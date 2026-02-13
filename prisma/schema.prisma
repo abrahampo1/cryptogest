@@ -1,0 +1,246 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ============================================
+// Clientes
+// ============================================
+model Cliente {
+  id        Int       @id @default(autoincrement())
+  nombre    String
+  email     String?
+  telefono  String?
+  direccion String?
+  ciudad    String?
+  codigoPostal String?
+  provincia String?
+  pais      String    @default("España")
+  nif       String?   @unique
+  notas     String?
+  activo    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  facturas  Factura[]
+}
+
+// ============================================
+// Productos / Servicios
+// ============================================
+model Producto {
+  id          Int       @id @default(autoincrement())
+  codigo      String?   @unique
+  nombre      String
+  descripcion String?
+  tipo        String    @default("servicio") // "producto" o "servicio"
+  precioBase  Float
+  impuestoId  Int?
+  impuesto    Impuesto? @relation("ProductoImpuesto", fields: [impuestoId], references: [id])
+  retencionId Int?
+  retencion   Impuesto? @relation("ProductoRetencion", fields: [retencionId], references: [id])
+  activo      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lineasFactura LineaFactura[]
+}
+
+// ============================================
+// Impuestos
+// ============================================
+model Impuesto {
+  id          Int       @id @default(autoincrement())
+  nombre      String    // "IVA General", "IVA Reducido", etc.
+  porcentaje  Float     // 21, 10, 4, 0
+  tipo        String    @default("IVA") // "IVA", "IRPF", "RE"
+  activo      Boolean   @default(true)
+  porDefecto  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  productos              Producto[]     @relation("ProductoImpuesto")
+  productosRetencion     Producto[]     @relation("ProductoRetencion")
+  lineasFactura          LineaFactura[] @relation("LineaFacturaImpuesto")
+  lineasFacturaRetencion LineaFactura[] @relation("LineaFacturaRetencion")
+  gastos      Gasto[]
+}
+
+// ============================================
+// Facturas
+// ============================================
+model Factura {
+  id          Int       @id @default(autoincrement())
+  numero      String    @unique
+  serie       String    @default("F")
+  fecha       DateTime  @default(now())
+  fechaVencimiento DateTime?
+  clienteId   Int
+  cliente     Cliente   @relation(fields: [clienteId], references: [id])
+  subtotal    Float
+  totalImpuestos Float  @default(0)
+  totalRetenciones Float @default(0)
+  total       Float
+  estado      String    @default("borrador") // "borrador", "emitida", "pagada", "vencida", "anulada"
+  notas       String?
+  formaPago   String?   // "transferencia", "efectivo", "tarjeta", etc.
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lineas      LineaFactura[]
+  asientos    Asiento[]
+}
+
+// ============================================
+// Líneas de Factura
+// ============================================
+model LineaFactura {
+  id          Int       @id @default(autoincrement())
+  facturaId   Int
+  factura     Factura   @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  productoId  Int?
+  producto    Producto? @relation(fields: [productoId], references: [id])
+  descripcion String
+  cantidad    Float     @default(1)
+  precioUnit  Float
+  descuento   Float     @default(0) // Porcentaje de descuento
+  impuestoId  Int?
+  impuesto    Impuesto? @relation("LineaFacturaImpuesto", fields: [impuestoId], references: [id])
+  retencionId Int?
+  retencion   Impuesto? @relation("LineaFacturaRetencion", fields: [retencionId], references: [id])
+  subtotal    Float     // cantidad * precioUnit * (1 - descuento/100)
+  totalImpuesto Float   @default(0)
+  totalRetencion Float  @default(0)
+  total       Float
+}
+
+// ============================================
+// Categorías de Gastos
+// ============================================
+model CategoriaGasto {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @unique
+  color       String    @default("#6B7280") // Color para visualización
+  icono       String    @default("receipt") // Nombre del icono
+  activo      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  gastos      Gasto[]
+}
+
+// ============================================
+// Gastos
+// ============================================
+model Gasto {
+  id            Int       @id @default(autoincrement())
+  descripcion   String
+  categoriaId   Int?
+  categoria     CategoriaGasto? @relation(fields: [categoriaId], references: [id])
+  monto         Float
+  impuestoIncluido Boolean @default(true)
+  impuestoId    Int?
+  impuesto      Impuesto? @relation(fields: [impuestoId], references: [id])
+  fecha         DateTime  @default(now())
+  proveedor     String?
+  numeroFactura String?   // Número de factura del proveedor
+  notas         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  adjuntos      AdjuntoGasto[]
+  asientos      Asiento[]
+}
+
+// ============================================
+// Adjuntos de Gastos (archivos encriptados)
+// ============================================
+model AdjuntoGasto {
+  id            Int       @id @default(autoincrement())
+  gastoId       Int
+  gasto         Gasto     @relation(fields: [gastoId], references: [id], onDelete: Cascade)
+  nombreOriginal String   // Nombre original del archivo
+  nombreEncriptado String @unique // Nombre del archivo encriptado en disco
+  tipoMime      String    // image/png, application/pdf, etc.
+  tamano        Int       // Tamaño en bytes del archivo original
+  createdAt     DateTime  @default(now())
+}
+
+// ============================================
+// Configuración
+// ============================================
+model Configuracion {
+  id        Int      @id @default(autoincrement())
+  clave     String   @unique
+  valor     String
+  tipo      String   @default("string") // "string", "number", "boolean", "json"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================
+// Plan General de Contabilidad - Cuentas
+// ============================================
+model CuentaContable {
+  id            Int       @id @default(autoincrement())
+  codigo        String    @unique
+  nombre        String
+  tipo          String    // "activo", "pasivo", "patrimonio_neto", "ingreso", "gasto"
+  grupo         Int       // 1-7 según PGC
+  nivel         Int       @default(1)
+  cuentaPadreId Int?
+  cuentaPadre   CuentaContable?  @relation("CuentaJerarquia", fields: [cuentaPadreId], references: [id])
+  subcuentas    CuentaContable[] @relation("CuentaJerarquia")
+  activo        Boolean   @default(true)
+  esSistema     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lineasAsiento LineaAsiento[]
+}
+
+// ============================================
+// Ejercicio Fiscal
+// ============================================
+model EjercicioFiscal {
+  id          Int       @id @default(autoincrement())
+  anio        Int       @unique
+  fechaInicio DateTime
+  fechaFin    DateTime
+  estado      String    @default("abierto") // "abierto", "cerrado"
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  asientos    Asiento[]
+}
+
+// ============================================
+// Asientos Contables
+// ============================================
+model Asiento {
+  id            Int       @id @default(autoincrement())
+  numero        Int
+  fecha         DateTime  @default(now())
+  descripcion   String
+  tipo          String    @default("manual") // "manual", "factura", "gasto", "cierre", "apertura"
+  documentoRef  String?
+  facturaId     Int?
+  factura       Factura?  @relation(fields: [facturaId], references: [id])
+  gastoId       Int?
+  gasto         Gasto?    @relation(fields: [gastoId], references: [id])
+  ejercicioId   Int
+  ejercicio     EjercicioFiscal @relation(fields: [ejercicioId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lineas        LineaAsiento[]
+}
+
+// ============================================
+// Líneas de Asiento (partida doble)
+// ============================================
+model LineaAsiento {
+  id          Int       @id @default(autoincrement())
+  asientoId   Int
+  asiento     Asiento   @relation(fields: [asientoId], references: [id], onDelete: Cascade)
+  cuentaId    Int
+  cuenta      CuentaContable @relation(fields: [cuentaId], references: [id])
+  debe        Float     @default(0)
+  haber       Float     @default(0)
+  concepto    String?
+}
