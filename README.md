@@ -12,7 +12,7 @@ Cifrado de extremo a extremo. Tus datos nunca salen de tu equipo sin tu autoriza
 [![Version](https://img.shields.io/badge/version-1.0.0-0d6efd?style=flat-square)](https://github.com/tu-usuario/cryptogest/releases)
 [![Plataformas](https://img.shields.io/badge/plataformas-Windows%20%7C%20macOS%20%7C%20Linux-333?style=flat-square)](#instalacion)
 [![Cifrado](https://img.shields.io/badge/cifrado-AES--256--GCM-2ea043?style=flat-square)](#seguridad)
-[![Licencia](https://img.shields.io/badge/licencia-ISC-888?style=flat-square)](LICENSE)
+[![Licencia](https://img.shields.io/badge/licencia-Source%20Available-888?style=flat-square)](LICENSE)
 
 ---
 
@@ -207,12 +207,20 @@ cryptogest/
 
 ## Licencia
 
-Este proyecto se distribuye bajo la licencia [ISC](LICENSE).
+Este proyecto se distribuye bajo la licencia **CryptoGest Source Available License**.
+
+Puedes ver, estudiar, modificar y redistribuir el codigo fuente para **uso no comercial**. Cualquier uso comercial requiere autorizacion previa por escrito del titular de los derechos.
+
+Consulta el archivo [LICENSE](LICENSE) para los terminos completos.
+
+Para licencias comerciales, contacta a: **abraham@leiro.dev**
 
 ---
 
 <div align="center">
 
 **CryptoGest** -- Gestion contable segura y profesional.
+
+Copyright &copy; 2026 Abraham Leiro / [leiro.dev](mailto:abraham@leiro.dev). Todos los derechos reservados.
 
 </div>

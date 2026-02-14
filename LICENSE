@@ -1,0 +1,125 @@
+CryptoGest Source Available License
+Version 1.0, 2026
+
+Copyright (c) 2026 Abraham Leiro <abraham@leiro.dev>
+All rights reserved.
+
+TERMS AND CONDITIONS
+
+1. DEFINITIONS
+
+   "License" refers to the terms and conditions defined in this document.
+
+   "Licensor" refers to the copyright holder: Abraham Leiro / leiro.dev.
+
+   "Software" refers to CryptoGest, including all source code, documentation,
+   configuration files, assets, and any associated materials in this repository.
+
+   "You" (or "Your") refers to any individual or legal entity exercising
+   permissions granted by this License.
+
+   "Commercial Use" means any use of the Software intended for or directed
+   toward commercial advantage or monetary compensation. This includes, but is
+   not limited to: selling, reselling, sublicensing, leasing, renting, or
+   offering the Software (or any derivative work) as a paid product or service,
+   whether directly or as part of a bundled offering.
+
+   "Non-Commercial Use" means personal, educational, research, or internal
+   organizational use that is not intended for or directed toward commercial
+   advantage or monetary compensation.
+
+2. GRANT OF RIGHTS
+
+   Subject to the terms of this License, the Licensor grants You a worldwide,
+   royalty-free, non-exclusive, non-transferable license to:
+
+   a) View, study, and inspect the source code of the Software.
+
+   b) Copy, modify, and create derivative works of the Software for
+      Non-Commercial Use only.
+
+   c) Install, run, and use the Software for Non-Commercial Use only.
+
+   d) Redistribute the source code of the Software, provided that:
+      i)   this License is included in all copies or substantial portions;
+      ii)  You do not charge any fee for the Software itself;
+      iii) You clearly attribute the original work to the Licensor;
+      iv)  any modifications are clearly marked as such.
+
+3. RESTRICTIONS
+
+   a) NO COMMERCIAL USE. You may NOT use, distribute, or deploy the Software
+      or any derivative work for Commercial Use without prior written
+      authorization from the Licensor.
+
+   b) NO RESALE. You may NOT sell, resell, sublicense, lease, rent, or
+      otherwise commercially distribute the Software, whether in its original
+      form, as a modified version, or as part of another product or service.
+
+   c) NO COMMERCIAL SERVICES. You may NOT offer the Software as a hosted
+      service, SaaS product, managed service, or any other form of commercial
+      offering without prior written authorization from the Licensor.
+
+   d) RESERVATION OF COMMERCIAL RIGHTS. The Licensor exclusively reserves all
+      rights to commercially exploit the Software, including the right to sell,
+      license, distribute, or offer the Software or derivative works for
+      commercial purposes.
+
+4. COMMERCIAL LICENSING
+
+   If You wish to use the Software for Commercial Use, You must obtain a
+   separate commercial license from the Licensor. For inquiries, contact:
+
+   Abraham Leiro <abraham@leiro.dev>
+
+5. CONTRIBUTIONS
+
+   By submitting a contribution (pull request, patch, or any other form) to
+   this repository, You agree to grant the Licensor a perpetual, worldwide,
+   royalty-free, non-exclusive, irrevocable license to use, reproduce, modify,
+   distribute, sublicense, and commercially exploit Your contribution as part
+   of the Software, under any license the Licensor sees fit.
+
+6. TRADEMARKS
+
+   This License does not grant permission to use the trade names, trademarks,
+   service marks, or product names of the Licensor, except as required for
+   reasonable and customary use in describing the origin of the Software.
+
+7. DISCLAIMER OF WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
+   THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER
+   IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+8. LIMITATION OF LIABILITY
+
+   IN NO EVENT SHALL THE LICENSOR BE LIABLE TO YOU FOR ANY INDIRECT, SPECIAL,
+   INCIDENTAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED
+   TO LOSS OF PROFITS, DATA, OR BUSINESS OPPORTUNITIES, REGARDLESS OF THE
+   CAUSE OF ACTION OR THE THEORY OF LIABILITY, EVEN IF THE LICENSOR HAS BEEN
+   ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+9. TERMINATION
+
+   a) This License and the rights granted hereunder will terminate
+      automatically if You fail to comply with any of its terms.
+
+   b) Upon termination, You must cease all use of the Software and destroy all
+      copies in Your possession.
+
+   c) Sections 3(d), 5, 6, 7, 8, and 9 shall survive termination.
+
+10. GOVERNING LAW
+
+    This License shall be governed by and construed in accordance with the laws
+    of Spain, without regard to its conflict of law provisions.
+
+11. ENTIRE AGREEMENT
+
+    This License constitutes the entire agreement between You and the Licensor
+    regarding the Software and supersedes all prior agreements and
+    understandings, whether written or oral.

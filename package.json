@@ -3,8 +3,8 @@
   "productName": "CryptoGest",
   "version": "1.0.0",
   "description": "ERP para gestión contable",
-  "license": "ISC",
-  "author": "",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Abraham Leiro <abraham@leiro.dev>",
   "main": "dist-electron/main.js",
   "build": {
     "appId": "com.cryptogest.app",
