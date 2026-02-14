@@ -288,6 +288,41 @@ interface RecentActivity {
   fecha: Date
 }
 
+// Cloud types
+interface CloudBackup {
+  id: number
+  original_filename: string
+  size_bytes: number
+  checksum_sha256: string
+  encryption_metadata: Record<string, any>
+  notes: string | null
+  uploaded_at: string
+  created_at: string
+}
+
+interface CloudPlan {
+  name: string
+  slug: string
+  max_backups: number
+  max_storage_bytes: number
+}
+
+interface CloudUsage {
+  backup_count: number
+  max_backups: number
+  unlimited_backups: boolean
+  backups_remaining: number | null
+  storage_used_bytes: number
+  max_storage_bytes: number
+  storage_remaining_bytes: number
+}
+
+interface CloudUser {
+  id: number
+  name: string
+  email: string
+}
+
 interface ElectronAPI {
   testDB: () => Promise<{ success: boolean; message: string }>
 
@@ -439,6 +474,27 @@ interface ElectronAPI {
     }>>
     migrate: () => Promise<ApiResponse<{ path: string; size: number; message: string }>>
     resetToDefault: () => Promise<ApiResponse<{ path: string; message: string }>>
+  }
+
+  cloud: {
+    configure: (data: { serverUrl: string; token: string }) => Promise<ApiResponse<{ user: CloudUser }>>
+    getConfig: () => Promise<ApiResponse<{ serverUrl: string; token: string; user?: CloudUser } | null>>
+    disconnect: () => Promise<ApiResponse<void>>
+    checkAuth: () => Promise<ApiResponse<{ user: CloudUser }>>
+    listBackups: (page?: number) => Promise<ApiResponse<{ backups: CloudBackup[]; meta: { current_page: number; last_page: number; total: number } }>>
+    upload: (notes?: string) => Promise<ApiResponse<CloudBackup>>
+    download: (backupId: number) => Promise<ApiResponse<{ path: string }>>
+    import: (backupId: number) => Promise<ApiResponse<{ message: string }>>
+    delete: (backupId: number) => Promise<ApiResponse<void>>
+    plan: () => Promise<ApiResponse<{ plan: CloudPlan; usage: CloudUsage }>>
+    onUploadProgress: (callback: (percent: number) => void) => () => void
+    onDownloadProgress: (callback: (percent: number) => void) => () => void
+    confirmDeviceLink: (data: { token: string; server: string }) => Promise<ApiResponse<any>>
+    onDeepLinkConnected: (callback: (data: { success: boolean; user?: CloudUser; server?: string; error?: string }) => void) => () => void
+  }
+
+  shell: {
+    openExternal: (url: string) => Promise<ApiResponse<void>>
   }
 }
 

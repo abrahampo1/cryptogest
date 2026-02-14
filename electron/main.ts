@@ -1,10 +1,13 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import os from 'os'
+import nodeCrypto from 'crypto'
 import archiver from 'archiver'
 import AdmZip from 'adm-zip'
 import { PrismaClient } from '@prisma/client'
 import * as crypto from './crypto'
+import * as cloud from './cloud'
 
 // Establecer nombre de la aplicación
 app.setName('CryptoGest')
@@ -263,6 +266,108 @@ async function ensureDatabaseTables(db: PrismaClient) {
 
 let mainWindow: BrowserWindow | null = null
 
+// ============================================
+// Protocol Handler for deep linking (cryptogest://)
+// ============================================
+
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('cryptogest', process.execPath, [path.resolve(process.argv[1])])
+  }
+} else {
+  app.setAsDefaultProtocolClient('cryptogest')
+}
+
+// Pending deep link data — processed after window loads + user authenticates
+let pendingDeepLinkData: { token: string; server: string } | null = null
+let rendererReady = false
+
+// Windows/Linux: deep link arrives as argument on second-instance
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_, commandLine) => {
+    const url = commandLine.find(arg => arg.startsWith('cryptogest://'))
+    if (url) parseAndQueueDeepLink(url)
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+}
+
+// macOS: deep link arrives as event
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  parseAndQueueDeepLink(url)
+})
+
+function parseAndQueueDeepLink(url: string) {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'cryptogest:') return
+
+    if (parsed.hostname === 'connect' || parsed.pathname === '//connect') {
+      const token = parsed.searchParams.get('token')
+      const server = parsed.searchParams.get('server')
+      if (token && server) {
+        pendingDeepLinkData = { token, server }
+        tryProcessDeepLink()
+      }
+    }
+  } catch (e) {
+    console.error('Error parsing deep link:', e)
+  }
+}
+
+async function tryProcessDeepLink() {
+  if (!pendingDeepLinkData) return
+  if (!rendererReady) return // Wait until renderer has loaded
+  if (!isAuthenticated || !prisma) return // Wait until user has unlocked the app
+
+  const data = pendingDeepLinkData
+  pendingDeepLinkData = null // Clear before async work to prevent double-processing
+
+  try {
+    console.log('[DeepLink] Confirming device link with server:', data.server)
+    const response = await cloud.confirmDeviceLink(data.server, data.token)
+
+    // Save config to database
+    await prisma!.configuracion.upsert({
+      where: { clave: 'cloud_server_url' },
+      update: { valor: data.server },
+      create: { clave: 'cloud_server_url', valor: data.server },
+    })
+    await prisma!.configuracion.upsert({
+      where: { clave: 'cloud_token' },
+      update: { valor: response.api_token },
+      create: { clave: 'cloud_token', valor: response.api_token },
+    })
+    cloud.setCloudConfig(data.server, response.api_token)
+
+    console.log('[DeepLink] Device linked successfully for user:', response.user.email)
+
+    // Notify the renderer that connection succeeded (past tense — it's a result notification)
+    if (mainWindow) {
+      mainWindow.webContents.send('deep-link:connected', {
+        success: true,
+        user: response.user,
+        server: data.server,
+      })
+    }
+  } catch (error) {
+    console.error('[DeepLink] Failed to confirm device link:', error)
+    pendingDeepLinkData = null
+    if (mainWindow) {
+      mainWindow.webContents.send('deep-link:connected', {
+        success: false,
+        error: String(error),
+      })
+    }
+  }
+}
+
 const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -286,10 +391,19 @@ const createWindow = () => {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    rendererReady = true
+    tryProcessDeepLink() // Process any queued deep link now that the page is loaded
+  })
 }
 
 app.whenReady().then(() => {
   createWindow()
+
+  // Check argv for Windows (first instance opened by deep link)
+  const argUrl = process.argv.find(arg => arg.startsWith('cryptogest://'))
+  if (argUrl) parseAndQueueDeepLink(argUrl)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -480,6 +594,9 @@ ipcMain.handle('auth:setup', async (_, password: string) => {
     // No encriptar aquí: prisma/dev.db debe permanecer en disco mientras la sesión esté activa.
     // Se encriptará automáticamente en auth:lock o before-quit.
 
+    // Process any pending deep link now that we're authenticated
+    tryProcessDeepLink()
+
     return { success: true }
   } catch (error) {
     const dbPath = crypto.getCurrentPrismaDbPath()
@@ -511,6 +628,9 @@ ipcMain.handle('auth:unlock', async (_, password: string) => {
     prisma = createPrismaClient()
     await prisma.$connect()
     await ensureDatabaseTables(prisma)
+
+    // Process any pending deep link now that we're authenticated
+    tryProcessDeepLink()
 
     return { success: true }
   } catch (error) {
@@ -593,6 +713,9 @@ ipcMain.handle('auth:unlockWithPasskey', async () => {
     prisma = createPrismaClient()
     await prisma.$connect()
     await ensureDatabaseTables(prisma)
+
+    // Process any pending deep link now that we're authenticated
+    tryProcessDeepLink()
 
     return { success: true }
   } catch (error) {
@@ -1873,6 +1996,490 @@ ipcMain.handle('backup:resetToDefault', async () => {
         message: 'Ruta de datos restaurada a la ubicación por defecto. Por favor, reinicia la aplicación.'
       }
     }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - Cloud Backup
+// ============================================
+
+// Configure cloud connection (save to Configuracion + verify token)
+ipcMain.handle('cloud:configure', async (_, data: { serverUrl: string; token: string }) => {
+  try {
+    const db = requireAuth()
+
+    // Set config in cloud module
+    cloud.setCloudConfig(data.serverUrl, data.token)
+
+    // Verify token by calling auth check
+    let user: cloud.CloudUser
+    try {
+      const authResult = await cloud.checkAuth()
+      user = authResult.user
+    } catch (err) {
+      cloud.clearCloudConfig()
+      if (err instanceof cloud.CloudAuthError) {
+        return { success: false, error: 'Token inválido o expirado' }
+      }
+      if (err instanceof cloud.CloudNetworkError) {
+        return { success: false, error: 'No se puede conectar con el servidor: ' + (err as Error).message }
+      }
+      return { success: false, error: String(err) }
+    }
+
+    // Save to Configuracion table
+    await db.configuracion.upsert({
+      where: { clave: 'cloud_server_url' },
+      update: { valor: data.serverUrl },
+      create: { clave: 'cloud_server_url', valor: data.serverUrl },
+    })
+    await db.configuracion.upsert({
+      where: { clave: 'cloud_token' },
+      update: { valor: data.token },
+      create: { clave: 'cloud_token', valor: data.token },
+    })
+
+    return { success: true, data: { user } }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Get cloud config from DB
+ipcMain.handle('cloud:getConfig', async () => {
+  try {
+    const db = requireAuth()
+
+    const serverUrlConfig = await db.configuracion.findUnique({ where: { clave: 'cloud_server_url' } })
+    const tokenConfig = await db.configuracion.findUnique({ where: { clave: 'cloud_token' } })
+
+    if (!serverUrlConfig || !tokenConfig) {
+      return { success: true, data: null }
+    }
+
+    // Re-initialize cloud module config
+    cloud.setCloudConfig(serverUrlConfig.valor, tokenConfig.valor)
+
+    // Optionally verify token (non-blocking, we return config even if check fails)
+    let user: cloud.CloudUser | undefined
+    try {
+      const authResult = await cloud.checkAuth()
+      user = authResult.user
+    } catch {
+      // Token may be expired, return config without user
+    }
+
+    return {
+      success: true,
+      data: {
+        serverUrl: serverUrlConfig.valor,
+        token: tokenConfig.valor,
+        user,
+      },
+    }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Disconnect cloud (clear config)
+ipcMain.handle('cloud:disconnect', async () => {
+  try {
+    const db = requireAuth()
+
+    cloud.clearCloudConfig()
+
+    // Remove from DB
+    try { await db.configuracion.delete({ where: { clave: 'cloud_server_url' } }) } catch { /* may not exist */ }
+    try { await db.configuracion.delete({ where: { clave: 'cloud_token' } }) } catch { /* may not exist */ }
+
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Check auth status
+ipcMain.handle('cloud:checkAuth', async () => {
+  try {
+    requireAuth()
+    const result = await cloud.checkAuth()
+    return { success: true, data: { user: result.user } }
+  } catch (error) {
+    if (error instanceof cloud.CloudAuthError) {
+      return { success: false, error: 'Token inválido o expirado' }
+    }
+    return { success: false, error: String(error) }
+  }
+})
+
+// List backups
+ipcMain.handle('cloud:listBackups', async (_, page?: number) => {
+  try {
+    requireAuth()
+    const result = await cloud.listBackups(page || 1)
+    return { success: true, data: { backups: result.data, meta: result.meta } }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Upload backup to cloud (E2E encrypted with master password)
+ipcMain.handle('cloud:upload', async (_, notes?: string) => {
+  try {
+    requireAuth()
+    if (!currentPassword) {
+      return { success: false, error: 'No hay contraseña maestra disponible' }
+    }
+
+    // 1. Force SQLite WAL checkpoint
+    if (prisma) {
+      await prisma.$queryRawUnsafe('PRAGMA wal_checkpoint(TRUNCATE)')
+    }
+
+    // 2. Create temp ZIP using same logic as backup:export
+    const tempDir = os.tmpdir()
+    const tempZipPath = path.join(tempDir, `cryptogest-cloud-${nodeCrypto.randomUUID()}.zip`)
+    const backupFilename = `cryptogest-backup-${new Date().toISOString().split('T')[0]}.zip.enc`
+
+    await new Promise<void>((resolve, reject) => {
+      const output = fs.createWriteStream(tempZipPath)
+      const archive = archiver('zip', { zlib: { level: 9 } })
+
+      output.on('close', () => resolve())
+      archive.on('error', (err) => reject(err))
+
+      archive.pipe(output)
+
+      const dbPath = getDbPath()
+      if (fs.existsSync(dbPath)) {
+        archive.file(dbPath, { name: 'database/dev.db' })
+      }
+
+      const walPath = dbPath + '-wal'
+      const shmPath = dbPath + '-shm'
+      if (fs.existsSync(walPath)) {
+        archive.file(walPath, { name: 'database/dev.db-wal' })
+      }
+      if (fs.existsSync(shmPath)) {
+        archive.file(shmPath, { name: 'database/dev.db-shm' })
+      }
+
+      const attachmentsDir = getAttachmentsPath()
+      if (fs.existsSync(attachmentsDir)) {
+        archive.directory(attachmentsDir, 'attachments')
+      }
+
+      const metadata = {
+        version: '1.0.0',
+        exportDate: new Date().toISOString(),
+        platform: process.platform,
+      }
+      archive.append(JSON.stringify(metadata, null, 2), { name: 'metadata.json' })
+
+      archive.finalize()
+    })
+
+    // 3. E2E Encrypt: read ZIP, encrypt with master password, write encrypted file
+    // Format: salt(32) + iv(16) + authTag(16) + ciphertext
+    const zipData = fs.readFileSync(tempZipPath)
+    try { fs.unlinkSync(tempZipPath) } catch { /* ignore */ }
+
+    const salt = nodeCrypto.randomBytes(32)
+    const key = crypto.deriveKey(currentPassword, salt)
+    const encryptedPayload = crypto.encrypt(zipData, key) // iv(16) + authTag(16) + ciphertext
+    const encryptedData = Buffer.concat([salt, encryptedPayload])
+
+    const tempEncPath = path.join(tempDir, `cryptogest-cloud-${nodeCrypto.randomUUID()}.enc`)
+    fs.writeFileSync(tempEncPath, encryptedData)
+
+    // 4. Build encryption metadata (describes the format for informational purposes)
+    const encryptionMetadata = {
+      algorithm: 'AES-256-GCM',
+      key_derivation: {
+        function: 'PBKDF2',
+        hash: 'SHA-512',
+        iterations: 100000,
+      },
+      format: 'salt(32)+iv(16)+authTag(16)+ciphertext',
+      e2e: true,
+      client_version: '1.0.0',
+      encrypted_at: new Date().toISOString(),
+    }
+
+    // 5. Upload with progress events
+    const cloudBackup = await cloud.uploadBackup(
+      tempEncPath,
+      backupFilename,
+      encryptionMetadata,
+      notes,
+      (percent) => {
+        if (mainWindow) {
+          mainWindow.webContents.send('cloud:upload-progress', percent)
+        }
+      },
+    )
+
+    // 6. Clean up temp file
+    try { fs.unlinkSync(tempEncPath) } catch { /* ignore */ }
+
+    return { success: true, data: cloudBackup }
+  } catch (error) {
+    if (error instanceof cloud.CloudQuotaError) {
+      return { success: false, error: 'Cuota de almacenamiento excedida. Mejora tu plan o elimina backups antiguos.' }
+    }
+    return { success: false, error: String(error) }
+  }
+})
+
+// Download backup from cloud (decrypt E2E before saving)
+ipcMain.handle('cloud:download', async (_, backupId: number) => {
+  try {
+    requireAuth()
+    if (!currentPassword) {
+      return { success: false, error: 'No hay contraseña maestra disponible' }
+    }
+
+    // Get backup info for filename
+    const backup = await cloud.getBackup(backupId)
+
+    // Show save dialog — offer .zip since we decrypt before saving
+    const defaultName = (backup.original_filename || `cloud-backup-${backupId}.zip.enc`).replace(/\.enc$/, '')
+    const result = await dialog.showSaveDialog(mainWindow!, {
+      title: 'Guardar backup descargado',
+      defaultPath: defaultName,
+      filters: [{ name: 'Archivo ZIP', extensions: ['zip'] }],
+    })
+
+    if (result.canceled || !result.filePath) {
+      return { success: false, error: 'Operación cancelada' }
+    }
+
+    // Download encrypted file to temp
+    const tempDir = os.tmpdir()
+    const tempEncPath = path.join(tempDir, `cryptogest-dl-${nodeCrypto.randomUUID()}.enc`)
+
+    await cloud.downloadBackup(backupId, tempEncPath, (percent) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('cloud:download-progress', percent)
+      }
+    })
+
+    // Decrypt: salt(32) + iv(16) + authTag(16) + ciphertext
+    try {
+      const encryptedData = fs.readFileSync(tempEncPath)
+      try { fs.unlinkSync(tempEncPath) } catch { /* ignore */ }
+
+      const salt = encryptedData.subarray(0, 32)
+      const encryptedPayload = encryptedData.subarray(32) // iv + authTag + ciphertext
+
+      const key = crypto.deriveKey(currentPassword, salt)
+      const zipData = crypto.decrypt(encryptedPayload, key)
+
+      fs.writeFileSync(result.filePath, zipData)
+    } catch {
+      try { fs.unlinkSync(tempEncPath) } catch { /* ignore */ }
+      try { fs.unlinkSync(result.filePath) } catch { /* ignore */ }
+      return { success: false, error: 'Error al descifrar el backup. ¿La contraseña maestra ha cambiado desde que se subió?' }
+    }
+
+    return { success: true, data: { path: result.filePath } }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Import backup directly from cloud (download + decrypt E2E + restore)
+ipcMain.handle('cloud:import', async (_, backupId: number) => {
+  try {
+    requireAuth()
+    if (!currentPassword) {
+      return { success: false, error: 'No hay contraseña maestra disponible' }
+    }
+
+    // Download encrypted file to temp
+    const tempDir = os.tmpdir()
+    const tempEncPath = path.join(tempDir, `cryptogest-import-${nodeCrypto.randomUUID()}.enc`)
+
+    await cloud.downloadBackup(backupId, tempEncPath, (percent) => {
+      if (mainWindow) {
+        mainWindow.webContents.send('cloud:download-progress', percent)
+      }
+    })
+
+    // Decrypt: salt(32) + iv(16) + authTag(16) + ciphertext → ZIP
+    let zipData: Buffer
+    try {
+      const encryptedData = fs.readFileSync(tempEncPath)
+      try { fs.unlinkSync(tempEncPath) } catch { /* ignore */ }
+
+      const salt = encryptedData.subarray(0, 32)
+      const encryptedPayload = encryptedData.subarray(32)
+
+      const key = crypto.deriveKey(currentPassword, salt)
+      zipData = crypto.decrypt(encryptedPayload, key)
+    } catch {
+      try { fs.unlinkSync(tempEncPath) } catch { /* ignore */ }
+      return { success: false, error: 'Error al descifrar el backup. ¿La contraseña maestra ha cambiado desde que se subió?' }
+    }
+
+    // Write decrypted ZIP to temp and validate
+    const tempZipPath = path.join(tempDir, `cryptogest-import-${nodeCrypto.randomUUID()}.zip`)
+    fs.writeFileSync(tempZipPath, zipData)
+
+    const zip = new AdmZip(tempZipPath)
+    const entries = zip.getEntries()
+    const hasDatabase = entries.some(e => e.entryName === 'database/dev.db')
+
+    if (!hasDatabase) {
+      try { fs.unlinkSync(tempZipPath) } catch { /* ignore */ }
+      return { success: false, error: 'El backup descifrado no contiene una base de datos válida de CryptoGest' }
+    }
+
+    // Read metadata if exists
+    let metadata = null
+    const hasMetadata = entries.some(e => e.entryName === 'metadata.json')
+    if (hasMetadata) {
+      const metadataEntry = zip.getEntry('metadata.json')
+      if (metadataEntry) {
+        metadata = JSON.parse(metadataEntry.getData().toString('utf8'))
+      }
+    }
+
+    // Disconnect Prisma
+    if (prisma) {
+      await prisma.$disconnect()
+      prisma = null
+    }
+    isAuthenticated = false
+    currentPassword = null
+
+    // Extract database
+    const dbDir = path.dirname(getDbPath())
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true })
+    }
+
+    const existingDbPath = getDbPath()
+    if (fs.existsSync(existingDbPath)) fs.unlinkSync(existingDbPath)
+    if (fs.existsSync(existingDbPath + '-wal')) fs.unlinkSync(existingDbPath + '-wal')
+    if (fs.existsSync(existingDbPath + '-shm')) fs.unlinkSync(existingDbPath + '-shm')
+
+    const dbEntry = zip.getEntry('database/dev.db')
+    if (dbEntry) {
+      fs.writeFileSync(getDbPath(), dbEntry.getData())
+    }
+
+    const walEntry = zip.getEntry('database/dev.db-wal')
+    if (walEntry) {
+      fs.writeFileSync(getDbPath() + '-wal', walEntry.getData())
+    }
+    const shmEntry = zip.getEntry('database/dev.db-shm')
+    if (shmEntry) {
+      fs.writeFileSync(getDbPath() + '-shm', shmEntry.getData())
+    }
+
+    // Extract attachments
+    const attachmentsDir = getAttachmentsPath()
+    if (!fs.existsSync(attachmentsDir)) {
+      fs.mkdirSync(attachmentsDir, { recursive: true })
+    }
+
+    if (fs.existsSync(attachmentsDir)) {
+      const existingFiles = fs.readdirSync(attachmentsDir)
+      for (const file of existingFiles) {
+        fs.unlinkSync(path.join(attachmentsDir, file))
+      }
+    }
+
+    for (const entry of entries) {
+      if (entry.entryName.startsWith('attachments/') && !entry.isDirectory) {
+        const fileName = path.basename(entry.entryName)
+        fs.writeFileSync(path.join(attachmentsDir, fileName), entry.getData())
+      }
+    }
+
+    // Clean up
+    try { fs.unlinkSync(tempZipPath) } catch { /* ignore */ }
+
+    return {
+      success: true,
+      data: {
+        metadata,
+        message: 'Importación desde la nube completada. Por favor, inicia sesión con tus credenciales.',
+      },
+    }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Delete backup from cloud
+ipcMain.handle('cloud:delete', async (_, backupId: number) => {
+  try {
+    requireAuth()
+    await cloud.deleteBackup(backupId)
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Get plan and usage info
+ipcMain.handle('cloud:plan', async () => {
+  try {
+    requireAuth()
+    const result = await cloud.getAccountPlan()
+    return { success: true, data: result }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - Device Link (deep link auto-config)
+// ============================================
+
+ipcMain.handle('cloud:confirmDeviceLink', async (_, data: { token: string; server: string }) => {
+  try {
+    const response = await cloud.confirmDeviceLink(data.server, data.token)
+
+    // Save config to database if authenticated
+    if (isAuthenticated && prisma) {
+      await prisma.configuracion.upsert({
+        where: { clave: 'cloud_server_url' },
+        update: { valor: data.server },
+        create: { clave: 'cloud_server_url', valor: data.server },
+      })
+      await prisma.configuracion.upsert({
+        where: { clave: 'cloud_token' },
+        update: { valor: response.api_token },
+        create: { clave: 'cloud_token', valor: response.api_token },
+      })
+      cloud.setCloudConfig(data.server, response.api_token)
+    }
+
+    return { success: true, data: response }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - Shell
+// ============================================
+
+ipcMain.handle('shell:openExternal', async (_, url: string) => {
+  try {
+    // Only allow http/https URLs
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { success: false, error: 'Solo se permiten URLs http/https' }
+    }
+    await shell.openExternal(url)
+    return { success: true }
   } catch (error) {
     return { success: false, error: String(error) }
   }

@@ -208,6 +208,50 @@ const electronAPI = {
     migrate: () => ipcRenderer.invoke('backup:migrate') as Promise<ApiResponse<{ path: string; size: number; message: string }>>,
     resetToDefault: () => ipcRenderer.invoke('backup:resetToDefault') as Promise<ApiResponse<{ path: string; message: string }>>,
   },
+
+  // Cloud Backup
+  cloud: {
+    configure: (data: { serverUrl: string; token: string }) =>
+      ipcRenderer.invoke('cloud:configure', data) as Promise<ApiResponse<any>>,
+    getConfig: () =>
+      ipcRenderer.invoke('cloud:getConfig') as Promise<ApiResponse<any>>,
+    disconnect: () =>
+      ipcRenderer.invoke('cloud:disconnect') as Promise<ApiResponse<void>>,
+    checkAuth: () =>
+      ipcRenderer.invoke('cloud:checkAuth') as Promise<ApiResponse<any>>,
+    listBackups: (page?: number) =>
+      ipcRenderer.invoke('cloud:listBackups', page) as Promise<ApiResponse<any>>,
+    upload: (notes?: string) =>
+      ipcRenderer.invoke('cloud:upload', notes) as Promise<ApiResponse<any>>,
+    download: (backupId: number) =>
+      ipcRenderer.invoke('cloud:download', backupId) as Promise<ApiResponse<any>>,
+    import: (backupId: number) =>
+      ipcRenderer.invoke('cloud:import', backupId) as Promise<ApiResponse<any>>,
+    delete: (backupId: number) =>
+      ipcRenderer.invoke('cloud:delete', backupId) as Promise<ApiResponse<void>>,
+    plan: () =>
+      ipcRenderer.invoke('cloud:plan') as Promise<ApiResponse<any>>,
+    onUploadProgress: (callback: (percent: number) => void) => {
+      ipcRenderer.on('cloud:upload-progress', (_, percent) => callback(percent))
+      return () => { ipcRenderer.removeAllListeners('cloud:upload-progress') }
+    },
+    onDownloadProgress: (callback: (percent: number) => void) => {
+      ipcRenderer.on('cloud:download-progress', (_, percent) => callback(percent))
+      return () => { ipcRenderer.removeAllListeners('cloud:download-progress') }
+    },
+    confirmDeviceLink: (data: { token: string; server: string }) =>
+      ipcRenderer.invoke('cloud:confirmDeviceLink', data) as Promise<ApiResponse<any>>,
+    onDeepLinkConnected: (callback: (data: { success: boolean; user?: any; server?: string; error?: string }) => void) => {
+      const handler = (_: any, data: any) => callback(data)
+      ipcRenderer.on('deep-link:connected', handler)
+      return () => { ipcRenderer.removeListener('deep-link:connected', handler) }
+    },
+  },
+
+  // Shell
+  shell: {
+    openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url) as Promise<ApiResponse<void>>,
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

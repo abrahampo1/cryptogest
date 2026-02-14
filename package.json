@@ -10,6 +10,12 @@
     "appId": "com.cryptogest.app",
     "productName": "CryptoGest",
     "icon": "assets/logo.png",
+    "protocols": [
+      {
+        "name": "CryptoGest",
+        "schemes": ["cryptogest"]
+      }
+    ],
     "mac": {
       "icon": "assets/logo.png",
       "category": "public.app-category.finance"

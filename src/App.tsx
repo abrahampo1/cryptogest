@@ -10,6 +10,7 @@ import { ConfiguracionPage } from '@/pages/ConfiguracionPage'
 import { EjerciciosPage } from '@/pages/EjerciciosPage'
 import { ContabilidadPage } from '@/pages/ContabilidadPage'
 import { ModelosHaciendaPage } from '@/pages/ModelosHaciendaPage'
+import { CloudPage } from '@/pages/CloudPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { EmpresaSelectorPage } from '@/pages/EmpresaSelectorPage'
 import { SetupWizardPage } from '@/pages/SetupWizardPage'
@@ -23,9 +24,21 @@ function App() {
   const [ultimaEmpresaId, setUltimaEmpresaId] = useState<string | null>(null)
   const [activeEmpresa, setActiveEmpresa] = useState<EmpresaInfo | null>(null)
   const [currentPage, setCurrentPage] = useState<Page>('dashboard')
+  const [deepLinkResult, setDeepLinkResult] = useState<{ success: boolean; user?: any; server?: string } | null>(null)
 
   useEffect(() => {
     loadEmpresas()
+  }, [])
+
+  // Listen for deep link connection results from main process (fires after auth + API confirm)
+  useEffect(() => {
+    const cleanup = window.electronAPI?.cloud.onDeepLinkConnected((data) => {
+      if (data.success) {
+        setDeepLinkResult({ success: true, user: data.user, server: data.server })
+        setCurrentPage('cloud')
+      }
+    })
+    return () => cleanup?.()
   }, [])
 
   const loadEmpresas = async () => {
@@ -139,6 +152,8 @@ function App() {
         return <ContabilidadPage />
       case 'modelos':
         return <ModelosHaciendaPage />
+      case 'cloud':
+        return <CloudPage deepLinkResult={deepLinkResult} onDeepLinkHandled={() => setDeepLinkResult(null)} />
       case 'configuracion':
         return <ConfiguracionPage />
       default:

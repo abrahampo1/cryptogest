@@ -15,9 +15,10 @@ import {
   FileBarChart,
   Calendar,
   Building2,
+  Cloud,
 } from "lucide-react"
 
-export type Page = "dashboard" | "clientes" | "productos" | "facturas" | "gastos" | "ejercicios" | "contabilidad" | "modelos" | "configuracion"
+export type Page = "dashboard" | "clientes" | "productos" | "facturas" | "gastos" | "ejercicios" | "contabilidad" | "modelos" | "cloud" | "configuracion"
 
 interface SidebarProps {
   currentPage: Page
@@ -36,6 +37,10 @@ const menuItems = [
   { id: "ejercicios" as Page, label: "Ejercicios Fiscales", icon: Calendar },
   { id: "contabilidad" as Page, label: "Contabilidad", icon: BookOpen },
   { id: "modelos" as Page, label: "Modelos Fiscales", icon: FileBarChart },
+]
+
+const cloudItems = [
+  { id: "cloud" as Page, label: "Cloud Backup", icon: Cloud },
 ]
 
 const configItems = [
@@ -71,6 +76,34 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
           </span>
         </div>
         {menuItems.map((item) => {
+          const Icon = item.icon
+          const isActive = currentPage === item.id
+          return (
+            <button
+              key={item.id}
+              className={cn(
+                "flex w-full items-center gap-2 px-4 py-2 text-left text-sm transition-colors",
+                isActive
+                  ? "bg-slate-800 text-white border-l-2 border-primary"
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 border-l-2 border-transparent"
+              )}
+              onClick={() => onPageChange(item.id)}
+            >
+              <Icon className="h-4 w-4 flex-shrink-0" />
+              <span className="truncate">{item.label}</span>
+              {isActive && <ChevronRight className="ml-auto h-3 w-3" />}
+            </button>
+          )
+        })}
+
+        <div className="my-2 border-t border-slate-700" />
+
+        <div className="px-3 py-1">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+            Nube
+          </span>
+        </div>
+        {cloudItems.map((item) => {
           const Icon = item.icon
           const isActive = currentPage === item.id
           return (
