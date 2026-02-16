@@ -495,9 +495,11 @@ interface ElectronAPI {
     import: (backupId: number) => Promise<ApiResponse<{ message: string }>>
     delete: (backupId: number) => Promise<ApiResponse<void>>
     plan: () => Promise<ApiResponse<{ plan: CloudPlan; usage: CloudUsage; license: CloudLicense }>>
+    licenseCheckout: () => Promise<ApiResponse<{ checkout_url: string }>>
     onUploadProgress: (callback: (percent: number) => void) => () => void
     onDownloadProgress: (callback: (percent: number) => void) => () => void
-    confirmDeviceLink: (data: { token: string; server: string }) => Promise<ApiResponse<any>>
+    confirmDeviceLink: (data: { token: string; server: string; deviceName?: string }) => Promise<ApiResponse<any>>
+    verifyCode: (data: { code: string; server: string; deviceName?: string }) => Promise<ApiResponse<{ api_token: string; user: CloudUser }>>
     onDeepLinkConnected: (callback: (data: { success: boolean; user?: CloudUser; server?: string; error?: string }) => void) => () => void
   }
 

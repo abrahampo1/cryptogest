@@ -489,20 +489,88 @@ export async function getAccountPlan(): Promise<{ plan: CloudPlan; usage: CloudU
   })
 }
 
+export async function createLicenseCheckout(): Promise<{ checkout_url: string }> {
+  return await makeRequest<{ checkout_url: string }>({
+    method: 'POST',
+    path: '/api/v1/license/checkout',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+}
+
 // ============================================
 // Device Linking (no auth token required)
 // ============================================
 
+export async function verifyDeviceCode(
+  serverUrl: string,
+  code: string,
+  deviceName?: string,
+): Promise<{ api_token: string; user: CloudUser }> {
+  const url = `${serverUrl.replace(/\/+$/, '')}/api/v1/device-link/verify-code`
+
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      code: code.toUpperCase(),
+      device_name: deviceName || 'CryptoGest Desktop',
+    })
+
+    const req = net.request({
+      method: 'POST',
+      url,
+    })
+
+    req.setHeader('Accept', 'application/json')
+    req.setHeader('Content-Type', 'application/json')
+
+    const timer = setTimeout(() => {
+      req.abort()
+      reject(new CloudNetworkError('Tiempo de espera agotado'))
+    }, 30000)
+
+    req.on('response', (res) => {
+      const chunks: Buffer[] = []
+      res.on('data', (chunk: Buffer) => chunks.push(chunk))
+      res.on('end', () => {
+        clearTimeout(timer)
+        const respBody = Buffer.concat(chunks).toString('utf8')
+        const status = res.statusCode
+
+        if (status >= 200 && status < 300) {
+          try {
+            resolve(JSON.parse(respBody))
+          } catch {
+            reject(new Error('Respuesta inválida del servidor'))
+          }
+          return
+        }
+
+        const { message, errors } = parseErrorBody(respBody, status)
+        reject(mapStatusToError(status, message, errors))
+      })
+    })
+
+    req.on('error', (err) => {
+      clearTimeout(timer)
+      reject(new CloudNetworkError(err.message))
+    })
+
+    req.write(body)
+    req.end()
+  })
+}
+
 export async function confirmDeviceLink(
   serverUrl: string,
   linkToken: string,
+  deviceName?: string,
 ): Promise<{ api_token: string; user: CloudUser }> {
   const url = `${serverUrl.replace(/\/+$/, '')}/api/v1/device-link/confirm`
 
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       token: linkToken,
-      device_name: 'CryptoGest Desktop',
+      device_name: deviceName || 'CryptoGest Desktop',
     })
 
     const req = net.request({

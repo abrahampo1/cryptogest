@@ -2534,15 +2534,53 @@ ipcMain.handle('cloud:plan', async () => {
   }
 })
 
+// Create license checkout session and open in browser
+ipcMain.handle('cloud:licenseCheckout', async () => {
+  try {
+    requireAuth()
+    const result = await cloud.createLicenseCheckout()
+    await shell.openExternal(result.checkout_url)
+    return { success: true, data: result }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
 // ============================================
 // IPC Handlers - Device Link (deep link auto-config)
 // ============================================
 
-ipcMain.handle('cloud:confirmDeviceLink', async (_, data: { token: string; server: string }) => {
+ipcMain.handle('cloud:confirmDeviceLink', async (_, data: { token: string; server: string; deviceName?: string }) => {
   try {
-    const response = await cloud.confirmDeviceLink(data.server, data.token)
+    const response = await cloud.confirmDeviceLink(data.server, data.token, data.deviceName)
 
     // Save config to database if authenticated
+    if (isAuthenticated && prisma) {
+      await prisma.configuracion.upsert({
+        where: { clave: 'cloud_server_url' },
+        update: { valor: data.server },
+        create: { clave: 'cloud_server_url', valor: data.server },
+      })
+      await prisma.configuracion.upsert({
+        where: { clave: 'cloud_token' },
+        update: { valor: response.api_token },
+        create: { clave: 'cloud_token', valor: response.api_token },
+      })
+      cloud.setCloudConfig(data.server, response.api_token)
+    }
+
+    return { success: true, data: response }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('cloud:verifyCode', async (_, data: { code: string; server: string; deviceName?: string }) => {
+  try {
+    requireAuth()
+    const response = await cloud.verifyDeviceCode(data.server, data.code, data.deviceName)
+
+    // Save config to database
     if (isAuthenticated && prisma) {
       await prisma.configuracion.upsert({
         where: { clave: 'cloud_server_url' },

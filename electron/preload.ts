@@ -234,6 +234,8 @@ const electronAPI = {
       ipcRenderer.invoke('cloud:delete', backupId) as Promise<ApiResponse<void>>,
     plan: () =>
       ipcRenderer.invoke('cloud:plan') as Promise<ApiResponse<any>>,
+    licenseCheckout: () =>
+      ipcRenderer.invoke('cloud:licenseCheckout') as Promise<ApiResponse<{ checkout_url: string }>>,
     onUploadProgress: (callback: (percent: number) => void) => {
       ipcRenderer.on('cloud:upload-progress', (_, percent) => callback(percent))
       return () => { ipcRenderer.removeAllListeners('cloud:upload-progress') }
@@ -242,8 +244,10 @@ const electronAPI = {
       ipcRenderer.on('cloud:download-progress', (_, percent) => callback(percent))
       return () => { ipcRenderer.removeAllListeners('cloud:download-progress') }
     },
-    confirmDeviceLink: (data: { token: string; server: string }) =>
+    confirmDeviceLink: (data: { token: string; server: string; deviceName?: string }) =>
       ipcRenderer.invoke('cloud:confirmDeviceLink', data) as Promise<ApiResponse<any>>,
+    verifyCode: (data: { code: string; server: string; deviceName?: string }) =>
+      ipcRenderer.invoke('cloud:verifyCode', data) as Promise<ApiResponse<{ api_token: string; user: { id: number; name: string; email: string } }>>,
     onDeepLinkConnected: (callback: (data: { success: boolean; user?: any; server?: string; error?: string }) => void) => {
       const handler = (_: any, data: any) => callback(data)
       ipcRenderer.on('deep-link:connected', handler)

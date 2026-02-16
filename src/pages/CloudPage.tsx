@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -39,6 +40,7 @@ import {
   ArrowDownToLine,
   KeyRound,
   HelpCircle,
+  ShoppingCart,
 } from "lucide-react"
 
 // ============================================
@@ -110,6 +112,16 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
   // Delete
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // License purchase
+  const [isPurchasing, setIsPurchasing] = useState(false)
+  const [isPollingLicense, setIsPollingLicense] = useState(false)
+
+  // Code-based connection
+  const [codeDigits, setCodeDigits] = useState(["", "", "", "", "", ""])
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false)
+  const [deviceName, setDeviceName] = useState("CryptoGest Desktop")
+  const codeInputRefs = useRef<(HTMLInputElement | null)[]>([])
 
   // Disconnect
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
@@ -201,6 +213,61 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
 
   const handleOpenCloud = () => {
     window.electronAPI?.shell.openExternal(`${serverUrl}/login`)
+  }
+
+  const handleCodeChange = (index: number, value: string) => {
+    // Only allow alphanumeric
+    const char = value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(-1)
+    const newDigits = [...codeDigits]
+    newDigits[index] = char
+    setCodeDigits(newDigits)
+    // Auto-focus next input
+    if (char && index < 5) {
+      codeInputRefs.current[index + 1]?.focus()
+    }
+  }
+
+  const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !codeDigits[index] && index > 0) {
+      codeInputRefs.current[index - 1]?.focus()
+    }
+  }
+
+  const handleCodePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData("text").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 6)
+    if (pasted.length === 0) return
+    const newDigits = [...codeDigits]
+    for (let i = 0; i < 6; i++) {
+      newDigits[i] = pasted[i] || ""
+    }
+    setCodeDigits(newDigits)
+    const focusIndex = Math.min(pasted.length, 5)
+    codeInputRefs.current[focusIndex]?.focus()
+  }
+
+  const handleVerifyCode = async () => {
+    const code = codeDigits.join("")
+    if (code.length !== 6) return
+    setIsVerifyingCode(true)
+    setErrorMessage("")
+    try {
+      const result = await window.electronAPI?.cloud.verifyCode({ code, server: serverUrl, deviceName: deviceName.trim() || undefined })
+      if (result?.success && result.data) {
+        setIsConnected(true)
+        setUser(result.data.user)
+        setSuccessMessage("Conectado correctamente a CryptoGest Cloud")
+        setCodeDigits(["", "", "", "", "", ""])
+        loadBackups(1)
+        loadPlan()
+      } else {
+        setErrorMessage(result?.error || "Codigo invalido o expirado")
+      }
+    } catch (err) {
+      setErrorMessage(String(err))
+    } finally {
+      setIsVerifyingCode(false)
+    }
   }
 
   const handleDisconnect = async () => {
@@ -329,6 +396,44 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
   }
 
   // ============================================
+  // License purchase
+  // ============================================
+
+  const handlePurchaseLicense = async () => {
+    setIsPurchasing(true)
+    setErrorMessage("")
+    try {
+      const result = await window.electronAPI?.cloud.licenseCheckout()
+      if (result?.success) {
+        setIsPollingLicense(true)
+      } else {
+        setErrorMessage(result?.error || "Error al iniciar la compra")
+      }
+    } catch (err) {
+      setErrorMessage(String(err))
+    } finally {
+      setIsPurchasing(false)
+    }
+  }
+
+  // Poll for license activation after checkout
+  useEffect(() => {
+    if (!isPollingLicense) return
+    const interval = setInterval(async () => {
+      const result = await window.electronAPI?.cloud.plan()
+      if (result?.success && result.data?.license?.has_license) {
+        setLicense(result.data.license)
+        setPlan(result.data.plan)
+        setUsage(result.data.usage)
+        setIsPollingLicense(false)
+        setSuccessMessage("Licencia empresarial activada correctamente")
+      }
+    }, 4000)
+    const timeout = setTimeout(() => setIsPollingLicense(false), 600000)
+    return () => { clearInterval(interval); clearTimeout(timeout) }
+  }, [isPollingLicense])
+
+  // ============================================
   // Loading state
   // ============================================
 
@@ -392,6 +497,14 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
           </Card>
         )}
 
+        {/* Error message */}
+        {errorMessage && (
+          <div className="flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {errorMessage}
+          </div>
+        )}
+
         <div className="max-w-lg mx-auto py-12">
           <div className="text-center space-y-6">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
@@ -401,18 +514,74 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
             <div className="space-y-2">
               <h2 className="text-lg font-semibold">Conecta tu cuenta</h2>
               <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                Inicia sesión en CryptoGest Cloud desde el navegador. Tu cuenta se vinculará automáticamente con esta aplicación.
+                Inicia sesion en CryptoGest Cloud desde el navegador. Tu cuenta se vinculara automaticamente con esta aplicacion, o introduce el codigo de vinculacion.
               </p>
             </div>
 
             <Button onClick={handleOpenCloud} size="lg" className="gap-2">
               <ExternalLink className="h-4 w-4" />
-              Iniciar sesión en CryptoGest Cloud
+              Iniciar sesion en CryptoGest Cloud
             </Button>
 
             <p className="text-xs text-muted-foreground">
-              Se abrirá {serverUrl} en tu navegador
+              Se abrira {serverUrl} en tu navegador
             </p>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 border-t" />
+              <span className="text-xs text-muted-foreground">o conecta con codigo</span>
+              <div className="flex-1 border-t" />
+            </div>
+
+            {/* Code input */}
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Genera un codigo en{" "}
+                <button
+                  onClick={() => window.electronAPI?.shell.openExternal(`${serverUrl}/dashboard/devices`)}
+                  className="text-primary hover:underline"
+                >
+                  Dispositivos
+                </button>
+                {" "}e introducelo aqui
+              </p>
+              <div className="max-w-[264px] mx-auto">
+                <Input
+                  value={deviceName}
+                  onChange={(e) => setDeviceName(e.target.value)}
+                  placeholder="Nombre del dispositivo"
+                  className="h-8 text-sm text-center"
+                  disabled={isVerifyingCode}
+                />
+              </div>
+              <div className="flex items-center justify-center gap-2" onPaste={handleCodePaste}>
+                {codeDigits.map((digit, i) => (
+                  <Input
+                    key={i}
+                    ref={(el) => { codeInputRefs.current[i] = el }}
+                    value={digit}
+                    onChange={(e) => handleCodeChange(i, e.target.value)}
+                    onKeyDown={(e) => handleCodeKeyDown(i, e)}
+                    className="h-11 w-11 text-center text-lg font-mono uppercase"
+                    maxLength={1}
+                    disabled={isVerifyingCode}
+                  />
+                ))}
+              </div>
+              <Button
+                onClick={handleVerifyCode}
+                disabled={codeDigits.join("").length !== 6 || isVerifyingCode}
+                size="sm"
+              >
+                {isVerifyingCode ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Cloud className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Conectar
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -660,48 +829,62 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
         <TabsContent value="plan">
           <div className="space-y-4">
           {/* License card */}
-          {license && (
-            <Card>
-              <CardContent className="py-4">
-                {license.has_license ? (
+          <Card>
+            <CardContent className="py-4">
+              {license?.has_license ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
+                    <KeyRound className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Licencia Empresarial activa</p>
+                    <p className="text-xs text-muted-foreground">
+                      Adquirida el {license.purchased_at ? formatDate(license.purchased_at) : "—"}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50">Perpetua</Badge>
+                </div>
+              ) : isPollingLicense ? (
+                <div className="flex flex-col items-center gap-3 py-2">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <div className="text-center">
+                    <p className="text-sm font-medium">Esperando confirmacion del pago...</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Completa el pago en tu navegador</p>
+                  </div>
+                  <Button variant="ghost" size="sm" className="text-xs" onClick={() => setIsPollingLicense(false)}>
+                    Cancelar espera
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
-                      <KeyRound className="h-4 w-4 text-emerald-600" />
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100">
+                      <KeyRound className="h-4 w-4 text-blue-600" />
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Licencia Empresarial activa</p>
+                    <div>
+                      <p className="text-sm font-medium">Licencia Empresarial</p>
                       <p className="text-xs text-muted-foreground">
-                        Adquirida el {license.purchased_at ? formatDate(license.purchased_at) : "—"}
+                        99 EUR + IVA — Pago unico, licencia perpetua
                       </p>
                     </div>
-                    <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50">Perpetua</Badge>
                   </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100">
-                        <KeyRound className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">Licencia Empresarial</p>
-                        <p className="text-xs text-muted-foreground">
-                          Gratis para uso personal. Licencia comercial: 99 EUR + IVA (pago unico)
-                        </p>
-                      </div>
-                    </div>
-                    <a
-                      href={`${serverUrl}/dashboard/license`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline inline-flex items-center gap-1 shrink-0 ml-4"
-                    >
-                      Comprar licencia <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                  <Button
+                    size="sm"
+                    className="shrink-0 ml-4"
+                    onClick={handlePurchaseLicense}
+                    disabled={isPurchasing}
+                  >
+                    {isPurchasing ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <ShoppingCart className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    Comprar licencia
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid grid-cols-2 gap-4">
             {/* Plan card */}
