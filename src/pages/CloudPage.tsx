@@ -38,6 +38,7 @@ import {
   Database,
   ArrowDownToLine,
   KeyRound,
+  HelpCircle,
 } from "lucide-react"
 
 // ============================================
@@ -69,9 +70,10 @@ function formatDate(date: string): string {
 interface CloudPageProps {
   deepLinkResult?: { success: boolean; user?: any; server?: string } | null
   onDeepLinkHandled?: () => void
+  onHelp?: () => void
 }
 
-export function CloudPage({ deepLinkResult, onDeepLinkHandled }: CloudPageProps) {
+export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPageProps) {
   // Connection state
   const [isConnected, setIsConnected] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -345,11 +347,18 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled }: CloudPageProps)
   if (!isConnected) {
     return (
       <div className="space-y-4">
-        <div className="border-b pb-3">
-          <h1 className="text-xl font-semibold">Cloud Backup</h1>
-          <p className="text-sm text-muted-foreground">
-            Guarda copias de seguridad en la nube con CryptoGest Cloud
-          </p>
+        <div className="flex items-center justify-between border-b pb-3">
+          <div>
+            <h1 className="text-xl font-semibold">Cloud Backup</h1>
+            <p className="text-sm text-muted-foreground">
+              Guarda copias de seguridad en la nube con CryptoGest Cloud
+            </p>
+          </div>
+          {onHelp && (
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
         </div>
 
         {/* Messages */}
@@ -418,11 +427,18 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled }: CloudPageProps)
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between border-b pb-3">
-        <div>
-          <h1 className="text-xl font-semibold">Cloud Backup</h1>
-          <p className="text-sm text-muted-foreground">
-            Gestiona tus copias de seguridad en la nube
-          </p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h1 className="text-xl font-semibold">Cloud Backup</h1>
+            <p className="text-sm text-muted-foreground">
+              Gestiona tus copias de seguridad en la nube
+            </p>
+          </div>
+          {onHelp && (
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right text-sm">

@@ -23,13 +23,15 @@ import {
   PackagePlus,
   FilePlus,
   Receipt,
+  HelpCircle,
 } from "lucide-react"
 
 interface DashboardPageProps {
   onNavigate: (page: Page) => void
+  onHelp?: () => void
 }
 
-export function DashboardPage({ onNavigate }: DashboardPageProps) {
+export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [activities, setActivities] = useState<RecentActivity[]>([])
   const [pendingInvoices, setPendingInvoices] = useState<Factura[]>([])
@@ -99,11 +101,18 @@ export function DashboardPage({ onNavigate }: DashboardPageProps) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="border-b pb-3">
-        <h1 className="text-xl font-semibold">Panel de Control</h1>
-        <p className="text-sm text-muted-foreground">
-          Resumen del ejercicio fiscal actual
-        </p>
+      <div className="flex items-center justify-between border-b pb-3">
+        <div>
+          <h1 className="text-xl font-semibold">Panel de Control</h1>
+          <p className="text-sm text-muted-foreground">
+            Resumen del ejercicio fiscal actual
+          </p>
+        </div>
+        {onHelp && (
+          <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+            <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        )}
       </div>
 
       {/* Quick Actions */}

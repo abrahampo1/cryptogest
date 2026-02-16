@@ -69,6 +69,7 @@ import {
   X,
   Image,
   Palette,
+  HelpCircle,
 } from "lucide-react"
 import { generateInvoicePdf, TemplateConfig } from "@/lib/generateInvoicePdf"
 import { PREVIEW_FACTURA } from "@/lib/invoicePreviewData"
@@ -110,7 +111,7 @@ const emptyImpuestoForm = {
   porDefecto: false,
 }
 
-export function ConfiguracionPage() {
+export function ConfiguracionPage({ onHelp }: { onHelp?: () => void }) {
   const [empresaData, setEmpresaData] = useState<EmpresaData>({
     nombre: "",
     nif: "",
@@ -687,11 +688,18 @@ export function ConfiguracionPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between border-b pb-3">
-        <div>
-          <h1 className="text-xl font-semibold">Configuración</h1>
-          <p className="text-sm text-muted-foreground">
-            Ajustes del sistema y datos de empresa
-          </p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h1 className="text-xl font-semibold">Configuración</h1>
+            <p className="text-sm text-muted-foreground">
+              Ajustes del sistema y datos de empresa
+            </p>
+          </div>
+          {onHelp && (
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
         </div>
       </div>
 

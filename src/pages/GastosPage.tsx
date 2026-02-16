@@ -54,6 +54,7 @@ import {
   Image as ImageIcon,
   Eye,
   FileImage,
+  HelpCircle,
 } from "lucide-react"
 import { ImportarGastosDialog } from "@/components/ImportarGastosDialog"
 
@@ -124,7 +125,7 @@ const emptyFormData = {
   notas: "",
 }
 
-export function GastosPage() {
+export function GastosPage({ onHelp }: { onHelp?: () => void }) {
   const [gastos, setGastos] = useState<Gasto[]>([])
   const [categorias, setCategorias] = useState<CategoriaGasto[]>([])
   const [impuestos, setImpuestos] = useState<Impuesto[]>([])
@@ -521,11 +522,18 @@ export function GastosPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between border-b pb-3">
-        <div>
-          <h1 className="text-xl font-semibold">Gastos</h1>
-          <p className="text-sm text-muted-foreground">
-            Control y seguimiento de gastos empresariales
-          </p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h1 className="text-xl font-semibold">Gastos</h1>
+            <p className="text-sm text-muted-foreground">
+              Control y seguimiento de gastos empresariales
+            </p>
+          </div>
+          {onHelp && (
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setIsImportOpen(true)}>

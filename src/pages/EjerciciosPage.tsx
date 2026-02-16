@@ -48,6 +48,7 @@ import {
   BookOpen,
   BarChart3,
   AlertCircle,
+  HelpCircle,
 } from "lucide-react"
 
 const formatCurrency = (amount: number) =>
@@ -56,7 +57,7 @@ const formatCurrency = (amount: number) =>
 const formatDate = (date: Date | string) =>
   new Date(date).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" })
 
-export function EjerciciosPage() {
+export function EjerciciosPage({ onHelp }: { onHelp?: () => void }) {
   const [ejercicios, setEjercicios] = useState<EjercicioFiscal[]>([])
   const [selectedStats, setSelectedStats] = useState<EjercicioStats | null>(null)
   const [selectedEjercicioId, setSelectedEjercicioId] = useState<number | null>(null)
@@ -198,11 +199,18 @@ export function EjerciciosPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between border-b pb-3">
-        <div>
-          <h1 className="text-xl font-semibold">Ejercicios Fiscales</h1>
-          <p className="text-sm text-muted-foreground">
-            Gestión de períodos contables anuales
-          </p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h1 className="text-xl font-semibold">Ejercicios Fiscales</h1>
+            <p className="text-sm text-muted-foreground">
+              Gestión de períodos contables anuales
+            </p>
+          </div>
+          {onHelp && (
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
         </div>
         <Button size="sm" className="gap-1.5" onClick={() => {
           setNewYear(String(yearOptions[0] || currentYear))

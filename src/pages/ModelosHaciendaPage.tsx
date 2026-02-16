@@ -25,6 +25,7 @@ import {
   FileText,
   Info,
   AlertCircle,
+  HelpCircle,
 } from "lucide-react"
 
 interface EjercicioFiscal {
@@ -77,7 +78,7 @@ const formatCurrency = (amount: number) =>
 
 const trimestreLabels = ["1T", "2T", "3T", "4T"]
 
-export function ModelosHaciendaPage() {
+export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
   const [ejercicios, setEjercicios] = useState<EjercicioFiscal[]>([])
   const [selectedEjercicioId, setSelectedEjercicioId] = useState<string>("")
   const [isLoadingEjercicios, setIsLoadingEjercicios] = useState(true)
@@ -217,11 +218,18 @@ export function ModelosHaciendaPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between border-b pb-3">
-        <div>
-          <h1 className="text-xl font-semibold">Modelos de Hacienda</h1>
-          <p className="text-sm text-muted-foreground">
-            Cálculo y consulta de modelos fiscales trimestrales y anuales
-          </p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h1 className="text-xl font-semibold">Modelos de Hacienda</h1>
+            <p className="text-sm text-muted-foreground">
+              Cálculo y consulta de modelos fiscales trimestrales y anuales
+            </p>
+          </div>
+          {onHelp && (
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
         </div>
       </div>
 

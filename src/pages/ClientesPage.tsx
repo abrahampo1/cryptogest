@@ -46,6 +46,7 @@ import {
   Eye,
   Download,
   Filter,
+  HelpCircle,
 } from "lucide-react"
 
 type ClienteWithFacturas = Cliente
@@ -64,7 +65,7 @@ const emptyFormData = {
   activo: true,
 }
 
-export function ClientesPage() {
+export function ClientesPage({ onHelp }: { onHelp?: () => void }) {
   const [clientes, setClientes] = useState<ClienteWithFacturas[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(true)
@@ -207,11 +208,18 @@ export function ClientesPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between border-b pb-3">
-        <div>
-          <h1 className="text-xl font-semibold">Clientes</h1>
-          <p className="text-sm text-muted-foreground">
-            Gestión de la cartera de clientes
-          </p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h1 className="text-xl font-semibold">Clientes</h1>
+            <p className="text-sm text-muted-foreground">
+              Gestión de la cartera de clientes
+            </p>
+          </div>
+          {onHelp && (
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
         </div>
         <Button size="sm" onClick={() => handleOpenDialog()}>
           <Plus className="mr-1 h-4 w-4" />

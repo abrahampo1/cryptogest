@@ -50,6 +50,7 @@ import {
   FileText,
   Receipt,
   X,
+  HelpCircle,
 } from "lucide-react"
 
 // ── Local types for form data ──────────────────────────────────────────
@@ -111,7 +112,7 @@ const formatDate = (date: Date | string) => {
 
 // ── Component ───────────────────────────────────────────────────────────
 
-export function ContabilidadPage() {
+export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
   // ── Shared state ──────────────────────────────────────────────────────
   const [cuentas, setCuentas] = useState<CuentaContable[]>([])
   const [ejercicios, setEjercicios] = useState<EjercicioFiscal[]>([])
@@ -655,11 +656,18 @@ export function ContabilidadPage() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between border-b pb-3">
-        <div>
-          <h1 className="text-xl font-semibold">Contabilidad</h1>
-          <p className="text-sm text-muted-foreground">
-            Plan de cuentas, asientos contables y libros oficiales
-          </p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h1 className="text-xl font-semibold">Contabilidad</h1>
+            <p className="text-sm text-muted-foreground">
+              Plan de cuentas, asientos contables y libros oficiales
+            </p>
+          </div>
+          {onHelp && (
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
         </div>
       </div>
 

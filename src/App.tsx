@@ -11,6 +11,7 @@ import { EjerciciosPage } from '@/pages/EjerciciosPage'
 import { ContabilidadPage } from '@/pages/ContabilidadPage'
 import { ModelosHaciendaPage } from '@/pages/ModelosHaciendaPage'
 import { CloudPage } from '@/pages/CloudPage'
+import { ManualPage } from '@/pages/ManualPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { EmpresaSelectorPage } from '@/pages/EmpresaSelectorPage'
 import { SetupWizardPage } from '@/pages/SetupWizardPage'
@@ -25,6 +26,7 @@ function App() {
   const [activeEmpresa, setActiveEmpresa] = useState<EmpresaInfo | null>(null)
   const [currentPage, setCurrentPage] = useState<Page>('dashboard')
   const [deepLinkResult, setDeepLinkResult] = useState<{ success: boolean; user?: any; server?: string } | null>(null)
+  const [manualSection, setManualSection] = useState<string | undefined>()
 
   useEffect(() => {
     loadEmpresas()
@@ -134,30 +136,37 @@ function App() {
     setPhase('empresa-selector')
   }
 
+  const navigateToManual = (section?: string) => {
+    setManualSection(section)
+    setCurrentPage('manual')
+  }
+
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
-        return <DashboardPage onNavigate={setCurrentPage} />
+        return <DashboardPage onNavigate={setCurrentPage} onHelp={() => navigateToManual('dashboard')} />
       case 'clientes':
-        return <ClientesPage />
+        return <ClientesPage onHelp={() => navigateToManual('clientes')} />
       case 'productos':
-        return <ProductosPage />
+        return <ProductosPage onHelp={() => navigateToManual('productos')} />
       case 'facturas':
-        return <FacturasPage />
+        return <FacturasPage onHelp={() => navigateToManual('facturas')} />
       case 'gastos':
-        return <GastosPage />
+        return <GastosPage onHelp={() => navigateToManual('gastos')} />
       case 'ejercicios':
-        return <EjerciciosPage />
+        return <EjerciciosPage onHelp={() => navigateToManual('ejercicios')} />
       case 'contabilidad':
-        return <ContabilidadPage />
+        return <ContabilidadPage onHelp={() => navigateToManual('contabilidad')} />
       case 'modelos':
-        return <ModelosHaciendaPage />
+        return <ModelosHaciendaPage onHelp={() => navigateToManual('modelos')} />
       case 'cloud':
-        return <CloudPage deepLinkResult={deepLinkResult} onDeepLinkHandled={() => setDeepLinkResult(null)} />
+        return <CloudPage deepLinkResult={deepLinkResult} onDeepLinkHandled={() => setDeepLinkResult(null)} onHelp={() => navigateToManual('cloud')} />
       case 'configuracion':
-        return <ConfiguracionPage />
+        return <ConfiguracionPage onHelp={() => navigateToManual('configuracion')} />
+      case 'manual':
+        return <ManualPage section={manualSection} />
       default:
-        return <DashboardPage onNavigate={setCurrentPage} />
+        return <DashboardPage onNavigate={setCurrentPage} onHelp={() => navigateToManual('dashboard')} />
     }
   }
 
