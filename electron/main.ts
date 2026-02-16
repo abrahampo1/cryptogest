@@ -9,6 +9,9 @@ import { PrismaClient } from '@prisma/client'
 import * as crypto from './crypto'
 import * as cloud from './cloud'
 import nodemailer from 'nodemailer'
+import { ImapFlow } from 'imapflow'
+import { simpleParser } from 'mailparser'
+import { convert as htmlToText } from 'html-to-text'
 
 // Establecer nombre de la aplicación
 app.setName('CryptoGest')
@@ -263,6 +266,68 @@ async function ensureDatabaseTables(db: PrismaClient) {
       CONSTRAINT "LineaAsiento_cuentaId_fkey" FOREIGN KEY ("cuentaId") REFERENCES "CuentaContable" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
     )
   `)
+
+  // ---- Tablas de buzón de correo ----
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "CuentaEmail" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "nombre" TEXT NOT NULL,
+      "email" TEXT NOT NULL,
+      "imapHost" TEXT NOT NULL,
+      "imapPort" INTEGER NOT NULL DEFAULT 993,
+      "imapSecure" INTEGER NOT NULL DEFAULT 1,
+      "imapUser" TEXT NOT NULL,
+      "imapPass" TEXT NOT NULL,
+      "smtpHost" TEXT NOT NULL,
+      "smtpPort" INTEGER NOT NULL DEFAULT 587,
+      "smtpSecure" INTEGER NOT NULL DEFAULT 0,
+      "smtpUser" TEXT NOT NULL,
+      "smtpPass" TEXT NOT NULL,
+      "fromName" TEXT NOT NULL DEFAULT '',
+      "activo" INTEGER NOT NULL DEFAULT 1,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "CarpetaEmail" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "cuentaId" INTEGER NOT NULL,
+      "path" TEXT NOT NULL,
+      "nombre" TEXT NOT NULL,
+      "specialUse" TEXT,
+      "totalMessages" INTEGER NOT NULL DEFAULT 0,
+      "unseenMessages" INTEGER NOT NULL DEFAULT 0,
+      "syncedAt" DATETIME,
+      CONSTRAINT "CarpetaEmail_cuentaId_fkey" FOREIGN KEY ("cuentaId") REFERENCES "CuentaEmail" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    )
+  `)
+  await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "CarpetaEmail_cuentaId_path_key" ON "CarpetaEmail"("cuentaId", "path")`)
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "CorreoCache" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "cuentaId" INTEGER NOT NULL,
+      "carpetaId" INTEGER NOT NULL,
+      "uid" INTEGER NOT NULL,
+      "messageId" TEXT,
+      "fromAddress" TEXT,
+      "fromName" TEXT,
+      "toAddress" TEXT,
+      "subject" TEXT,
+      "fecha" DATETIME,
+      "hasAttachments" INTEGER NOT NULL DEFAULT 0,
+      "seen" INTEGER NOT NULL DEFAULT 0,
+      "flagged" INTEGER NOT NULL DEFAULT 0,
+      "size" INTEGER NOT NULL DEFAULT 0,
+      "syncedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "CorreoCache_cuentaId_fkey" FOREIGN KEY ("cuentaId") REFERENCES "CuentaEmail" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT "CorreoCache_carpetaId_fkey" FOREIGN KEY ("carpetaId") REFERENCES "CarpetaEmail" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    )
+  `)
+  await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "CorreoCache_cuentaId_carpetaId_uid_key" ON "CorreoCache"("cuentaId", "carpetaId", "uid")`)
 }
 
 let mainWindow: BrowserWindow | null = null
@@ -3803,6 +3868,577 @@ ipcMain.handle('email:send', async (_, data: {
         filename: data.attachmentName,
         content: Buffer.from(data.attachmentBase64, 'base64'),
       }]
+    }
+
+    await transporter.sendMail(mailOptions)
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - Buzón de Correo
+// ============================================
+
+function createImapConnection(account: { imapHost: string; imapPort: number; imapSecure: number; imapUser: string; imapPass: string }): ImapFlow {
+  const decryptedPass = safeStorage.decryptString(Buffer.from(account.imapPass, 'base64'))
+  return new ImapFlow({
+    host: account.imapHost,
+    port: account.imapPort,
+    secure: account.imapSecure === 1,
+    auth: {
+      user: account.imapUser,
+      pass: decryptedPass,
+    },
+    logger: false,
+  })
+}
+
+function createAccountTransporter(account: { smtpHost: string; smtpPort: number; smtpSecure: number; smtpUser: string; smtpPass: string }) {
+  const decryptedPass = safeStorage.decryptString(Buffer.from(account.smtpPass, 'base64'))
+  return nodemailer.createTransport({
+    host: account.smtpHost,
+    port: account.smtpPort,
+    secure: account.smtpSecure === 1,
+    auth: {
+      user: account.smtpUser,
+      pass: decryptedPass,
+    },
+  })
+}
+
+function checkHasAttachments(bodyStructure: any): boolean {
+  if (!bodyStructure) return false
+  if (bodyStructure.disposition === 'attachment') return true
+  if (bodyStructure.childNodes) {
+    return bodyStructure.childNodes.some((child: any) => checkHasAttachments(child))
+  }
+  return false
+}
+
+// --- Cuentas ---
+
+ipcMain.handle('buzon:addAccount', async (_, data: {
+  nombre: string; email: string;
+  imapHost: string; imapPort: number; imapSecure: boolean; imapUser: string; imapPass: string;
+  smtpHost: string; smtpPort: number; smtpSecure: boolean; smtpUser: string; smtpPass: string;
+  fromName: string;
+}) => {
+  try {
+    requireAuth()
+    const encImapPass = safeStorage.encryptString(data.imapPass).toString('base64')
+    const encSmtpPass = safeStorage.encryptString(data.smtpPass).toString('base64')
+    await prisma!.$executeRawUnsafe(
+      `INSERT INTO "CuentaEmail" ("nombre","email","imapHost","imapPort","imapSecure","imapUser","imapPass","smtpHost","smtpPort","smtpSecure","smtpUser","smtpPass","fromName") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      data.nombre, data.email,
+      data.imapHost, data.imapPort, data.imapSecure ? 1 : 0, data.imapUser, encImapPass,
+      data.smtpHost, data.smtpPort, data.smtpSecure ? 1 : 0, data.smtpUser, encSmtpPass,
+      data.fromName || ''
+    )
+    const rows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" ORDER BY "id" DESC LIMIT 1`)
+    return { success: true, data: rows[0] }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('buzon:updateAccount', async (_, id: number, data: {
+  nombre: string; email: string;
+  imapHost: string; imapPort: number; imapSecure: boolean; imapUser: string; imapPass?: string;
+  smtpHost: string; smtpPort: number; smtpSecure: boolean; smtpUser: string; smtpPass?: string;
+  fromName: string;
+}) => {
+  try {
+    requireAuth()
+    let query = `UPDATE "CuentaEmail" SET "nombre"=?,"email"=?,"imapHost"=?,"imapPort"=?,"imapSecure"=?,"imapUser"=?,"smtpHost"=?,"smtpPort"=?,"smtpSecure"=?,"smtpUser"=?,"fromName"=?,"updatedAt"=CURRENT_TIMESTAMP`
+    const params: any[] = [
+      data.nombre, data.email,
+      data.imapHost, data.imapPort, data.imapSecure ? 1 : 0, data.imapUser,
+      data.smtpHost, data.smtpPort, data.smtpSecure ? 1 : 0, data.smtpUser,
+      data.fromName || ''
+    ]
+    if (data.imapPass) {
+      query += `,"imapPass"=?`
+      params.push(safeStorage.encryptString(data.imapPass).toString('base64'))
+    }
+    if (data.smtpPass) {
+      query += `,"smtpPass"=?`
+      params.push(safeStorage.encryptString(data.smtpPass).toString('base64'))
+    }
+    query += ` WHERE "id"=?`
+    params.push(id)
+    await prisma!.$executeRawUnsafe(query, ...params)
+    const rows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, id)
+    return { success: true, data: rows[0] }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('buzon:deleteAccount', async (_, id: number) => {
+  try {
+    requireAuth()
+    await prisma!.$executeRawUnsafe(`DELETE FROM "CuentaEmail" WHERE "id"=?`, id)
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('buzon:listAccounts', async () => {
+  try {
+    requireAuth()
+    const rows = await prisma!.$queryRawUnsafe<any[]>(`SELECT "id","nombre","email","imapHost","imapPort","imapSecure","imapUser","smtpHost","smtpPort","smtpSecure","smtpUser","fromName","activo","createdAt","updatedAt" FROM "CuentaEmail" ORDER BY "nombre"`)
+    return { success: true, data: rows }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('buzon:testConnection', async (_, id: number) => {
+  try {
+    requireAuth()
+    const rows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, id)
+    if (!rows.length) return { success: false, error: 'Cuenta no encontrada' }
+    const account = rows[0]
+
+    // Test IMAP
+    const imap = createImapConnection(account)
+    await imap.connect()
+    await imap.logout()
+
+    // Test SMTP
+    const transporter = createAccountTransporter(account)
+    await transporter.verify()
+
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// --- Carpetas ---
+
+ipcMain.handle('buzon:syncFolders', async (_, cuentaId: number) => {
+  try {
+    requireAuth()
+    const rows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
+    if (!rows.length) return { success: false, error: 'Cuenta no encontrada' }
+
+    const imap = createImapConnection(rows[0])
+    await imap.connect()
+
+    const folders = await imap.list()
+    await imap.logout()
+
+    // Upsert folders
+    for (const folder of folders) {
+      const specialUse = folder.specialUse || null
+      const existing = await prisma!.$queryRawUnsafe<any[]>(
+        `SELECT "id" FROM "CarpetaEmail" WHERE "cuentaId"=? AND "path"=?`, cuentaId, folder.path
+      )
+      if (existing.length > 0) {
+        await prisma!.$executeRawUnsafe(
+          `UPDATE "CarpetaEmail" SET "nombre"=?,"specialUse"=?,"syncedAt"=CURRENT_TIMESTAMP WHERE "id"=?`,
+          folder.name, specialUse, existing[0].id
+        )
+      } else {
+        await prisma!.$executeRawUnsafe(
+          `INSERT INTO "CarpetaEmail" ("cuentaId","path","nombre","specialUse","syncedAt") VALUES (?,?,?,?,CURRENT_TIMESTAMP)`,
+          cuentaId, folder.path, folder.name, specialUse
+        )
+      }
+    }
+
+    // Remove folders that no longer exist on server
+    const serverPaths = folders.map(f => f.path)
+    const dbFolders = await prisma!.$queryRawUnsafe<any[]>(
+      `SELECT "id","path" FROM "CarpetaEmail" WHERE "cuentaId"=?`, cuentaId
+    )
+    for (const dbFolder of dbFolders) {
+      if (!serverPaths.includes(dbFolder.path)) {
+        await prisma!.$executeRawUnsafe(`DELETE FROM "CarpetaEmail" WHERE "id"=?`, dbFolder.id)
+      }
+    }
+
+    const updatedFolders = await prisma!.$queryRawUnsafe<any[]>(
+      `SELECT * FROM "CarpetaEmail" WHERE "cuentaId"=? ORDER BY "specialUse" IS NULL, "nombre"`, cuentaId
+    )
+    return { success: true, data: updatedFolders }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('buzon:listFolders', async (_, cuentaId: number) => {
+  try {
+    requireAuth()
+    const rows = await prisma!.$queryRawUnsafe<any[]>(
+      `SELECT * FROM "CarpetaEmail" WHERE "cuentaId"=? ORDER BY "specialUse" IS NULL, "nombre"`, cuentaId
+    )
+    return { success: true, data: rows }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// --- Mensajes ---
+
+ipcMain.handle('buzon:syncMessages', async (_, cuentaId: number, carpetaId: number) => {
+  try {
+    requireAuth()
+    const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
+    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
+    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+
+    const imap = createImapConnection(accountRows[0])
+    await imap.connect()
+
+    const lock = await imap.getMailboxLock(folderRows[0].path)
+    try {
+      // Update folder stats
+      const status = imap.mailbox
+      if (status) {
+        await prisma!.$executeRawUnsafe(
+          `UPDATE "CarpetaEmail" SET "totalMessages"=?,"unseenMessages"=?,"syncedAt"=CURRENT_TIMESTAMP WHERE "id"=?`,
+          status.exists || 0, status.unseen || 0, carpetaId
+        )
+      }
+
+      // Get highest synced UID to only fetch new messages
+      const maxUidRows = await prisma!.$queryRawUnsafe<any[]>(
+        `SELECT MAX("uid") as maxUid FROM "CorreoCache" WHERE "cuentaId"=? AND "carpetaId"=?`, cuentaId, carpetaId
+      )
+      const maxUid = maxUidRows[0]?.maxUid || 0
+      const range = maxUid > 0 ? `${maxUid + 1}:*` : '1:*'
+
+      let synced = 0
+      for await (const msg of imap.fetch(range, {
+        uid: true,
+        envelope: true,
+        flags: true,
+        bodyStructure: true,
+        size: true,
+      })) {
+        if (msg.uid <= maxUid) continue // Skip already-synced
+        const env = msg.envelope
+        const fromAddr = env.from?.[0]?.address || ''
+        const fromName = env.from?.[0]?.name || ''
+        const toAddr = env.to?.map((t: any) => t.address).join(', ') || ''
+        const subject = env.subject || ''
+        const messageId = env.messageId || ''
+        const fecha = env.date ? new Date(env.date).toISOString() : new Date().toISOString()
+        const seen = msg.flags?.has('\\Seen') ? 1 : 0
+        const flagged = msg.flags?.has('\\Flagged') ? 1 : 0
+        const hasAttachments = checkHasAttachments(msg.bodyStructure) ? 1 : 0
+
+        await prisma!.$executeRawUnsafe(
+          `INSERT OR IGNORE INTO "CorreoCache" ("cuentaId","carpetaId","uid","messageId","fromAddress","fromName","toAddress","subject","fecha","hasAttachments","seen","flagged","size") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          cuentaId, carpetaId, msg.uid, messageId, fromAddr, fromName, toAddr, subject, fecha, hasAttachments, seen, flagged, msg.size || 0
+        )
+        synced++
+      }
+
+      // Also update flags for recently synced messages (last 100)
+      const recentRows = await prisma!.$queryRawUnsafe<any[]>(
+        `SELECT "uid" FROM "CorreoCache" WHERE "cuentaId"=? AND "carpetaId"=? ORDER BY "uid" DESC LIMIT 100`, cuentaId, carpetaId
+      )
+      if (recentRows.length > 0) {
+        const minRecentUid = recentRows[recentRows.length - 1].uid
+        const maxRecentUid = recentRows[0].uid
+        for await (const msg of imap.fetch(`${minRecentUid}:${maxRecentUid}`, { uid: true, flags: true })) {
+          const seen = msg.flags?.has('\\Seen') ? 1 : 0
+          const flagged = msg.flags?.has('\\Flagged') ? 1 : 0
+          await prisma!.$executeRawUnsafe(
+            `UPDATE "CorreoCache" SET "seen"=?,"flagged"=? WHERE "cuentaId"=? AND "carpetaId"=? AND "uid"=?`,
+            seen, flagged, cuentaId, carpetaId, msg.uid
+          )
+        }
+      }
+    } finally {
+      lock.release()
+    }
+
+    await imap.logout()
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('buzon:listMessages', async (_, cuentaId: number, carpetaId: number, page: number = 1, pageSize: number = 50) => {
+  try {
+    requireAuth()
+    const offset = (page - 1) * pageSize
+    const rows = await prisma!.$queryRawUnsafe<any[]>(
+      `SELECT * FROM "CorreoCache" WHERE "cuentaId"=? AND "carpetaId"=? ORDER BY "fecha" DESC LIMIT ? OFFSET ?`,
+      cuentaId, carpetaId, pageSize, offset
+    )
+    const countRows = await prisma!.$queryRawUnsafe<any[]>(
+      `SELECT COUNT(*) as total FROM "CorreoCache" WHERE "cuentaId"=? AND "carpetaId"=?`, cuentaId, carpetaId
+    )
+    const total = Number(countRows[0]?.total || 0)
+    return { success: true, data: { messages: rows, total, page, pageSize } }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('buzon:getMessage', async (_, cuentaId: number, carpetaId: number, uid: number) => {
+  try {
+    requireAuth()
+    const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
+    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
+    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+
+    const imap = createImapConnection(accountRows[0])
+    await imap.connect()
+
+    const lock = await imap.getMailboxLock(folderRows[0].path)
+    let result: any = null
+    try {
+      const download = await imap.download(String(uid), undefined, { uid: true })
+      if (download?.content) {
+        const parsed = await simpleParser(download.content)
+
+        // Mark as seen
+        await imap.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true })
+
+        const attachments = (parsed.attachments || []).map((att, idx) => ({
+          index: idx,
+          filename: att.filename || `attachment_${idx}`,
+          contentType: att.contentType,
+          size: att.size,
+        }))
+
+        result = {
+          uid,
+          messageId: parsed.messageId || '',
+          from: parsed.from?.value || [],
+          to: parsed.to ? (Array.isArray(parsed.to) ? parsed.to.flatMap((t: any) => t.value) : parsed.to.value) : [],
+          cc: parsed.cc ? (Array.isArray(parsed.cc) ? parsed.cc.flatMap((c: any) => c.value) : parsed.cc.value) : [],
+          subject: parsed.subject || '',
+          date: parsed.date?.toISOString() || '',
+          html: parsed.html || '',
+          text: parsed.text || '',
+          attachments,
+        }
+      }
+
+      // Update cache seen flag
+      await prisma!.$executeRawUnsafe(
+        `UPDATE "CorreoCache" SET "seen"=1 WHERE "cuentaId"=? AND "carpetaId"=? AND "uid"=?`,
+        cuentaId, carpetaId, uid
+      )
+    } finally {
+      lock.release()
+    }
+
+    await imap.logout()
+    return { success: true, data: result }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('buzon:downloadAttachment', async (_, cuentaId: number, carpetaId: number, uid: number, attachmentIndex: number) => {
+  try {
+    requireAuth()
+    const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
+    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
+    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+
+    const imap = createImapConnection(accountRows[0])
+    await imap.connect()
+
+    const lock = await imap.getMailboxLock(folderRows[0].path)
+    let attachmentData: { filename: string; contentType: string; data: number[] } | null = null
+    try {
+      const download = await imap.download(String(uid), undefined, { uid: true })
+      if (download?.content) {
+        const parsed = await simpleParser(download.content)
+        const att = parsed.attachments?.[attachmentIndex]
+        if (att) {
+          // Ask user where to save
+          const result = await dialog.showSaveDialog(mainWindow!, {
+            defaultPath: att.filename || 'attachment',
+          })
+          if (!result.canceled && result.filePath) {
+            fs.writeFileSync(result.filePath, att.content)
+            attachmentData = {
+              filename: att.filename || 'attachment',
+              contentType: att.contentType,
+              data: Array.from(att.content),
+            }
+          }
+        }
+      }
+    } finally {
+      lock.release()
+    }
+
+    await imap.logout()
+    return { success: true, data: attachmentData }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// --- Acciones ---
+
+ipcMain.handle('buzon:markRead', async (_, cuentaId: number, carpetaId: number, uid: number) => {
+  try {
+    requireAuth()
+    const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
+    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
+    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+
+    const imap = createImapConnection(accountRows[0])
+    await imap.connect()
+    const lock = await imap.getMailboxLock(folderRows[0].path)
+    try {
+      await imap.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true })
+    } finally {
+      lock.release()
+    }
+    await imap.logout()
+
+    await prisma!.$executeRawUnsafe(
+      `UPDATE "CorreoCache" SET "seen"=1 WHERE "cuentaId"=? AND "carpetaId"=? AND "uid"=?`,
+      cuentaId, carpetaId, uid
+    )
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('buzon:markUnread', async (_, cuentaId: number, carpetaId: number, uid: number) => {
+  try {
+    requireAuth()
+    const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
+    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
+    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+
+    const imap = createImapConnection(accountRows[0])
+    await imap.connect()
+    const lock = await imap.getMailboxLock(folderRows[0].path)
+    try {
+      await imap.messageFlagsRemove(String(uid), ['\\Seen'], { uid: true })
+    } finally {
+      lock.release()
+    }
+    await imap.logout()
+
+    await prisma!.$executeRawUnsafe(
+      `UPDATE "CorreoCache" SET "seen"=0 WHERE "cuentaId"=? AND "carpetaId"=? AND "uid"=?`,
+      cuentaId, carpetaId, uid
+    )
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('buzon:deleteMessage', async (_, cuentaId: number, carpetaId: number, uid: number) => {
+  try {
+    requireAuth()
+    const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
+    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
+    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+
+    const imap = createImapConnection(accountRows[0])
+    await imap.connect()
+    const lock = await imap.getMailboxLock(folderRows[0].path)
+    try {
+      await imap.messageFlagsAdd(String(uid), ['\\Deleted'], { uid: true })
+      await imap.messageDelete(String(uid), { uid: true })
+    } finally {
+      lock.release()
+    }
+    await imap.logout()
+
+    await prisma!.$executeRawUnsafe(
+      `DELETE FROM "CorreoCache" WHERE "cuentaId"=? AND "carpetaId"=? AND "uid"=?`,
+      cuentaId, carpetaId, uid
+    )
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('buzon:moveMessage', async (_, cuentaId: number, carpetaId: number, uid: number, destPath: string) => {
+  try {
+    requireAuth()
+    const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
+    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
+    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+
+    const imap = createImapConnection(accountRows[0])
+    await imap.connect()
+    const lock = await imap.getMailboxLock(folderRows[0].path)
+    try {
+      await imap.messageMove(String(uid), destPath, { uid: true })
+    } finally {
+      lock.release()
+    }
+    await imap.logout()
+
+    // Remove from source folder cache
+    await prisma!.$executeRawUnsafe(
+      `DELETE FROM "CorreoCache" WHERE "cuentaId"=? AND "carpetaId"=? AND "uid"=?`,
+      cuentaId, carpetaId, uid
+    )
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// --- Envío ---
+
+ipcMain.handle('buzon:sendEmail', async (_, cuentaId: number, data: {
+  to: string; cc?: string; subject: string;
+  html: string; text: string;
+  inReplyTo?: string; references?: string;
+  attachments?: Array<{ filename: string; data: number[] }>;
+}) => {
+  try {
+    requireAuth()
+    const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
+    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+
+    const account = accountRows[0]
+    const transporter = createAccountTransporter(account)
+
+    const fromName = account.fromName || account.nombre
+    const from = fromName ? `"${fromName}" <${account.email}>` : account.email
+
+    const mailOptions: nodemailer.SendMailOptions = {
+      from,
+      to: data.to,
+      cc: data.cc || undefined,
+      subject: data.subject,
+      text: data.text || htmlToText(data.html || ''),
+      html: data.html || undefined,
+      inReplyTo: data.inReplyTo || undefined,
+      references: data.references || undefined,
+    }
+
+    if (data.attachments?.length) {
+      mailOptions.attachments = data.attachments.map(att => ({
+        filename: att.filename,
+        content: Buffer.from(att.data),
+      }))
     }
 
     await transporter.sendMail(mailOptions)

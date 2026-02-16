@@ -71,6 +71,7 @@ import {
   Palette,
   HelpCircle,
   Mail,
+  FlaskConical,
 } from "lucide-react"
 import { generateInvoicePdf, TemplateConfig } from "@/lib/generateInvoicePdf"
 import { PREVIEW_FACTURA } from "@/lib/invoicePreviewData"
@@ -112,7 +113,7 @@ const emptyImpuestoForm = {
   porDefecto: false,
 }
 
-export function ConfiguracionPage({ onHelp }: { onHelp?: () => void }) {
+export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onHelp?: () => void; buzonEnabled?: boolean; onBuzonToggle?: (v: boolean) => void }) {
   const [empresaData, setEmpresaData] = useState<EmpresaData>({
     nombre: "",
     nif: "",
@@ -1886,6 +1887,37 @@ export function ConfiguracionPage({ onHelp }: { onHelp?: () => void }) {
                     </span>
                   </div>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <FlaskConical className="h-4 w-4" />
+                Funciones Beta
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Activa funciones experimentales. Pueden contener errores o cambiar sin previo aviso.
+              </p>
+              <div className="flex items-center justify-between p-3 border rounded">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full p-2 bg-amber-50 text-amber-600">
+                    <Mail className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Buzón de Correo</p>
+                    <p className="text-xs text-muted-foreground">
+                      Cliente de email integrado con soporte IMAP/SMTP
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={buzonEnabled || false}
+                  onCheckedChange={(v) => onBuzonToggle?.(v)}
+                />
               </div>
             </CardContent>
           </Card>

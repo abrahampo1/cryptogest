@@ -278,6 +278,34 @@ const electronAPI = {
   shell: {
     openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url) as Promise<ApiResponse<void>>,
   },
+
+  // Buzón de Correo
+  buzon: {
+    addAccount: (data: any) => ipcRenderer.invoke('buzon:addAccount', data) as Promise<ApiResponse<any>>,
+    updateAccount: (id: number, data: any) => ipcRenderer.invoke('buzon:updateAccount', id, data) as Promise<ApiResponse<any>>,
+    deleteAccount: (id: number) => ipcRenderer.invoke('buzon:deleteAccount', id) as Promise<ApiResponse<void>>,
+    listAccounts: () => ipcRenderer.invoke('buzon:listAccounts') as Promise<ApiResponse<any[]>>,
+    testConnection: (id: number) => ipcRenderer.invoke('buzon:testConnection', id) as Promise<ApiResponse<void>>,
+    syncFolders: (cuentaId: number) => ipcRenderer.invoke('buzon:syncFolders', cuentaId) as Promise<ApiResponse<any[]>>,
+    listFolders: (cuentaId: number) => ipcRenderer.invoke('buzon:listFolders', cuentaId) as Promise<ApiResponse<any[]>>,
+    syncMessages: (cuentaId: number, carpetaId: number) => ipcRenderer.invoke('buzon:syncMessages', cuentaId, carpetaId) as Promise<ApiResponse<void>>,
+    listMessages: (cuentaId: number, carpetaId: number, page?: number, pageSize?: number) =>
+      ipcRenderer.invoke('buzon:listMessages', cuentaId, carpetaId, page, pageSize) as Promise<ApiResponse<any>>,
+    getMessage: (cuentaId: number, carpetaId: number, uid: number) =>
+      ipcRenderer.invoke('buzon:getMessage', cuentaId, carpetaId, uid) as Promise<ApiResponse<any>>,
+    downloadAttachment: (cuentaId: number, carpetaId: number, uid: number, attachmentIndex: number) =>
+      ipcRenderer.invoke('buzon:downloadAttachment', cuentaId, carpetaId, uid, attachmentIndex) as Promise<ApiResponse<any>>,
+    markRead: (cuentaId: number, carpetaId: number, uid: number) =>
+      ipcRenderer.invoke('buzon:markRead', cuentaId, carpetaId, uid) as Promise<ApiResponse<void>>,
+    markUnread: (cuentaId: number, carpetaId: number, uid: number) =>
+      ipcRenderer.invoke('buzon:markUnread', cuentaId, carpetaId, uid) as Promise<ApiResponse<void>>,
+    deleteMessage: (cuentaId: number, carpetaId: number, uid: number) =>
+      ipcRenderer.invoke('buzon:deleteMessage', cuentaId, carpetaId, uid) as Promise<ApiResponse<void>>,
+    moveMessage: (cuentaId: number, carpetaId: number, uid: number, destPath: string) =>
+      ipcRenderer.invoke('buzon:moveMessage', cuentaId, carpetaId, uid, destPath) as Promise<ApiResponse<void>>,
+    sendEmail: (cuentaId: number, data: any) =>
+      ipcRenderer.invoke('buzon:sendEmail', cuentaId, data) as Promise<ApiResponse<void>>,
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

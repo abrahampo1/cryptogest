@@ -288,6 +288,85 @@ interface RecentActivity {
   fecha: Date
 }
 
+// Buzón de correo types
+interface CuentaEmail {
+  id: number
+  nombre: string
+  email: string
+  imapHost: string
+  imapPort: number
+  imapSecure: number
+  imapUser: string
+  smtpHost: string
+  smtpPort: number
+  smtpSecure: number
+  smtpUser: string
+  fromName: string
+  activo: number
+  createdAt: string
+  updatedAt: string
+}
+
+interface CarpetaEmail {
+  id: number
+  cuentaId: number
+  path: string
+  nombre: string
+  specialUse: string | null
+  totalMessages: number
+  unseenMessages: number
+  syncedAt: string | null
+}
+
+interface CorreoCache {
+  id: number
+  cuentaId: number
+  carpetaId: number
+  uid: number
+  messageId: string | null
+  fromAddress: string | null
+  fromName: string | null
+  toAddress: string | null
+  subject: string | null
+  fecha: string | null
+  hasAttachments: number
+  seen: number
+  flagged: number
+  size: number
+  syncedAt: string
+}
+
+interface CorreoCompleto {
+  uid: number
+  messageId: string
+  from: Array<{ address: string; name: string }>
+  to: Array<{ address: string; name: string }>
+  cc: Array<{ address: string; name: string }>
+  subject: string
+  date: string
+  html: string
+  text: string
+  attachments: Array<{ index: number; filename: string; contentType: string; size: number }>
+}
+
+interface CorreoListResult {
+  messages: CorreoCache[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+interface BuzonSendData {
+  to: string
+  cc?: string
+  subject: string
+  html: string
+  text: string
+  inReplyTo?: string
+  references?: string
+  attachments?: Array<{ filename: string; data: number[] }>
+}
+
 // Cloud types
 interface CloudBackup {
   id: number
@@ -517,6 +596,25 @@ interface ElectronAPI {
 
   shell: {
     openExternal: (url: string) => Promise<ApiResponse<void>>
+  }
+
+  buzon: {
+    addAccount: (data: any) => Promise<ApiResponse<CuentaEmail>>
+    updateAccount: (id: number, data: any) => Promise<ApiResponse<CuentaEmail>>
+    deleteAccount: (id: number) => Promise<ApiResponse<void>>
+    listAccounts: () => Promise<ApiResponse<CuentaEmail[]>>
+    testConnection: (id: number) => Promise<ApiResponse<void>>
+    syncFolders: (cuentaId: number) => Promise<ApiResponse<CarpetaEmail[]>>
+    listFolders: (cuentaId: number) => Promise<ApiResponse<CarpetaEmail[]>>
+    syncMessages: (cuentaId: number, carpetaId: number) => Promise<ApiResponse<void>>
+    listMessages: (cuentaId: number, carpetaId: number, page?: number, pageSize?: number) => Promise<ApiResponse<CorreoListResult>>
+    getMessage: (cuentaId: number, carpetaId: number, uid: number) => Promise<ApiResponse<CorreoCompleto>>
+    downloadAttachment: (cuentaId: number, carpetaId: number, uid: number, attachmentIndex: number) => Promise<ApiResponse<any>>
+    markRead: (cuentaId: number, carpetaId: number, uid: number) => Promise<ApiResponse<void>>
+    markUnread: (cuentaId: number, carpetaId: number, uid: number) => Promise<ApiResponse<void>>
+    deleteMessage: (cuentaId: number, carpetaId: number, uid: number) => Promise<ApiResponse<void>>
+    moveMessage: (cuentaId: number, carpetaId: number, uid: number, destPath: string) => Promise<ApiResponse<void>>
+    sendEmail: (cuentaId: number, data: BuzonSendData) => Promise<ApiResponse<void>>
   }
 }
 

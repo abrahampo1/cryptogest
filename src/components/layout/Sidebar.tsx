@@ -17,9 +17,10 @@ import {
   Building2,
   Cloud,
   HelpCircle,
+  Mail,
 } from "lucide-react"
 
-export type Page = "dashboard" | "clientes" | "productos" | "facturas" | "gastos" | "ejercicios" | "contabilidad" | "modelos" | "cloud" | "configuracion" | "manual"
+export type Page = "dashboard" | "clientes" | "productos" | "facturas" | "gastos" | "ejercicios" | "contabilidad" | "modelos" | "buzon" | "cloud" | "configuracion" | "manual"
 
 interface SidebarProps {
   currentPage: Page
@@ -27,6 +28,7 @@ interface SidebarProps {
   onLock?: () => Promise<void>
   onSwitchEmpresa?: () => Promise<void>
   empresaNombre?: string
+  buzonEnabled?: boolean
 }
 
 const menuItems = [
@@ -38,6 +40,10 @@ const menuItems = [
   { id: "ejercicios" as Page, label: "Ejercicios Fiscales", icon: Calendar },
   { id: "contabilidad" as Page, label: "Contabilidad", icon: BookOpen },
   { id: "modelos" as Page, label: "Modelos Fiscales", icon: FileBarChart },
+]
+
+const betaItems = [
+  { id: "buzon" as Page, label: "Buzón de Correo", icon: Mail, beta: true },
 ]
 
 const cloudItems = [
@@ -52,7 +58,7 @@ const helpItems = [
   { id: "manual" as Page, label: "Manual de Uso", icon: HelpCircle },
 ]
 
-export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, empresaNombre }: SidebarProps) {
+export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, empresaNombre, buzonEnabled }: SidebarProps) {
   const [isLocking, setIsLocking] = useState(false)
 
   const handleLock = async () => {
@@ -100,6 +106,38 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
             </button>
           )
         })}
+
+        {buzonEnabled && (
+          <>
+            <div className="my-2 border-t border-slate-700" />
+            <div className="px-3 py-1">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+                Beta
+              </span>
+            </div>
+            {betaItems.map((item) => {
+              const Icon = item.icon
+              const isActive = currentPage === item.id
+              return (
+                <button
+                  key={item.id}
+                  className={cn(
+                    "flex w-full items-center gap-2 px-4 py-2 text-left text-sm transition-colors",
+                    isActive
+                      ? "bg-slate-800 text-white border-l-2 border-primary"
+                      : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 border-l-2 border-transparent"
+                  )}
+                  onClick={() => onPageChange(item.id)}
+                >
+                  <Icon className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                  <span className="text-[9px] bg-amber-500/20 text-amber-400 rounded px-1 py-0.5 leading-none">Beta</span>
+                  {isActive && <ChevronRight className="ml-auto h-3 w-3" />}
+                </button>
+              )
+            })}
+          </>
+        )}
 
         <div className="my-2 border-t border-slate-700" />
 

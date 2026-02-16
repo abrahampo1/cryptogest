@@ -12,6 +12,7 @@ import { ContabilidadPage } from '@/pages/ContabilidadPage'
 import { ModelosHaciendaPage } from '@/pages/ModelosHaciendaPage'
 import { CloudPage } from '@/pages/CloudPage'
 import { ManualPage } from '@/pages/ManualPage'
+import { BuzonPage } from '@/pages/BuzonPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { EmpresaSelectorPage } from '@/pages/EmpresaSelectorPage'
 import { SetupWizardPage } from '@/pages/SetupWizardPage'
@@ -27,6 +28,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard')
   const [deepLinkResult, setDeepLinkResult] = useState<{ success: boolean; user?: any; server?: string } | null>(null)
   const [manualSection, setManualSection] = useState<string | undefined>()
+  const [buzonEnabled, setBuzonEnabled] = useState(() => localStorage.getItem('beta.buzon') === 'true')
 
   useEffect(() => {
     loadEmpresas()
@@ -159,10 +161,12 @@ function App() {
         return <ContabilidadPage onHelp={() => navigateToManual('contabilidad')} />
       case 'modelos':
         return <ModelosHaciendaPage onHelp={() => navigateToManual('modelos')} />
+      case 'buzon':
+        return <BuzonPage />
       case 'cloud':
         return <CloudPage deepLinkResult={deepLinkResult} onDeepLinkHandled={() => setDeepLinkResult(null)} onHelp={() => navigateToManual('cloud')} />
       case 'configuracion':
-        return <ConfiguracionPage onHelp={() => navigateToManual('configuracion')} />
+        return <ConfiguracionPage onHelp={() => navigateToManual('configuracion')} buzonEnabled={buzonEnabled} onBuzonToggle={(v) => { localStorage.setItem('beta.buzon', v ? 'true' : 'false'); setBuzonEnabled(v) }} />
       case 'manual':
         return <ManualPage section={manualSection} />
       default:
@@ -213,6 +217,7 @@ function App() {
       onLock={handleLock}
       onSwitchEmpresa={handleSwitchEmpresa}
       empresaNombre={activeEmpresa?.nombre}
+      buzonEnabled={buzonEnabled}
     >
       {renderPage()}
     </DashboardLayout>

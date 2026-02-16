@@ -16,7 +16,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['@prisma/client', '.prisma/client']
+              external: ['@prisma/client', '.prisma/client', 'imapflow', 'mailparser', 'html-to-text']
             }
           }
         }

@@ -8,12 +8,13 @@ interface DashboardLayoutProps {
   onLock?: () => Promise<void>
   onSwitchEmpresa?: () => Promise<void>
   empresaNombre?: string
+  buzonEnabled?: boolean
 }
 
-export function DashboardLayout({ children, currentPage, onPageChange, onLock, onSwitchEmpresa, empresaNombre }: DashboardLayoutProps) {
+export function DashboardLayout({ children, currentPage, onPageChange, onLock, onSwitchEmpresa, empresaNombre, buzonEnabled }: DashboardLayoutProps) {
   return (
     <div className="flex h-screen bg-background">
-      <Sidebar currentPage={currentPage} onPageChange={onPageChange} onLock={onLock} onSwitchEmpresa={onSwitchEmpresa} empresaNombre={empresaNombre} />
+      <Sidebar currentPage={currentPage} onPageChange={onPageChange} onLock={onLock} onSwitchEmpresa={onSwitchEmpresa} empresaNombre={empresaNombre} buzonEnabled={buzonEnabled} />
       <main className="flex-1 overflow-auto">
         <div className="h-full p-6">
           {children}
