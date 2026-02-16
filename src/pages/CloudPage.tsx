@@ -37,6 +37,7 @@ import {
   HardDrive,
   Database,
   ArrowDownToLine,
+  KeyRound,
 } from "lucide-react"
 
 // ============================================
@@ -84,9 +85,10 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled }: CloudPageProps)
   const [meta, setMeta] = useState<{ current_page: number; last_page: number; total: number } | null>(null)
   const [isLoadingBackups, setIsLoadingBackups] = useState(false)
 
-  // Plan
+  // Plan & License
   const [plan, setPlan] = useState<CloudPlan | null>(null)
   const [usage, setUsage] = useState<CloudUsage | null>(null)
+  const [license, setLicense] = useState<CloudLicense | null>(null)
 
   // Upload
   const [isUploading, setIsUploading] = useState(false)
@@ -169,13 +171,20 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled }: CloudPageProps)
     try {
       const result = await window.electronAPI?.cloud.getConfig()
       if (result?.success && result.data) {
-        setServerUrl(result.data.serverUrl)
-        setIsConnected(true)
-        if (result.data.user) {
-          setUser(result.data.user)
+        // Load locally persisted license (perpetual, independent of connection)
+        if (result.data.license) {
+          setLicense(result.data.license)
         }
-        // Load backups and plan
-        await Promise.all([loadBackups(1), loadPlan()])
+
+        if (result.data.serverUrl && result.data.token) {
+          setServerUrl(result.data.serverUrl)
+          setIsConnected(true)
+          if (result.data.user) {
+            setUser(result.data.user)
+          }
+          // Load backups and plan
+          await Promise.all([loadBackups(1), loadPlan()])
+        }
       }
     } catch (err) {
       console.error("Error loading cloud config:", err)
@@ -201,6 +210,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled }: CloudPageProps)
       setMeta(null)
       setPlan(null)
       setUsage(null)
+      // License is NOT cleared — it's perpetual and persisted locally
       setShowDisconnectConfirm(false)
       setSuccessMessage("Desconectado de CryptoGest Cloud")
     } catch (err) {
@@ -229,6 +239,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled }: CloudPageProps)
       if (result?.success && result.data) {
         setPlan(result.data.plan)
         setUsage(result.data.usage)
+        setLicense(result.data.license ?? null)
       }
     } catch (err) {
       console.error("Error loading plan:", err)
@@ -349,6 +360,29 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled }: CloudPageProps)
           </div>
         )}
 
+        {/* License status (persisted locally, shown even when disconnected) */}
+        {license?.has_license && (
+          <Card>
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
+                  <KeyRound className="h-4 w-4 text-emerald-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Licencia Empresarial activa</p>
+                  <p className="text-xs text-muted-foreground">
+                    Adquirida el {license.purchased_at ? formatDate(license.purchased_at) : "—"} — Perpetua
+                  </p>
+                </div>
+                <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50">
+                  <KeyRound className="mr-1 h-3 w-3" />
+                  Licenciado
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="max-w-lg mx-auto py-12">
           <div className="text-center space-y-6">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
@@ -396,6 +430,12 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled }: CloudPageProps)
             <p className="text-xs text-muted-foreground">{user?.email}</p>
           </div>
           {plan && <Badge variant="info">{plan.name}</Badge>}
+          {license?.has_license && (
+            <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50">
+              <KeyRound className="mr-1 h-3 w-3" />
+              Licenciado
+            </Badge>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -602,6 +642,51 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled }: CloudPageProps)
 
         {/* Tab: Plan y uso */}
         <TabsContent value="plan">
+          <div className="space-y-4">
+          {/* License card */}
+          {license && (
+            <Card>
+              <CardContent className="py-4">
+                {license.has_license ? (
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
+                      <KeyRound className="h-4 w-4 text-emerald-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Licencia Empresarial activa</p>
+                      <p className="text-xs text-muted-foreground">
+                        Adquirida el {license.purchased_at ? formatDate(license.purchased_at) : "—"}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50">Perpetua</Badge>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100">
+                        <KeyRound className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Licencia Empresarial</p>
+                        <p className="text-xs text-muted-foreground">
+                          Gratis para uso personal. Licencia comercial: 99 EUR + IVA (pago unico)
+                        </p>
+                      </div>
+                    </div>
+                    <a
+                      href={`${serverUrl}/dashboard/license`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline inline-flex items-center gap-1 shrink-0 ml-4"
+                    >
+                      Comprar licencia <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             {/* Plan card */}
             <Card>
@@ -722,6 +807,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled }: CloudPageProps)
                 )}
               </CardContent>
             </Card>
+          </div>
           </div>
         </TabsContent>
       </Tabs>

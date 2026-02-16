@@ -44,6 +44,11 @@ export interface CloudUser {
   email: string
 }
 
+export interface CloudLicense {
+  has_license: boolean
+  purchased_at: string | null
+}
+
 interface PaginationMeta {
   current_page: number
   last_page: number
@@ -477,8 +482,8 @@ export async function downloadBackup(
 // Account
 // ============================================
 
-export async function getAccountPlan(): Promise<{ plan: CloudPlan; usage: CloudUsage }> {
-  return await makeRequest<{ plan: CloudPlan; usage: CloudUsage }>({
+export async function getAccountPlan(): Promise<{ plan: CloudPlan; usage: CloudUsage; license: CloudLicense }> {
+  return await makeRequest<{ plan: CloudPlan; usage: CloudUsage; license: CloudLicense }>({
     method: 'GET',
     path: '/api/v1/account/plan',
   })

@@ -13,7 +13,9 @@
     "protocols": [
       {
         "name": "CryptoGest",
-        "schemes": ["cryptogest"]
+        "schemes": [
+          "cryptogest"
+        ]
       }
     ],
     "mac": {
@@ -93,6 +95,8 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "input-otp": "^1.4.2",
+    "jspdf": "^4.1.0",
+    "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.303.0",
     "papaparse": "^5.5.3",
     "react": "^18.2.0",
