@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import os from 'os'
@@ -8,6 +8,7 @@ import AdmZip from 'adm-zip'
 import { PrismaClient } from '@prisma/client'
 import * as crypto from './crypto'
 import * as cloud from './cloud'
+import nodemailer from 'nodemailer'
 
 // Establecer nombre de la aplicación
 app.setName('CryptoGest')
@@ -3663,6 +3664,149 @@ ipcMain.handle('export:saveFile', async (_, data: { content: string; defaultFile
     }
 
     return { success: true, data: { path: result.filePath } }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================================
+// Email SMTP handlers
+// ============================================================
+
+ipcMain.handle('email:saveConfig', async (_, data: {
+  host: string
+  port: number
+  secure: boolean
+  user: string
+  pass?: string
+  fromName: string
+  fromEmail: string
+}) => {
+  try {
+    requireAuth()
+    await prisma!.$executeRawUnsafe(`INSERT OR REPLACE INTO Configuracion (clave, valor) VALUES ('email.host', ?)`, data.host)
+    await prisma!.$executeRawUnsafe(`INSERT OR REPLACE INTO Configuracion (clave, valor) VALUES ('email.port', ?)`, String(data.port))
+    await prisma!.$executeRawUnsafe(`INSERT OR REPLACE INTO Configuracion (clave, valor) VALUES ('email.secure', ?)`, String(data.secure))
+    await prisma!.$executeRawUnsafe(`INSERT OR REPLACE INTO Configuracion (clave, valor) VALUES ('email.user', ?)`, data.user)
+    await prisma!.$executeRawUnsafe(`INSERT OR REPLACE INTO Configuracion (clave, valor) VALUES ('email.fromName', ?)`, data.fromName)
+    await prisma!.$executeRawUnsafe(`INSERT OR REPLACE INTO Configuracion (clave, valor) VALUES ('email.fromEmail', ?)`, data.fromEmail)
+
+    // Encrypt password with safeStorage if provided
+    if (data.pass) {
+      const encrypted = safeStorage.encryptString(data.pass).toString('base64')
+      await prisma!.$executeRawUnsafe(`INSERT OR REPLACE INTO Configuracion (clave, valor) VALUES ('email.pass', ?)`, encrypted)
+    }
+
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('email:test', async () => {
+  try {
+    requireAuth()
+    const rows = await prisma!.$queryRawUnsafe<{ clave: string; valor: string }[]>(
+      `SELECT clave, valor FROM Configuracion WHERE clave LIKE 'email.%'`
+    )
+    const cfg: Record<string, string> = {}
+    for (const row of rows) cfg[row.clave] = row.valor
+
+    if (!cfg['email.host'] || !cfg['email.user'] || !cfg['email.pass']) {
+      return { success: false, error: 'Configuración SMTP incompleta. Guarda la configuración primero.' }
+    }
+
+    const decryptedPass = safeStorage.decryptString(Buffer.from(cfg['email.pass'], 'base64'))
+
+    const transporter = nodemailer.createTransport({
+      host: cfg['email.host'],
+      port: parseInt(cfg['email.port'] || '587'),
+      secure: cfg['email.secure'] === 'true',
+      auth: {
+        user: cfg['email.user'],
+        pass: decryptedPass,
+      },
+    })
+
+    await transporter.verify()
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('email:send', async (_, data: {
+  to: string
+  cc?: string
+  subject: string
+  body: string
+  attachmentName?: string
+  attachmentBase64?: string
+}) => {
+  try {
+    requireAuth()
+    const rows = await prisma!.$queryRawUnsafe<{ clave: string; valor: string }[]>(
+      `SELECT clave, valor FROM Configuracion WHERE clave LIKE 'email.%'`
+    )
+    const cfg: Record<string, string> = {}
+    for (const row of rows) cfg[row.clave] = row.valor
+
+    if (!cfg['email.host'] || !cfg['email.user'] || !cfg['email.pass']) {
+      return { success: false, error: 'Configuración SMTP no encontrada. Ve a Configuración > Email.' }
+    }
+
+    const decryptedPass = safeStorage.decryptString(Buffer.from(cfg['email.pass'], 'base64'))
+
+    const transporter = nodemailer.createTransport({
+      host: cfg['email.host'],
+      port: parseInt(cfg['email.port'] || '587'),
+      secure: cfg['email.secure'] === 'true',
+      auth: {
+        user: cfg['email.user'],
+        pass: decryptedPass,
+      },
+    })
+
+    const fromName = cfg['email.fromName'] || ''
+    const fromEmail = cfg['email.fromEmail'] || cfg['email.user']
+    const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail
+
+    // Check license and branding preference
+    const brandingRows = await prisma!.$queryRawUnsafe<{ clave: string; valor: string }[]>(
+      `SELECT clave, valor FROM Configuracion WHERE clave IN ('cloud_license_granted', 'email.hideBranding')`
+    )
+    const brandingCfg: Record<string, string> = {}
+    for (const row of brandingRows) brandingCfg[row.clave] = row.valor
+    const hasLicense = !!brandingCfg['cloud_license_granted']
+    const hideBranding = hasLicense && brandingCfg['email.hideBranding'] === 'true'
+
+    let emailBody = data.body
+    let emailHtml: string | undefined
+    if (!hideBranding) {
+      const footer = '\n\n--\nEnviado gracias a CryptoGest — https://cryptogest.app'
+      emailBody = data.body + footer
+      const bodyHtml = data.body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+      emailHtml = bodyHtml + '<br><br><hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0"><p style="font-size:12px;color:#9ca3af">Enviado gracias a <a href="https://cryptogest.app" style="color:#3b82f6;text-decoration:none">CryptoGest</a></p>'
+    }
+
+    const mailOptions: nodemailer.SendMailOptions = {
+      from,
+      to: data.to,
+      cc: data.cc || undefined,
+      subject: data.subject,
+      text: emailBody,
+      html: emailHtml,
+    }
+
+    if (data.attachmentBase64 && data.attachmentName) {
+      mailOptions.attachments = [{
+        filename: data.attachmentName,
+        content: Buffer.from(data.attachmentBase64, 'base64'),
+      }]
+    }
+
+    await transporter.sendMail(mailOptions)
+    return { success: true }
   } catch (error) {
     return { success: false, error: String(error) }
   }

@@ -70,6 +70,7 @@ import {
   Image,
   Palette,
   HelpCircle,
+  Mail,
 } from "lucide-react"
 import { generateInvoicePdf, TemplateConfig } from "@/lib/generateInvoicePdf"
 import { PREVIEW_FACTURA } from "@/lib/invoicePreviewData"
@@ -204,12 +205,31 @@ export function ConfiguracionPage({ onHelp }: { onHelp?: () => void }) {
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const logoInputRef = useRef<HTMLInputElement>(null)
 
+  // Email SMTP state
+  const [emailConfig, setEmailConfig] = useState({
+    host: '',
+    port: '587',
+    secure: false,
+    user: '',
+    pass: '',
+    fromName: '',
+    fromEmail: '',
+  })
+  const [emailHasPassword, setEmailHasPassword] = useState(false)
+  const [emailHideBranding, setEmailHideBranding] = useState(false)
+  const [emailHasLicense, setEmailHasLicense] = useState(false)
+  const [emailSaving, setEmailSaving] = useState(false)
+  const [emailTesting, setEmailTesting] = useState(false)
+  const [emailSuccess, setEmailSuccess] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
+
   useEffect(() => {
     checkSecurityStatus()
     loadImpuestos()
     loadDataPathInfo()
     loadConfig()
     loadLogo()
+    loadEmailConfig()
   }, [])
 
   const loadConfig = async () => {
@@ -629,6 +649,82 @@ export function ConfiguracionPage({ onHelp }: { onHelp?: () => void }) {
     }
   }
 
+  const loadEmailConfig = async () => {
+    try {
+      const result = await window.electronAPI?.config.getAll()
+      if (result?.success && result.data) {
+        const cfg = result.data
+        setEmailConfig({
+          host: cfg['email.host'] || '',
+          port: cfg['email.port'] || '587',
+          secure: cfg['email.secure'] === 'true',
+          user: cfg['email.user'] || '',
+          pass: '',
+          fromName: cfg['email.fromName'] || '',
+          fromEmail: cfg['email.fromEmail'] || '',
+        })
+        setEmailHasPassword(!!cfg['email.pass'])
+        setEmailHideBranding(cfg['email.hideBranding'] === 'true')
+        setEmailHasLicense(!!cfg['cloud_license_granted'])
+      }
+    } catch (error) {
+      console.error('Error loading email config:', error)
+    }
+  }
+
+  const handleSaveEmailConfig = async () => {
+    setEmailSaving(true)
+    setEmailSuccess(null)
+    setEmailError(null)
+    try {
+      const result = await window.electronAPI?.email.saveConfig({
+        host: emailConfig.host,
+        port: parseInt(emailConfig.port) || 587,
+        secure: emailConfig.secure,
+        user: emailConfig.user,
+        pass: emailConfig.pass || undefined,
+        fromName: emailConfig.fromName,
+        fromEmail: emailConfig.fromEmail,
+      })
+      // Save branding preference
+      if (emailHasLicense) {
+        await window.electronAPI?.config.set('email.hideBranding', String(emailHideBranding))
+      }
+
+      if (result?.success) {
+        setEmailSuccess('Configuración de email guardada correctamente')
+        if (emailConfig.pass) setEmailHasPassword(true)
+        setEmailConfig(prev => ({ ...prev, pass: '' }))
+        setTimeout(() => setEmailSuccess(null), 3000)
+      } else {
+        setEmailError(result?.error || 'Error al guardar')
+      }
+    } catch (error) {
+      setEmailError(String(error))
+    } finally {
+      setEmailSaving(false)
+    }
+  }
+
+  const handleTestEmail = async () => {
+    setEmailTesting(true)
+    setEmailSuccess(null)
+    setEmailError(null)
+    try {
+      const result = await window.electronAPI?.email.test()
+      if (result?.success) {
+        setEmailSuccess('Conexión SMTP verificada correctamente')
+        setTimeout(() => setEmailSuccess(null), 3000)
+      } else {
+        setEmailError(result?.error || 'Error al verificar la conexión')
+      }
+    } catch (error) {
+      setEmailError(String(error))
+    } finally {
+      setEmailTesting(false)
+    }
+  }
+
   const handleSetupPasskey = async () => {
     if (!passkeyPassword) {
       setPasskeyError("Ingresa tu contraseña actual")
@@ -720,6 +816,10 @@ export function ConfiguracionPage({ onHelp }: { onHelp?: () => void }) {
           <TabsTrigger value="seguridad" className="text-xs h-7 px-3">
             <Shield className="mr-1.5 h-3.5 w-3.5" />
             Seguridad
+          </TabsTrigger>
+          <TabsTrigger value="email" className="text-xs h-7 px-3">
+            <Mail className="mr-1.5 h-3.5 w-3.5" />
+            Email
           </TabsTrigger>
           <TabsTrigger value="sistema" className="text-xs h-7 px-3">
             <Database className="mr-1.5 h-3.5 w-3.5" />
@@ -1387,6 +1487,160 @@ export function ConfiguracionPage({ onHelp }: { onHelp?: () => void }) {
                   <span className="text-[10px] px-2 py-0.5 rounded bg-green-50 text-green-700">Protegido</span>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Email Tab */}
+        <TabsContent value="email">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                Configuración SMTP
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {emailSuccess && (
+                <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2 rounded text-xs">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {emailSuccess}
+                </div>
+              )}
+
+              {emailError && (
+                <div className="flex items-center gap-2 bg-red-50 text-red-700 p-2 rounded text-xs">
+                  <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span>{emailError}</span>
+                </div>
+              )}
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-1.5 md:col-span-2">
+                  <Label className="text-xs">Servidor SMTP</Label>
+                  <Input
+                    className="h-8 text-sm"
+                    value={emailConfig.host}
+                    onChange={(e) => setEmailConfig({ ...emailConfig, host: e.target.value })}
+                    placeholder="smtp.gmail.com"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Puerto</Label>
+                  <Input
+                    className="h-8 text-sm"
+                    type="number"
+                    value={emailConfig.port}
+                    onChange={(e) => setEmailConfig({ ...emailConfig, port: e.target.value })}
+                    placeholder="587"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="email-secure"
+                  checked={emailConfig.secure}
+                  onCheckedChange={(checked) => setEmailConfig({ ...emailConfig, secure: checked })}
+                />
+                <Label htmlFor="email-secure" className="text-xs">SSL/TLS (activar para puerto 465)</Label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Usuario</Label>
+                  <Input
+                    className="h-8 text-sm"
+                    value={emailConfig.user}
+                    onChange={(e) => setEmailConfig({ ...emailConfig, user: e.target.value })}
+                    placeholder="tu@email.com"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Contraseña</Label>
+                  <Input
+                    className="h-8 text-sm"
+                    type="password"
+                    value={emailConfig.pass}
+                    onChange={(e) => setEmailConfig({ ...emailConfig, pass: e.target.value })}
+                    placeholder={emailHasPassword ? "Dejar vacío para mantener actual" : "Contraseña SMTP"}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Nombre del remitente</Label>
+                  <Input
+                    className="h-8 text-sm"
+                    value={emailConfig.fromName}
+                    onChange={(e) => setEmailConfig({ ...emailConfig, fromName: e.target.value })}
+                    placeholder="Mi Empresa S.L."
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Email del remitente</Label>
+                  <Input
+                    className="h-8 text-sm"
+                    type="email"
+                    value={emailConfig.fromEmail}
+                    onChange={(e) => setEmailConfig({ ...emailConfig, fromEmail: e.target.value })}
+                    placeholder="facturacion@empresa.es"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestEmail}
+                  disabled={emailTesting || emailSaving}
+                >
+                  {emailTesting ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Probar conexión
+                </Button>
+                <Button size="sm" onClick={handleSaveEmailConfig} disabled={emailSaving || emailTesting}>
+                  {emailSaving ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Save className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Guardar
+                </Button>
+              </div>
+
+              {/* Branding footer toggle */}
+              <div className="flex items-center justify-between p-3 border rounded">
+                <div className="flex items-center gap-3">
+                  <div className={`rounded-full p-2 ${emailHasLicense ? 'bg-green-50 text-green-600' : 'bg-muted text-muted-foreground'}`}>
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Firma de CryptoGest en emails</p>
+                    <p className="text-xs text-muted-foreground">
+                      {emailHasLicense
+                        ? 'Puedes ocultar la firma "Enviado gracias a CryptoGest" en tus emails'
+                        : 'Adquiere una licencia para poder ocultar la firma en tus emails'}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={!emailHideBranding}
+                  onCheckedChange={(checked) => setEmailHideBranding(!checked)}
+                  disabled={!emailHasLicense}
+                />
+              </div>
+
+              <p className="text-[11px] text-muted-foreground bg-blue-50/50 p-2 rounded">
+                <strong>Gmail:</strong> Usa una "contraseña de aplicación" en lugar de tu contraseña normal.
+                Ve a tu cuenta de Google {">"} Seguridad {">"} Contraseñas de aplicaciones para generarla.
+                Servidor: <code className="bg-blue-100 px-1 rounded">smtp.gmail.com</code>, puerto: <code className="bg-blue-100 px-1 rounded">587</code>.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>

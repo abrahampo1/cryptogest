@@ -509,6 +509,12 @@ interface ElectronAPI {
     delete: () => Promise<ApiResponse<void>>
   }
 
+  email: {
+    saveConfig: (data: { host: string; port: number; secure: boolean; user: string; pass?: string; fromName: string; fromEmail: string }) => Promise<ApiResponse<void>>
+    test: () => Promise<ApiResponse<void>>
+    send: (data: { to: string; cc?: string; subject: string; body: string; attachmentName?: string; attachmentBase64?: string }) => Promise<ApiResponse<void>>
+  }
+
   shell: {
     openExternal: (url: string) => Promise<ApiResponse<void>>
   }

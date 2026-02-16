@@ -62,9 +62,11 @@ import {
   ChevronDown,
   ChevronUp,
   HelpCircle,
+  Mail,
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { generateInvoicePdf, TemplateConfig } from "@/lib/generateInvoicePdf"
+import { SendEmailDialog } from "@/components/SendEmailDialog"
 
 interface LineaFormData {
   productoId?: number
@@ -117,6 +119,14 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
   const [pagarDialogOpen, setPagarDialogOpen] = useState(false)
   const [facturaToEmitir, setFacturaToEmitir] = useState<Factura | null>(null)
   const [facturaToMarcarPagada, setFacturaToMarcarPagada] = useState<Factura | null>(null)
+
+  // Email dialog state
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false)
+  const [emailAttachmentName, setEmailAttachmentName] = useState("")
+  const [emailAttachmentBase64, setEmailAttachmentBase64] = useState("")
+  const [emailDefaultRecipient, setEmailDefaultRecipient] = useState("")
+  const [emailDefaultSubject, setEmailDefaultSubject] = useState("")
+  const [emailDefaultBody, setEmailDefaultBody] = useState("")
 
   const [formData, setFormData] = useState({
     clienteId: "",
@@ -555,6 +565,81 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
     }
   }
 
+  const handleSendEmail = async (factura: Factura) => {
+    try {
+      // Get full factura with relations
+      const facturaRes = await window.electronAPI?.facturas.getById(factura.id)
+      if (!facturaRes?.success || !facturaRes.data) return
+      const fullFactura = facturaRes.data
+
+      // Get empresa config
+      const configRes = await window.electronAPI?.config.getAll()
+      const cfg = configRes?.success ? configRes.data || {} : {}
+
+      const empresa = {
+        nombre: cfg['empresa.nombre'] || '',
+        nif: cfg['empresa.nif'] || '',
+        direccion: cfg['empresa.direccion'] || '',
+        codigoPostal: cfg['empresa.codigoPostal'] || '',
+        ciudad: cfg['empresa.ciudad'] || '',
+        provincia: cfg['empresa.provincia'] || '',
+        telefono: cfg['empresa.telefono'] || '',
+        email: cfg['empresa.email'] || '',
+        web: cfg['empresa.web'] || '',
+      }
+
+      const facturacion = {
+        piePagina: cfg['facturacion.piePagina'] || '',
+      }
+
+      const template: TemplateConfig = {
+        plantilla: (cfg['facturacion.plantilla'] as TemplateConfig['plantilla']) || 'clasica',
+        colorAccento: cfg['facturacion.colorAccento'] || '#374151',
+        mostrarTelefono: cfg['facturacion.mostrarTelefono'] !== 'false',
+        mostrarEmail: cfg['facturacion.mostrarEmail'] !== 'false',
+        mostrarWeb: cfg['facturacion.mostrarWeb'] !== 'false',
+        mostrarNotas: cfg['facturacion.mostrarNotas'] !== 'false',
+        mostrarFormaPago: cfg['facturacion.mostrarFormaPago'] !== 'false',
+      }
+
+      try {
+        const logoRes = await window.electronAPI?.logo.read()
+        if (logoRes?.success && logoRes.data) {
+          const bytes = new Uint8Array(logoRes.data.data)
+          let binary = ''
+          bytes.forEach(b => { binary += String.fromCharCode(b) })
+          template.logoBase64 = `data:${logoRes.data.tipoMime};base64,${btoa(binary)}`
+        }
+      } catch {
+        // No logo
+      }
+
+      const pdfBase64 = generateInvoicePdf({
+        factura: fullFactura,
+        empresa,
+        facturacion,
+        template,
+      })
+
+      const clienteEmail = fullFactura.cliente?.email || ''
+      const empresaNombre = empresa.nombre || 'Nuestra empresa'
+
+      setEmailAttachmentName(`Factura-${factura.numero}.pdf`)
+      setEmailAttachmentBase64(pdfBase64)
+      setEmailDefaultRecipient(clienteEmail)
+      setEmailDefaultSubject(`Factura ${factura.numero} - ${empresaNombre}`)
+      setEmailDefaultBody(
+        `Estimado/a ${fullFactura.cliente?.nombre || 'cliente'},\n\n` +
+        `Adjunto encontrará la factura ${factura.numero} por importe de ${formatCurrency(factura.total)}.\n\n` +
+        `Quedamos a su disposición para cualquier consulta.\n\n` +
+        `Un cordial saludo,\n${empresaNombre}`
+      )
+      setEmailDialogOpen(true)
+    } catch (err) {
+      console.error('Error preparing email:', err)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -836,15 +921,26 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                             <Eye className="h-3 w-3" />
                           </Button>
                           {factura.estado !== "borrador" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                              onClick={() => handleGeneratePdf(factura)}
-                              title="Descargar PDF"
-                            >
-                              <Download className="h-3 w-3" />
-                            </Button>
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => handleGeneratePdf(factura)}
+                                title="Descargar PDF"
+                              >
+                                <Download className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => handleSendEmail(factura)}
+                                title="Enviar por email"
+                              >
+                                <Mail className="h-3 w-3" />
+                              </Button>
+                            </>
                           )}
                           {factura.estado === "borrador" && (
                             <>
@@ -1389,6 +1485,17 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Email Dialog */}
+      <SendEmailDialog
+        open={emailDialogOpen}
+        onClose={() => setEmailDialogOpen(false)}
+        attachmentName={emailAttachmentName}
+        attachmentBase64={emailAttachmentBase64}
+        defaultRecipient={emailDefaultRecipient}
+        defaultSubject={emailDefaultSubject}
+        defaultBody={emailDefaultBody}
+      />
     </div>
   )
 }

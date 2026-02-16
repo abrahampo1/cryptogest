@@ -41,7 +41,7 @@ const menuItems = [
 ]
 
 const cloudItems = [
-  { id: "cloud" as Page, label: "Cloud Backup", icon: Cloud },
+  { id: "cloud" as Page, label: "Copias y Licencia", icon: Cloud },
 ]
 
 const configItems = [

@@ -265,6 +265,15 @@ const electronAPI = {
       ipcRenderer.invoke('logo:delete') as Promise<ApiResponse<void>>,
   },
 
+  // Email
+  email: {
+    saveConfig: (data: { host: string; port: number; secure: boolean; user: string; pass?: string; fromName: string; fromEmail: string }) =>
+      ipcRenderer.invoke('email:saveConfig', data) as Promise<ApiResponse<void>>,
+    test: () => ipcRenderer.invoke('email:test') as Promise<ApiResponse<void>>,
+    send: (data: { to: string; cc?: string; subject: string; body: string; attachmentName?: string; attachmentBase64?: string }) =>
+      ipcRenderer.invoke('email:send', data) as Promise<ApiResponse<void>>,
+  },
+
   // Shell
   shell: {
     openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url) as Promise<ApiResponse<void>>,
