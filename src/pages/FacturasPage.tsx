@@ -63,6 +63,7 @@ import {
   ChevronUp,
   HelpCircle,
   Mail,
+  FileSearch,
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { generateInvoicePdf, TemplateConfig } from "@/lib/generateInvoicePdf"
@@ -119,6 +120,10 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
   const [pagarDialogOpen, setPagarDialogOpen] = useState(false)
   const [facturaToEmitir, setFacturaToEmitir] = useState<Factura | null>(null)
   const [facturaToMarcarPagada, setFacturaToMarcarPagada] = useState<Factura | null>(null)
+
+  // PDF preview state
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
+  const [pdfPreviewNumero, setPdfPreviewNumero] = useState("")
 
   // Email dialog state
   const [emailDialogOpen, setEmailDialogOpen] = useState(false)
@@ -640,6 +645,90 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
     }
   }
 
+  const handlePreviewPdf = async (factura: Factura) => {
+    try {
+      const facturaRes = await window.electronAPI?.facturas.getById(factura.id)
+      if (!facturaRes?.success || !facturaRes.data) return
+
+      const configRes = await window.electronAPI?.config.getAll()
+      const cfg = configRes?.success ? configRes.data || {} : {}
+
+      const empresa = {
+        nombre: cfg['empresa.nombre'] || '',
+        nif: cfg['empresa.nif'] || '',
+        direccion: cfg['empresa.direccion'] || '',
+        codigoPostal: cfg['empresa.codigoPostal'] || '',
+        ciudad: cfg['empresa.ciudad'] || '',
+        provincia: cfg['empresa.provincia'] || '',
+        telefono: cfg['empresa.telefono'] || '',
+        email: cfg['empresa.email'] || '',
+        web: cfg['empresa.web'] || '',
+      }
+
+      const facturacion = {
+        piePagina: cfg['facturacion.piePagina'] || '',
+      }
+
+      const template: TemplateConfig = {
+        plantilla: (cfg['facturacion.plantilla'] as TemplateConfig['plantilla']) || 'clasica',
+        colorAccento: cfg['facturacion.colorAccento'] || '#374151',
+        mostrarTelefono: cfg['facturacion.mostrarTelefono'] !== 'false',
+        mostrarEmail: cfg['facturacion.mostrarEmail'] !== 'false',
+        mostrarWeb: cfg['facturacion.mostrarWeb'] !== 'false',
+        mostrarNotas: cfg['facturacion.mostrarNotas'] !== 'false',
+        mostrarFormaPago: cfg['facturacion.mostrarFormaPago'] !== 'false',
+      }
+
+      try {
+        const logoRes = await window.electronAPI?.logo.read()
+        if (logoRes?.success && logoRes.data) {
+          const bytes = new Uint8Array(logoRes.data.data)
+          let binary = ''
+          bytes.forEach(b => { binary += String.fromCharCode(b) })
+          template.logoBase64 = `data:${logoRes.data.tipoMime};base64,${btoa(binary)}`
+        }
+      } catch {
+        // No logo
+      }
+
+      const pdfBase64 = generateInvoicePdf({
+        factura: facturaRes.data,
+        empresa,
+        facturacion,
+        template,
+      })
+
+      const binaryString = atob(pdfBase64)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+      const blob = new Blob([bytes], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+
+      setPdfPreviewUrl(url)
+      setPdfPreviewNumero(factura.numero)
+    } catch (err) {
+      console.error('Error generating PDF preview:', err)
+    }
+  }
+
+  const handleClosePreview = () => {
+    if (pdfPreviewUrl) {
+      URL.revokeObjectURL(pdfPreviewUrl)
+    }
+    setPdfPreviewUrl(null)
+    setPdfPreviewNumero("")
+  }
+
+  const handleDownloadFromPreview = () => {
+    if (!pdfPreviewUrl) return
+    const a = document.createElement('a')
+    a.href = pdfPreviewUrl
+    a.download = `Factura-${pdfPreviewNumero}.pdf`
+    a.click()
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -922,6 +1011,15 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                           </Button>
                           {factura.estado !== "borrador" && (
                             <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => handlePreviewPdf(factura)}
+                                title="Previsualizar PDF"
+                              >
+                                <FileSearch className="h-3 w-3" />
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1380,14 +1478,24 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
 
           <DialogFooter>
             {selectedFactura && selectedFactura.estado !== "borrador" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleGeneratePdf(selectedFactura)}
-              >
-                <Download className="mr-1.5 h-3 w-3" />
-                Descargar PDF
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePreviewPdf(selectedFactura)}
+                >
+                  <FileSearch className="mr-1.5 h-3 w-3" />
+                  Previsualizar PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleGeneratePdf(selectedFactura)}
+                >
+                  <Download className="mr-1.5 h-3 w-3" />
+                  Descargar PDF
+                </Button>
+              </>
             )}
             <Button variant="outline" size="sm" onClick={() => setIsDetailOpen(false)}>
               Cerrar
@@ -1485,6 +1593,36 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog de previsualización de PDF */}
+      <Dialog open={!!pdfPreviewUrl} onOpenChange={(open) => { if (!open) handleClosePreview() }}>
+        <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Previsualización - Factura {pdfPreviewNumero}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0">
+            {pdfPreviewUrl && (
+              <iframe
+                src={pdfPreviewUrl}
+                className="w-full h-full rounded border"
+                title={`PDF Factura ${pdfPreviewNumero}`}
+              />
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={handleClosePreview}>
+              Cerrar
+            </Button>
+            <Button size="sm" onClick={handleDownloadFromPreview}>
+              <Download className="mr-1.5 h-3 w-3" />
+              Descargar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Email Dialog */}
       <SendEmailDialog
