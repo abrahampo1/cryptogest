@@ -248,6 +248,16 @@ const electronAPI = {
     },
   },
 
+  // Logo
+  logo: {
+    upload: (fileData: { data: number[]; nombre: string; tipoMime: string }) =>
+      ipcRenderer.invoke('logo:upload', fileData) as Promise<ApiResponse<{ path: string }>>,
+    read: () =>
+      ipcRenderer.invoke('logo:read') as Promise<ApiResponse<{ data: number[]; tipoMime: string }>>,
+    delete: () =>
+      ipcRenderer.invoke('logo:delete') as Promise<ApiResponse<void>>,
+  },
+
   // Shell
   shell: {
     openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url) as Promise<ApiResponse<void>>,

@@ -63,6 +63,7 @@ import {
   ChevronUp,
 } from "lucide-react"
 import * as XLSX from "xlsx"
+import { generateInvoicePdf, TemplateConfig } from "@/lib/generateInvoicePdf"
 
 interface LineaFormData {
   productoId?: number
@@ -486,6 +487,73 @@ export function FacturasPage() {
     })
   }
 
+  const handleGeneratePdf = async (factura: Factura) => {
+    try {
+      // Get full factura with relations
+      const facturaRes = await window.electronAPI?.facturas.getById(factura.id)
+      if (!facturaRes?.success || !facturaRes.data) return
+
+      // Get empresa config
+      const configRes = await window.electronAPI?.config.getAll()
+      const cfg = configRes?.success ? configRes.data || {} : {}
+
+      const empresa = {
+        nombre: cfg['empresa.nombre'] || '',
+        nif: cfg['empresa.nif'] || '',
+        direccion: cfg['empresa.direccion'] || '',
+        codigoPostal: cfg['empresa.codigoPostal'] || '',
+        ciudad: cfg['empresa.ciudad'] || '',
+        provincia: cfg['empresa.provincia'] || '',
+        telefono: cfg['empresa.telefono'] || '',
+        email: cfg['empresa.email'] || '',
+        web: cfg['empresa.web'] || '',
+      }
+
+      const facturacion = {
+        piePagina: cfg['facturacion.piePagina'] || '',
+      }
+
+      // Build template config
+      const template: TemplateConfig = {
+        plantilla: (cfg['facturacion.plantilla'] as TemplateConfig['plantilla']) || 'clasica',
+        colorAccento: cfg['facturacion.colorAccento'] || '#374151',
+        mostrarTelefono: cfg['facturacion.mostrarTelefono'] !== 'false',
+        mostrarEmail: cfg['facturacion.mostrarEmail'] !== 'false',
+        mostrarWeb: cfg['facturacion.mostrarWeb'] !== 'false',
+        mostrarNotas: cfg['facturacion.mostrarNotas'] !== 'false',
+        mostrarFormaPago: cfg['facturacion.mostrarFormaPago'] !== 'false',
+      }
+
+      // Try to load logo
+      try {
+        const logoRes = await window.electronAPI?.logo.read()
+        if (logoRes?.success && logoRes.data) {
+          const bytes = new Uint8Array(logoRes.data.data)
+          let binary = ''
+          bytes.forEach(b => { binary += String.fromCharCode(b) })
+          template.logoBase64 = `data:${logoRes.data.tipoMime};base64,${btoa(binary)}`
+        }
+      } catch {
+        // No logo, continue without it
+      }
+
+      const pdfBase64 = generateInvoicePdf({
+        factura: facturaRes.data,
+        empresa,
+        facturacion,
+        template,
+      })
+
+      await window.electronAPI?.export.saveFile({
+        content: pdfBase64,
+        defaultFilename: `Factura-${factura.numero}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      })
+    } catch (err) {
+      console.error('Error generating PDF:', err)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -759,6 +827,17 @@ export function FacturasPage() {
                           >
                             <Eye className="h-3 w-3" />
                           </Button>
+                          {factura.estado !== "borrador" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => handleGeneratePdf(factura)}
+                              title="Descargar PDF"
+                            >
+                              <Download className="h-3 w-3" />
+                            </Button>
+                          )}
                           {factura.estado === "borrador" && (
                             <>
                               <Button
@@ -1196,6 +1275,16 @@ export function FacturasPage() {
           )}
 
           <DialogFooter>
+            {selectedFactura && selectedFactura.estado !== "borrador" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleGeneratePdf(selectedFactura)}
+              >
+                <Download className="mr-1.5 h-3 w-3" />
+                Descargar PDF
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => setIsDetailOpen(false)}>
               Cerrar
             </Button>

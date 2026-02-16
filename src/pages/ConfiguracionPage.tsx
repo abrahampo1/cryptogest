@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -65,7 +65,13 @@ import {
   FolderOutput,
   RotateCcw,
   ExternalLink,
+  Upload,
+  X,
+  Image,
+  Palette,
 } from "lucide-react"
+import { generateInvoicePdf, TemplateConfig } from "@/lib/generateInvoicePdf"
+import { PREVIEW_FACTURA } from "@/lib/invoicePreviewData"
 
 interface EmpresaData {
   nombre: string
@@ -174,11 +180,75 @@ export function ConfiguracionPage() {
   const [migrateError, setMigrateError] = useState<string | null>(null)
   const [isResettingPath, setIsResettingPath] = useState(false)
 
+  const [empresaSaving, setEmpresaSaving] = useState(false)
+  const [empresaSuccess, setEmpresaSuccess] = useState<string | null>(null)
+  const [facturacionSaving, setFacturacionSaving] = useState(false)
+  const [facturacionSuccess, setFacturacionSuccess] = useState<string | null>(null)
+
+  // Template state
+  const [templateConfig, setTemplateConfig] = useState<TemplateConfig>({
+    plantilla: 'clasica',
+    colorAccento: '#374151',
+    mostrarTelefono: true,
+    mostrarEmail: true,
+    mostrarWeb: true,
+    mostrarNotas: true,
+    mostrarFormaPago: true,
+  })
+  const [logoBase64, setLogoBase64] = useState<string | undefined>(undefined)
+  const [logoLoading, setLogoLoading] = useState(false)
+  const [templateSaving, setTemplateSaving] = useState(false)
+  const [templateSuccess, setTemplateSuccess] = useState<string | null>(null)
+  const [previewPdf, setPreviewPdf] = useState<string>('')
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     checkSecurityStatus()
     loadImpuestos()
     loadDataPathInfo()
+    loadConfig()
+    loadLogo()
   }, [])
+
+  const loadConfig = async () => {
+    try {
+      const result = await window.electronAPI?.config.getAll()
+      if (result?.success && result.data) {
+        const cfg = result.data
+        setEmpresaData({
+          nombre: cfg['empresa.nombre'] || '',
+          nif: cfg['empresa.nif'] || '',
+          direccion: cfg['empresa.direccion'] || '',
+          codigoPostal: cfg['empresa.codigoPostal'] || '',
+          ciudad: cfg['empresa.ciudad'] || '',
+          provincia: cfg['empresa.provincia'] || '',
+          telefono: cfg['empresa.telefono'] || '',
+          email: cfg['empresa.email'] || '',
+          web: cfg['empresa.web'] || '',
+        })
+        setFacturacionData({
+          serieFactura: cfg['facturacion.serieFactura'] || 'F',
+          proximoNumero: cfg['facturacion.proximoNumero'] || '001',
+          ivaPorDefecto: cfg['facturacion.ivaPorDefecto'] || '21',
+          diasVencimiento: cfg['facturacion.diasVencimiento'] || '30',
+          piePagina: cfg['facturacion.piePagina'] || '',
+        })
+        setTemplateConfig(prev => ({
+          ...prev,
+          plantilla: (cfg['facturacion.plantilla'] as TemplateConfig['plantilla']) || 'clasica',
+          colorAccento: cfg['facturacion.colorAccento'] || '#374151',
+          mostrarTelefono: cfg['facturacion.mostrarTelefono'] !== 'false',
+          mostrarEmail: cfg['facturacion.mostrarEmail'] !== 'false',
+          mostrarWeb: cfg['facturacion.mostrarWeb'] !== 'false',
+          mostrarNotas: cfg['facturacion.mostrarNotas'] !== 'false',
+          mostrarFormaPago: cfg['facturacion.mostrarFormaPago'] !== 'false',
+        }))
+      }
+    } catch (error) {
+      console.error('Error loading config:', error)
+    }
+  }
 
   const checkSecurityStatus = async () => {
     if (!window.electronAPI?.auth) return
@@ -339,12 +409,139 @@ export function ConfiguracionPage() {
     setIsTesting(false)
   }
 
-  const handleSaveEmpresa = () => {
-    console.log("Guardando datos de empresa:", empresaData)
+  const handleSaveEmpresa = async () => {
+    setEmpresaSaving(true)
+    setEmpresaSuccess(null)
+    try {
+      for (const [key, value] of Object.entries(empresaData)) {
+        await window.electronAPI?.config.set(`empresa.${key}`, value)
+      }
+      setEmpresaSuccess('Datos de empresa guardados correctamente')
+      setTimeout(() => setEmpresaSuccess(null), 3000)
+    } catch (error) {
+      console.error('Error saving empresa:', error)
+    } finally {
+      setEmpresaSaving(false)
+    }
   }
 
-  const handleSaveFacturacion = () => {
-    console.log("Guardando datos de facturación:", facturacionData)
+  const handleSaveFacturacion = async () => {
+    setFacturacionSaving(true)
+    setFacturacionSuccess(null)
+    try {
+      for (const [key, value] of Object.entries(facturacionData)) {
+        await window.electronAPI?.config.set(`facturacion.${key}`, value)
+      }
+      setFacturacionSuccess('Configuración de facturación guardada correctamente')
+      setTimeout(() => setFacturacionSuccess(null), 3000)
+    } catch (error) {
+      console.error('Error saving facturacion:', error)
+    } finally {
+      setFacturacionSaving(false)
+    }
+  }
+
+  const loadLogo = async () => {
+    try {
+      const result = await window.electronAPI?.logo.read()
+      if (result?.success && result.data) {
+        const bytes = new Uint8Array(result.data.data)
+        const blob = new Blob([bytes], { type: result.data.tipoMime })
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          setLogoBase64(reader.result as string)
+        }
+        reader.readAsDataURL(blob)
+      }
+    } catch {
+      // No logo, that's fine
+    }
+  }
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) {
+      alert('El logo no puede superar 2MB')
+      return
+    }
+    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+      alert('Formato no soportado. Usa PNG o JPG.')
+      return
+    }
+
+    setLogoLoading(true)
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const data = Array.from(new Uint8Array(arrayBuffer))
+      await window.electronAPI?.logo.upload({ data, nombre: file.name, tipoMime: file.type })
+
+      // Read back as base64 for preview
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setLogoBase64(reader.result as string)
+        setLogoLoading(false)
+      }
+      reader.readAsDataURL(file)
+    } catch {
+      setLogoLoading(false)
+    }
+    // Reset input
+    if (logoInputRef.current) logoInputRef.current.value = ''
+  }
+
+  const handleLogoDelete = async () => {
+    try {
+      await window.electronAPI?.logo.delete()
+      setLogoBase64(undefined)
+    } catch {
+      // ignore
+    }
+  }
+
+  const generatePreview = useCallback(() => {
+    try {
+      const base64 = generateInvoicePdf({
+        factura: PREVIEW_FACTURA,
+        empresa: empresaData,
+        facturacion: { piePagina: facturacionData.piePagina },
+        template: { ...templateConfig, logoBase64 },
+      })
+      setPreviewPdf(`data:application/pdf;base64,${base64}`)
+    } catch (err) {
+      console.error('Error generating preview:', err)
+    }
+  }, [templateConfig, logoBase64, empresaData, facturacionData.piePagina])
+
+  // Debounced preview regeneration
+  useEffect(() => {
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
+    previewTimerRef.current = setTimeout(() => {
+      generatePreview()
+    }, 500)
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
+    }
+  }, [generatePreview])
+
+  const handleSaveTemplate = async () => {
+    setTemplateSaving(true)
+    setTemplateSuccess(null)
+    try {
+      await window.electronAPI?.config.set('facturacion.plantilla', templateConfig.plantilla)
+      await window.electronAPI?.config.set('facturacion.colorAccento', templateConfig.colorAccento)
+      await window.electronAPI?.config.set('facturacion.mostrarTelefono', String(templateConfig.mostrarTelefono))
+      await window.electronAPI?.config.set('facturacion.mostrarEmail', String(templateConfig.mostrarEmail))
+      await window.electronAPI?.config.set('facturacion.mostrarWeb', String(templateConfig.mostrarWeb))
+      await window.electronAPI?.config.set('facturacion.mostrarNotas', String(templateConfig.mostrarNotas))
+      await window.electronAPI?.config.set('facturacion.mostrarFormaPago', String(templateConfig.mostrarFormaPago))
+      setTemplateSuccess('Plantilla guardada correctamente')
+      setTimeout(() => setTemplateSuccess(null), 3000)
+    } catch (error) {
+      console.error('Error saving template:', error)
+    } finally {
+      setTemplateSaving(false)
+    }
   }
 
   const loadDataPathInfo = async () => {
@@ -529,6 +726,12 @@ export function ConfiguracionPage() {
               <CardTitle className="text-sm font-medium">Datos de la Empresa</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {empresaSuccess && (
+                <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2 rounded text-xs">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {empresaSuccess}
+                </div>
+              )}
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-1.5">
                   <Label className="text-xs">Nombre / Razón Social</Label>
@@ -622,8 +825,8 @@ export function ConfiguracionPage() {
               </div>
 
               <div className="flex justify-end pt-2">
-                <Button size="sm" onClick={handleSaveEmpresa}>
-                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                <Button size="sm" onClick={handleSaveEmpresa} disabled={empresaSaving}>
+                  {empresaSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
                   Guardar
                 </Button>
               </div>
@@ -632,12 +835,18 @@ export function ConfiguracionPage() {
         </TabsContent>
 
         {/* Facturación Tab */}
-        <TabsContent value="facturacion">
+        <TabsContent value="facturacion" className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">Configuración de Facturación</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {facturacionSuccess && (
+                <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2 rounded text-xs">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {facturacionSuccess}
+                </div>
+              )}
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-1.5">
                   <Label className="text-xs">Serie de Facturación</Label>
@@ -700,9 +909,254 @@ export function ConfiguracionPage() {
               </div>
 
               <div className="flex justify-end pt-2">
-                <Button size="sm" onClick={handleSaveFacturacion}>
-                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                <Button size="sm" onClick={handleSaveFacturacion} disabled={facturacionSaving}>
+                  {facturacionSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
                   Guardar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Template Card */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Palette className="h-4 w-4" />
+                Plantilla de Factura
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {templateSuccess && (
+                <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2 rounded text-xs">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {templateSuccess}
+                </div>
+              )}
+
+              {/* Template selector - 2x2 grid */}
+              <div>
+                <Label className="text-xs mb-2 block">Diseño</Label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {([
+                    { id: 'clasica', name: 'Clásica', desc: 'Tabla a rayas, diseño tradicional' },
+                    { id: 'moderna', name: 'Moderna', desc: 'Barra superior, cajas de color' },
+                    { id: 'minimalista', name: 'Minimalista', desc: 'Tipografía limpia, sin fondos' },
+                    { id: 'ejecutiva', name: 'Ejecutiva', desc: 'Sidebar lateral, estilo corporativo' },
+                  ] as const).map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setTemplateConfig(prev => ({ ...prev, plantilla: t.id }))}
+                      className={`relative p-3 rounded border-2 text-left transition-all ${
+                        templateConfig.plantilla === t.id
+                          ? 'border-blue-500 bg-blue-50/50'
+                          : 'border-muted hover:border-muted-foreground/30'
+                      }`}
+                    >
+                      {/* Mini schematic preview */}
+                      <div className="mb-2 h-16 rounded bg-muted/50 border overflow-hidden p-1.5">
+                        {t.id === 'clasica' && (
+                          <div className="h-full flex flex-col gap-0.5">
+                            <div className="flex justify-between">
+                              <div className="w-8 h-1.5 rounded-sm" style={{ backgroundColor: templateConfig.colorAccento }} />
+                              <div className="w-6 h-1.5 bg-muted-foreground/20 rounded-sm" />
+                            </div>
+                            <div className="w-full h-0.5 bg-muted-foreground/10 mt-0.5" />
+                            <div className="flex-1 space-y-0.5 mt-0.5">
+                              <div className="w-full h-1.5 rounded-sm" style={{ backgroundColor: templateConfig.colorAccento, opacity: 0.7 }} />
+                              <div className="w-full h-1 bg-muted-foreground/5 rounded-sm" />
+                              <div className="w-full h-1 bg-muted-foreground/10 rounded-sm" />
+                              <div className="w-full h-1 bg-muted-foreground/5 rounded-sm" />
+                            </div>
+                          </div>
+                        )}
+                        {t.id === 'moderna' && (
+                          <div className="h-full flex flex-col gap-0.5">
+                            <div className="w-full h-1.5 rounded-sm" style={{ backgroundColor: templateConfig.colorAccento }} />
+                            <div className="flex justify-between mt-0.5">
+                              <div className="w-6 h-1.5 bg-muted-foreground/20 rounded-sm" />
+                              <div className="w-10 h-2 rounded-sm" style={{ backgroundColor: templateConfig.colorAccento, opacity: 0.8 }} />
+                            </div>
+                            <div className="w-full h-2 bg-muted-foreground/10 rounded-sm mt-0.5" />
+                            <div className="flex-1 space-y-0.5 mt-0.5">
+                              <div className="w-full h-1.5 rounded-sm border border-muted-foreground/20" style={{ backgroundColor: templateConfig.colorAccento, opacity: 0.6 }} />
+                              <div className="w-full h-1 border border-muted-foreground/10 rounded-sm" />
+                              <div className="w-full h-1 border border-muted-foreground/10 rounded-sm" />
+                            </div>
+                          </div>
+                        )}
+                        {t.id === 'minimalista' && (
+                          <div className="h-full flex flex-col gap-1">
+                            <div className="flex justify-between">
+                              <div className="w-8 h-1 bg-muted-foreground/30 rounded-sm" />
+                              <div className="w-10 h-1 bg-muted-foreground/15 rounded-sm" />
+                            </div>
+                            <div className="w-full h-[0.5px] bg-muted-foreground/15 mt-0.5" />
+                            <div className="flex-1 space-y-1 mt-0.5">
+                              <div className="w-full h-[0.5px] bg-muted-foreground/20" />
+                              <div className="w-full h-0.5 bg-muted-foreground/5 rounded-sm" />
+                              <div className="w-full h-0.5 bg-muted-foreground/5 rounded-sm" />
+                              <div className="w-full h-0.5 bg-muted-foreground/5 rounded-sm" />
+                            </div>
+                          </div>
+                        )}
+                        {t.id === 'ejecutiva' && (
+                          <div className="h-full flex gap-1">
+                            <div className="w-2 h-full rounded-sm" style={{ backgroundColor: templateConfig.colorAccento }} />
+                            <div className="flex-1 flex flex-col gap-0.5">
+                              <div className="flex justify-between">
+                                <div className="w-6 h-1.5 bg-muted-foreground/20 rounded-sm" />
+                                <div className="w-6 h-1.5 bg-muted-foreground/15 rounded-sm" />
+                              </div>
+                              <div className="w-full h-2 rounded-sm" style={{ backgroundColor: templateConfig.colorAccento, opacity: 0.1 }} />
+                              <div className="flex-1 space-y-0.5 mt-0.5">
+                                <div className="w-full h-1 rounded-sm" style={{ backgroundColor: templateConfig.colorAccento, opacity: 0.6 }} />
+                                <div className="w-full h-0.5 bg-muted-foreground/5 rounded-sm" />
+                                <div className="w-full h-0.5 bg-muted-foreground/10 rounded-sm" />
+                              </div>
+                              <div className="w-1/2 h-1.5 rounded-sm ml-auto" style={{ backgroundColor: templateConfig.colorAccento, opacity: 0.7 }} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs font-medium">{t.name}</p>
+                      <p className="text-[10px] text-muted-foreground leading-tight">{t.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Color de acento */}
+              <div>
+                <Label className="text-xs mb-2 block">Color de acento</Label>
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-1.5">
+                    {['#374151', '#1e40af', '#047857', '#b91c1c', '#7c3aed', '#c2410c'].map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => setTemplateConfig(prev => ({ ...prev, colorAccento: color }))}
+                        className={`w-7 h-7 rounded-full border-2 transition-all ${
+                          templateConfig.colorAccento === color ? 'border-blue-500 scale-110' : 'border-transparent'
+                        }`}
+                        style={{ backgroundColor: color }}
+                        title={color}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className="w-7 h-7 rounded border"
+                      style={{ backgroundColor: templateConfig.colorAccento }}
+                    />
+                    <Input
+                      className="h-8 text-sm font-mono w-24"
+                      value={templateConfig.colorAccento}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        if (/^#[0-9a-fA-F]{0,6}$/.test(v)) {
+                          setTemplateConfig(prev => ({ ...prev, colorAccento: v }))
+                        }
+                      }}
+                      placeholder="#374151"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Logo */}
+              <div>
+                <Label className="text-xs mb-2 block">Logo de empresa</Label>
+                <div className="flex items-center gap-3">
+                  {logoBase64 ? (
+                    <div className="relative">
+                      <img
+                        src={logoBase64}
+                        alt="Logo"
+                        className="h-14 w-14 object-contain border rounded p-1"
+                      />
+                      <button
+                        onClick={handleLogoDelete}
+                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-14 w-14 border rounded border-dashed flex items-center justify-center bg-muted/30">
+                      <Image className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => logoInputRef.current?.click()}
+                      disabled={logoLoading}
+                    >
+                      {logoLoading ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      ) : (
+                        <Upload className="h-3 w-3 mr-1" />
+                      )}
+                      Subir logo
+                    </Button>
+                    <p className="text-[10px] text-muted-foreground mt-1">PNG o JPG, max 2MB</p>
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      className="hidden"
+                      onChange={handleLogoUpload}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Visibility toggles */}
+              <div>
+                <Label className="text-xs mb-2 block">Elementos visibles</Label>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                  {([
+                    { key: 'mostrarTelefono', label: 'Teléfono empresa' },
+                    { key: 'mostrarEmail', label: 'Email empresa' },
+                    { key: 'mostrarWeb', label: 'Web empresa' },
+                    { key: 'mostrarNotas', label: 'Sección notas' },
+                    { key: 'mostrarFormaPago', label: 'Forma de pago' },
+                  ] as const).map(({ key, label }) => (
+                    <div key={key} className="flex items-center gap-2">
+                      <Switch
+                        id={`template-${key}`}
+                        checked={templateConfig[key]}
+                        onCheckedChange={(checked) =>
+                          setTemplateConfig(prev => ({ ...prev, [key]: checked }))
+                        }
+                      />
+                      <Label htmlFor={`template-${key}`} className="text-xs">{label}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preview */}
+              <div>
+                <Label className="text-xs mb-2 block">Vista previa</Label>
+                {previewPdf ? (
+                  <iframe
+                    src={previewPdf}
+                    className="w-full h-[500px] border rounded"
+                    title="Vista previa de factura"
+                  />
+                ) : (
+                  <div className="w-full h-[500px] border rounded flex items-center justify-center bg-muted/30">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button size="sm" onClick={handleSaveTemplate} disabled={templateSaving}>
+                  {templateSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                  Guardar plantilla
                 </Button>
               </div>
             </CardContent>

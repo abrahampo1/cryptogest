@@ -323,6 +323,11 @@ interface CloudUser {
   email: string
 }
 
+interface CloudLicense {
+  has_license: boolean
+  purchased_at: string | null
+}
+
 interface ElectronAPI {
   testDB: () => Promise<{ success: boolean; message: string }>
 
@@ -478,7 +483,7 @@ interface ElectronAPI {
 
   cloud: {
     configure: (data: { serverUrl: string; token: string }) => Promise<ApiResponse<{ user: CloudUser }>>
-    getConfig: () => Promise<ApiResponse<{ serverUrl: string; token: string; user?: CloudUser } | null>>
+    getConfig: () => Promise<ApiResponse<{ serverUrl?: string; token?: string; user?: CloudUser; license?: CloudLicense } | null>>
     disconnect: () => Promise<ApiResponse<void>>
     checkAuth: () => Promise<ApiResponse<{ user: CloudUser }>>
     listBackups: (page?: number) => Promise<ApiResponse<{ backups: CloudBackup[]; meta: { current_page: number; last_page: number; total: number } }>>
@@ -486,11 +491,17 @@ interface ElectronAPI {
     download: (backupId: number) => Promise<ApiResponse<{ path: string }>>
     import: (backupId: number) => Promise<ApiResponse<{ message: string }>>
     delete: (backupId: number) => Promise<ApiResponse<void>>
-    plan: () => Promise<ApiResponse<{ plan: CloudPlan; usage: CloudUsage }>>
+    plan: () => Promise<ApiResponse<{ plan: CloudPlan; usage: CloudUsage; license: CloudLicense }>>
     onUploadProgress: (callback: (percent: number) => void) => () => void
     onDownloadProgress: (callback: (percent: number) => void) => () => void
     confirmDeviceLink: (data: { token: string; server: string }) => Promise<ApiResponse<any>>
     onDeepLinkConnected: (callback: (data: { success: boolean; user?: CloudUser; server?: string; error?: string }) => void) => () => void
+  }
+
+  logo: {
+    upload: (fileData: { data: number[]; nombre: string; tipoMime: string }) => Promise<ApiResponse<{ path: string }>>
+    read: () => Promise<ApiResponse<{ data: number[]; tipoMime: string }>>
+    delete: () => Promise<ApiResponse<void>>
   }
 
   shell: {

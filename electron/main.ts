@@ -2055,8 +2055,15 @@ ipcMain.handle('cloud:getConfig', async () => {
     const serverUrlConfig = await db.configuracion.findUnique({ where: { clave: 'cloud_server_url' } })
     const tokenConfig = await db.configuracion.findUnique({ where: { clave: 'cloud_token' } })
 
+    // Check locally persisted license (perpetual, independent of connection)
+    const licenseConfig = await db.configuracion.findUnique({ where: { clave: 'cloud_license_granted' } })
+    const license: cloud.CloudLicense = licenseConfig
+      ? { has_license: true, purchased_at: licenseConfig.valor }
+      : { has_license: false, purchased_at: null }
+
     if (!serverUrlConfig || !tokenConfig) {
-      return { success: true, data: null }
+      // Not connected, but may still have a perpetual license
+      return { success: true, data: license.has_license ? { license } : null }
     }
 
     // Re-initialize cloud module config
@@ -2077,6 +2084,7 @@ ipcMain.handle('cloud:getConfig', async () => {
         serverUrl: serverUrlConfig.valor,
         token: tokenConfig.valor,
         user,
+        license,
       },
     }
   } catch (error) {
@@ -2430,8 +2438,18 @@ ipcMain.handle('cloud:delete', async (_, backupId: number) => {
 // Get plan and usage info
 ipcMain.handle('cloud:plan', async () => {
   try {
-    requireAuth()
+    const db = requireAuth()
     const result = await cloud.getAccountPlan()
+
+    // Persist license locally when granted (perpetual, never revoked)
+    if (result.license?.has_license) {
+      await db.configuracion.upsert({
+        where: { clave: 'cloud_license_granted' },
+        update: { valor: result.license.purchased_at || new Date().toISOString() },
+        create: { clave: 'cloud_license_granted', valor: result.license.purchased_at || new Date().toISOString() },
+      })
+    }
+
     return { success: true, data: result }
   } catch (error) {
     return { success: false, error: String(error) }
@@ -2479,6 +2497,55 @@ ipcMain.handle('shell:openExternal', async (_, url: string) => {
       return { success: false, error: 'Solo se permiten URLs http/https' }
     }
     await shell.openExternal(url)
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - Logo de Empresa
+// ============================================
+
+ipcMain.handle('logo:upload', async (_, fileData: { data: number[]; nombre: string; tipoMime: string }) => {
+  try {
+    requireAuth()
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg']
+    if (!validTypes.includes(fileData.tipoMime)) {
+      return { success: false, error: 'Formato no soportado. Usa PNG o JPG.' }
+    }
+    const buffer = Buffer.from(fileData.data)
+    const logoPath = path.join(getDataPath(), 'logo.png')
+    fs.writeFileSync(logoPath, buffer)
+    return { success: true, data: { path: 'logo.png' } }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('logo:read', async () => {
+  try {
+    requireAuth()
+    const logoPath = path.join(getDataPath(), 'logo.png')
+    if (!fs.existsSync(logoPath)) {
+      return { success: false, error: 'No hay logo configurado' }
+    }
+    const buffer = fs.readFileSync(logoPath)
+    return { success: true, data: { data: Array.from(buffer), tipoMime: 'image/png' } }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('logo:delete', async () => {
+  try {
+    const db = requireAuth()
+    const logoPath = path.join(getDataPath(), 'logo.png')
+    if (fs.existsSync(logoPath)) {
+      fs.unlinkSync(logoPath)
+    }
+    // Also remove config key if exists
+    await db.configuracion.deleteMany({ where: { clave: 'facturacion.logoPath' } })
     return { success: true }
   } catch (error) {
     return { success: false, error: String(error) }
@@ -3471,7 +3538,8 @@ ipcMain.handle('export:saveFile', async (_, data: { content: string; defaultFile
       return { success: false, error: 'Operación cancelada' }
     }
 
-    const encoding = data.defaultFilename.endsWith('.xlsx') ? 'base64' : 'utf-8'
+    const isBinary = data.defaultFilename.endsWith('.xlsx') || data.defaultFilename.endsWith('.pdf')
+    const encoding = isBinary ? 'base64' : 'utf-8'
     if (encoding === 'base64') {
       fs.writeFileSync(result.filePath, Buffer.from(data.content, 'base64'))
     } else {
