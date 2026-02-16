@@ -42,6 +42,11 @@ import {
   Clock,
   XCircle,
   UserPlus,
+  Mail,
+  FileSearch,
+  FolderOpen,
+  HardDrive,
+  Key,
   type LucideIcon,
 } from "lucide-react"
 
@@ -71,14 +76,14 @@ const sections: ManualSection[] = [
   { id: "dashboard", title: "Panel de Control", icon: LayoutDashboard, color: "text-blue-600", border: "border-l-blue-500", bg: "bg-blue-50", keywords: ["panel", "resumen", "inicio", "estadísticas", "ingresos", "beneficio"], desc: "Tu centro de mando", group: "basico" },
   { id: "clientes", title: "Clientes", icon: Users, color: "text-violet-600", border: "border-l-violet-500", bg: "bg-violet-50", keywords: ["cliente", "cartera", "nif", "cif", "dirección", "contacto", "ficha", "buscar"], desc: "Gestiona tu cartera de clientes", group: "basico" },
   { id: "productos", title: "Productos y Servicios", icon: Package, color: "text-amber-600", border: "border-l-amber-500", bg: "bg-amber-50", keywords: ["producto", "servicio", "catálogo", "precio", "pvp", "referencia"], desc: "Tu catálogo de lo que vendes", group: "basico" },
-  { id: "facturas", title: "Facturación", icon: FileText, color: "text-rose-600", border: "border-l-rose-500", bg: "bg-rose-50", keywords: ["factura", "emitir", "cobrar", "pdf", "serie", "línea", "borrador", "emitida", "pagada", "anulada", "iva", "irpf", "retención", "base imponible"], desc: "Crea y gestiona tus facturas", group: "basico" },
+  { id: "facturas", title: "Facturación", icon: FileText, color: "text-rose-600", border: "border-l-rose-500", bg: "bg-rose-50", keywords: ["factura", "emitir", "cobrar", "pdf", "serie", "línea", "borrador", "emitida", "pagada", "anulada", "iva", "irpf", "retención", "base imponible", "previsualizar", "email", "enviar", "correo"], desc: "Crea y gestiona tus facturas", group: "basico" },
   { id: "gastos", title: "Gastos", icon: Receipt, color: "text-orange-600", border: "border-l-orange-500", bg: "bg-orange-50", keywords: ["gasto", "proveedor", "ticket", "justificante", "adjunto", "categoría", "deducir", "iva soportado", "importar", "csv"], desc: "Registra y clasifica gastos", group: "basico" },
   { id: "ejercicios", title: "Ejercicios Fiscales", icon: Calendar, color: "text-teal-600", border: "border-l-teal-500", bg: "bg-teal-50", keywords: ["ejercicio", "fiscal", "año", "período", "abrir", "cerrar", "reabrir"], desc: "Períodos contables anuales", group: "avanzado" },
   { id: "contabilidad", title: "Contabilidad", icon: BookOpen, color: "text-indigo-600", border: "border-l-indigo-500", bg: "bg-indigo-50", keywords: ["contabilidad", "plan de cuentas", "pgc", "asiento", "debe", "haber", "libro diario", "libro mayor", "partida doble"], desc: "Plan de cuentas y asientos", group: "avanzado" },
   { id: "modelos", title: "Modelos Fiscales", icon: FileBarChart, color: "text-cyan-600", border: "border-l-cyan-500", bg: "bg-cyan-50", keywords: ["modelo", "303", "111", "390", "hacienda", "aeat", "trimestral", "anual", "declaración"], desc: "Declaraciones de Hacienda", group: "avanzado" },
   { id: "plantillas", title: "Plantillas de Factura", icon: Palette, color: "text-pink-600", border: "border-l-pink-500", bg: "bg-pink-50", keywords: ["plantilla", "template", "pdf", "logo", "logotipo", "color", "diseño"], desc: "Personaliza tus PDFs", group: "sistema" },
-  { id: "cloud", title: "Cloud Backup", icon: Cloud, color: "text-sky-600", border: "border-l-sky-500", bg: "bg-sky-50", keywords: ["cloud", "nube", "backup", "copia", "seguridad", "restaurar", "subir", "cifrado"], desc: "Copias de seguridad en la nube", group: "sistema" },
-  { id: "configuracion", title: "Configuración", icon: Settings, color: "text-slate-600", border: "border-l-slate-500", bg: "bg-slate-50", keywords: ["configuración", "ajustes", "empresa", "facturación", "impuestos", "serie", "passkey"], desc: "Ajustes del sistema", group: "sistema" },
+  { id: "cloud", title: "Cloud Backup", icon: Cloud, color: "text-sky-600", border: "border-l-sky-500", bg: "bg-sky-50", keywords: ["cloud", "nube", "backup", "copia", "seguridad", "restaurar", "subir", "cifrado", "licencia", "código", "vincular", "dispositivo", "plan"], desc: "Copias de seguridad en la nube", group: "sistema" },
+  { id: "configuracion", title: "Configuración", icon: Settings, color: "text-slate-600", border: "border-l-slate-500", bg: "bg-slate-50", keywords: ["configuración", "ajustes", "empresa", "facturación", "impuestos", "serie", "passkey", "email", "smtp", "correo"], desc: "Ajustes del sistema", group: "sistema" },
   { id: "seguridad", title: "Seguridad y Cifrado", icon: Shield, color: "text-red-600", border: "border-l-red-500", bg: "bg-red-50", keywords: ["seguridad", "cifrado", "aes", "contraseña", "passkey", "bloquear", "encriptar"], desc: "Protección de tus datos", group: "sistema" },
   { id: "glosario", title: "Glosario Financiero", icon: GraduationCap, color: "text-purple-600", border: "border-l-purple-500", bg: "bg-purple-50", keywords: ["glosario", "concepto", "definición", "iva", "irpf", "base imponible", "devengo", "pgc", "debe", "haber", "activo", "pasivo", "amortización"], desc: "Conceptos explicados con sencillez", group: "referencia" },
 ]
@@ -248,6 +253,9 @@ function InicioContent({ onNavigate }: { onNavigate: (id: string) => void }) {
         <FAQ q="¿Qué son los modelos fiscales (303, 111, 390)?">
           Son los formularios que presentas a Hacienda periódicamente para declarar tus impuestos. El <strong>303</strong> es la declaración trimestral de IVA (cada 3 meses). El <strong>111</strong> son las retenciones de IRPF (también trimestral). El <strong>390</strong> es el resumen anual de IVA. <strong>CryptoGest los calcula automáticamente</strong> a partir de tus facturas y gastos, solo tienes que revisar las cifras.
         </FAQ>
+        <FAQ q="¿Puedo enviar facturas por email directamente?">
+          <strong>Sí.</strong> CryptoGest puede enviar facturas como PDF adjunto por email directamente desde la aplicación. Solo necesitas configurar tu cuenta de correo (SMTP) en Configuración → Email. Una vez configurado, en cada factura emitida verás un botón de correo que abre un formulario con el email del cliente, el asunto y un mensaje ya rellenados. Solo tienes que revisarlo y pulsar "Enviar".
+        </FAQ>
         <FAQ q="¿Puedo usar CryptoGest para varias empresas?">
           <strong>Sí.</strong> Puedes crear tantas empresas como necesites. Cada una tiene su propia base de datos completamente separada, con su propia contraseña. Los datos de una empresa nunca se mezclan con los de otra. Es perfecto si gestionas un negocio como autónomo y además administras una sociedad.
         </FAQ>
@@ -293,7 +301,8 @@ function PrimerosPasosContent() {
     <Step n={1}><strong>Nombre de la empresa:</strong> pon el nombre de tu negocio o tu nombre como autónomo. Este nombre aparecerá en todas tus facturas.</Step>
     <Step n={2}><strong>NIF/CIF:</strong> es tu número de identificación fiscal. Si eres autónomo, es tu DNI con una letra al final (ej. 12345678A). Si tienes una sociedad (S.L., S.A.), empieza por letra (ej. B12345678). Si no lo tienes a mano, puedes dejarlo para después.</Step>
     <Step n={3}><strong>Dirección y datos fiscales:</strong> dirección completa de tu negocio. Estos datos se imprimen automáticamente en tus facturas, así que pon la dirección que aparece en tu alta de Hacienda.</Step>
-    <Step n={4}><strong>Contraseña maestra:</strong> elige una contraseña segura. CryptoGest cifra todos tus datos con ella, así que es muy importante. Usa al menos 8 caracteres mezclando letras, números y algún símbolo (ej. MiEmpresa2026!).</Step>
+    <Step n={4}><strong>Ubicación de los datos:</strong> elige dónde guardar los archivos de la empresa. Puedes usar la <Ic icon={FolderOpen} className="text-slate-600" />carpeta por defecto, un <Ic icon={HardDrive} className="text-slate-600" />disco externo (USB, disco duro portátil) o seleccionar una carpeta personalizada. Esto es útil si quieres guardar los datos en una unidad externa o en una carpeta sincronizada.</Step>
+    <Step n={5}><strong>Contraseña maestra:</strong> elige una contraseña segura. CryptoGest cifra todos tus datos con ella, así que es muy importante. Usa al menos 8 caracteres mezclando letras, números y algún símbolo (ej. MiEmpresa2026!).</Step>
 
     <Warning>
       <strong>Muy importante:</strong> la contraseña maestra no se puede recuperar si la olvidas. No hay botón de "he olvidado mi contraseña". Apúntala en un papel y guárdalo en un lugar seguro (un cajón con llave, una caja fuerte, etc.).
@@ -430,8 +439,17 @@ function FacturasContent() {
       Si eres autónomo y facturas a empresas, tus facturas suelen incluir una <strong>retención de IRPF</strong> (normalmente el 15%, o el 7% si llevas menos de 2 años de alta). Esto significa que el cliente no te paga todo: se queda un porcentaje y se lo paga a Hacienda por ti, como un adelanto de tu declaración de la renta. La factura muestra: Base + IVA − Retención = Total a pagar.
     </Concept>
 
-    <SectionTitle>Generar un PDF de la factura</SectionTitle>
-    <P>Puedes generar un PDF profesional de cada factura para enviárselo al cliente por email. El PDF usa la plantilla que hayas configurado (con tu logotipo y colores). También puedes exportar todas las facturas a Excel para analizarlas.</P>
+    <SectionTitle>Previsualizar, descargar y enviar PDFs</SectionTitle>
+    <P>Cada factura emitida se puede ver como PDF, descargar o enviar directamente por email al cliente. En la tabla de facturas verás tres botones en cada fila (solo para facturas no borrador):</P>
+    <Step n={1}><Ic icon={FileSearch} className="text-slate-600" /><strong>Previsualizar:</strong> abre el PDF directamente en la aplicación, en una ventana modal a pantalla casi completa. Puedes revisarlo sin descargar nada. Desde ahí también puedes descargarlo si todo está correcto.</Step>
+    <Step n={2}><Ic icon={Download} className="text-slate-600" /><strong>Descargar:</strong> guarda el PDF en tu ordenador. Se abre un diálogo para elegir dónde guardarlo.</Step>
+    <Step n={3}><Ic icon={Mail} className="text-slate-600" /><strong>Enviar por email:</strong> envía la factura como PDF adjunto directamente desde CryptoGest. El email se rellena automáticamente con los datos del cliente, el asunto y un mensaje personalizado que puedes editar antes de enviar.</Step>
+    <P>Estos mismos botones también aparecen al abrir el detalle de una factura.</P>
+
+    <Tip>Para poder enviar facturas por email, primero tienes que configurar tu cuenta SMTP en <Ic icon={Settings} className="text-slate-600" />Configuración → <Ic icon={Mail} className="text-rose-600" />Email. Consulta la sección "Configuración" del manual para más detalles.</Tip>
+
+    <SectionTitle>Exportar listados</SectionTitle>
+    <P>Además de los PDFs individuales, puedes exportar el listado completo de facturas a <strong>CSV</strong>, <strong>Excel</strong> o <strong>JSON</strong> usando el botón <Ic icon={Download} className="text-slate-600" />"Exportar" de la parte superior.</P>
 
     <Warning>Hacienda exige que la numeración de facturas sea <strong>correlativa y sin saltos</strong>. Es decir, si tu última factura es la 003, la siguiente debe ser la 004, no la 007. CryptoGest se encarga de esto automáticamente, así que no cambies los números manualmente.</Warning>
 
@@ -585,9 +603,18 @@ function CloudContent() {
     <P>Cloud Backup te permite guardar una copia de seguridad de todos tus datos en la nube (Internet). Si tu ordenador se estropea, te lo roban o lo cambias, podrás recuperar toda tu información en minutos.</P>
 
     <SectionTitle>Conectar tu cuenta</SectionTitle>
-    <Step n={1}>Ve a <Ic icon={Cloud} className="text-sky-600" /><strong>"Cloud Backup"</strong> en el menú de la izquierda.</Step>
-    <Step n={2}>Pulsa <strong>"Conectar con CryptoGest Cloud"</strong>. Se abrirá tu navegador para crear una cuenta o iniciar sesión.</Step>
+    <P>Hay dos formas de vincular CryptoGest con tu cuenta en la nube:</P>
+
+    <Step n={1}><strong>Iniciar sesión desde el navegador:</strong> pulsa <strong>"Iniciar sesión en CryptoGest Cloud"</strong>. Se abrirá tu navegador para crear una cuenta o iniciar sesión. Es la forma más rápida.</Step>
+    <Step n={2}><strong>Conectar con código:</strong> si prefieres no abrir el navegador, puedes vincular tu dispositivo con un código de 6 dígitos. Introduce el código que obtienes desde tu cuenta web de CryptoGest Cloud y pulsa <Ic icon={Cloud} className="text-sky-600" />"Conectar". Opcionalmente, puedes darle un nombre al dispositivo (ej. "PC Oficina", "Portátil") para identificarlo fácilmente.</Step>
     <Step n={3}>Una vez conectado, verás tu nombre, email y el plan que tienes contratado.</Step>
+
+    <SectionTitle>Licencia y planes</SectionTitle>
+    <P>CryptoGest Cloud ofrece diferentes planes según tus necesidades de almacenamiento. Además, puedes adquirir una <strong>licencia empresarial</strong> directamente desde la aplicación:</P>
+    <Step n={1}>Ve a la pestaña <strong>"Plan y uso"</strong> dentro de Cloud Backup.</Step>
+    <Step n={2}>Verás tu plan actual con el espacio de almacenamiento y el número de backups disponibles.</Step>
+    <Step n={3}>Si quieres la licencia, pulsa <Ic icon={Key} className="text-amber-600" /><strong>"Comprar licencia"</strong>. Se abrirá una pasarela de pago segura. La licencia es de <strong>pago único y perpetua</strong> (no hay cuotas mensuales).</Step>
+    <Step n={4}>Con la licencia puedes, entre otras cosas, ocultar la firma de CryptoGest en los emails que envíes a tus clientes.</Step>
 
     <SectionTitle>Hacer una copia de seguridad</SectionTitle>
     <Step n={1}>Pulsa <Ic icon={Upload} className="text-primary" /><strong>"Subir Backup"</strong>.</Step>
@@ -634,6 +661,16 @@ function ConfiguracionContent() {
     <Step n={2}>Puedes <strong>crear</strong> nuevos tipos si los necesitas (ej. IGIC para Canarias).</Step>
     <Step n={3}>Puedes <strong>editar</strong> o <strong>desactivar</strong> los existentes. Los desactivados dejan de aparecer en los desplegables.</Step>
     <Step n={4}>Marca uno como <strong>por defecto</strong> (icono <Ic icon={Star} className="text-amber-500" /> estrella) para que se seleccione automáticamente al crear productos y líneas de factura.</Step>
+
+    <SectionTitle>Pestaña "Email"</SectionTitle>
+    <P>Configura tu cuenta de correo para poder enviar facturas por email directamente desde CryptoGest:</P>
+    <Step n={1}><strong>Servidor SMTP:</strong> la dirección del servidor de correo (ej. smtp.gmail.com para Gmail, smtp.office365.com para Outlook).</Step>
+    <Step n={2}><strong>Puerto:</strong> normalmente 587. Si usas SSL/TLS, el puerto suele ser 465 (activa el interruptor "SSL/TLS").</Step>
+    <Step n={3}><strong>Usuario y contraseña:</strong> las credenciales de tu cuenta de correo. Para Gmail, necesitas una "contraseña de aplicación" (no tu contraseña normal): ve a tu cuenta de Google → Seguridad → Contraseñas de aplicaciones.</Step>
+    <Step n={4}><strong>Nombre y email del remitente:</strong> el nombre y dirección que verán tus clientes cuando reciban la factura (ej. "Mi Empresa S.L." y "facturacion@empresa.es").</Step>
+    <Step n={5}>Pulsa <strong>"Probar conexión"</strong> para verificar que todo está bien configurado antes de guardar.</Step>
+
+    <Tip>Si tienes la licencia empresarial, puedes ocultar la firma de CryptoGest en los emails. Activa el interruptor "Firma de CryptoGest en emails" en esta misma pestaña.</Tip>
 
     <SectionTitle>Otras pestañas</SectionTitle>
     <Step n={1}><Ic icon={Shield} className="text-red-600" /><strong>"Seguridad":</strong> cambiar contraseña maestra y configurar passkey (ver sección "Seguridad y Cifrado" del manual).</Step>
