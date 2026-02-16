@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,14 +20,23 @@ import {
   ArrowRight,
   ArrowLeft,
   Sparkles,
+  HardDrive,
+  FolderOpen,
 } from "lucide-react"
 
 interface SetupWizardPageProps {
   onComplete: () => void
 }
 
-type WizardStep = "bienvenida" | "empresa" | "seguridad" | "procesando" | "completado"
+type WizardStep = "bienvenida" | "empresa" | "ubicacion" | "seguridad" | "procesando" | "completado"
 type InputMode = "password" | "pin"
+type LocationMode = "default" | "volume" | "custom"
+
+interface VolumeInfo {
+  name: string
+  path: string
+  available: boolean
+}
 
 export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
   const [step, setStep] = useState<WizardStep>("bienvenida")
@@ -35,6 +44,13 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
   // Empresa
   const [empresaNombre, setEmpresaNombre] = useState("")
   const [empresaNif, setEmpresaNif] = useState("")
+
+  // Ubicación
+  const [locationMode, setLocationMode] = useState<LocationMode>("default")
+  const [customDataPath, setCustomDataPath] = useState<string | null>(null)
+  const [defaultPath, setDefaultPath] = useState<string>("")
+  const [volumes, setVolumes] = useState<VolumeInfo[]>([])
+  const [loadingVolumes, setLoadingVolumes] = useState(false)
 
   // Seguridad
   const [inputMode, setInputMode] = useState<InputMode>("password")
@@ -47,13 +63,54 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
   const [error, setError] = useState<string | null>(null)
   const [processingStep, setProcessingStep] = useState(0)
 
+  const loadLocationData = useCallback(async () => {
+    setLoadingVolumes(true)
+    try {
+      const [defaultRes, volumesRes] = await Promise.all([
+        window.electronAPI?.empresa.getDefaultPath(),
+        window.electronAPI?.empresa.detectVolumes(),
+      ])
+      if (defaultRes?.success && defaultRes.data) {
+        setDefaultPath(defaultRes.data.path)
+      }
+      if (volumesRes?.success && volumesRes.data) {
+        setVolumes(volumesRes.data.filter(v => v.available))
+      }
+    } catch {
+      // silently fail — default path will show as fallback
+    } finally {
+      setLoadingVolumes(false)
+    }
+  }, [])
+
   const handleEmpresaNext = () => {
     setError(null)
     if (!empresaNombre.trim()) {
       setError("El nombre de la empresa es obligatorio")
       return
     }
-    setStep("seguridad")
+    setStep("ubicacion")
+  }
+
+  useEffect(() => {
+    if (step === "ubicacion") {
+      loadLocationData()
+    }
+  }, [step, loadLocationData])
+
+  const handleSelectCustomFolder = async () => {
+    const result = await window.electronAPI?.empresa.selectDirectory()
+    if (result?.success && result.data) {
+      setCustomDataPath(result.data.path)
+      setLocationMode("custom")
+    }
+  }
+
+  const getSelectedPath = (): string | undefined => {
+    if (locationMode === "default") return undefined
+    if (locationMode === "custom" && customDataPath) return customDataPath
+    if (locationMode === "volume" && customDataPath) return customDataPath
+    return undefined
   }
 
   const handleSecuritySubmit = async () => {
@@ -89,8 +146,10 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
       await new Promise((r) => setTimeout(r, 400))
       setProcessingStep(1)
 
+      const selectedPath = getSelectedPath()
       const createResult = await window.electronAPI?.empresa.create({
         nombre: empresaNombre.trim(),
+        ...(selectedPath ? { customDataPath: selectedPath } : {}),
       })
       if (!createResult?.success || !createResult.data) {
         throw new Error(createResult?.error || "Error al crear la empresa")
@@ -140,6 +199,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       if (step === "empresa") handleEmpresaNext()
+      if (step === "ubicacion") setStep("seguridad")
       if (step === "seguridad") handleSecuritySubmit()
     }
   }
@@ -219,6 +279,11 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-primary" />
               <span className="text-xs text-primary font-medium">Empresa</span>
+            </div>
+            <div className="flex-1 h-px bg-slate-800" />
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-slate-700" />
+              <span className="text-xs text-slate-600">Ubicación</span>
             </div>
             <div className="flex-1 h-px bg-slate-800" />
             <div className="flex items-center gap-1.5">
@@ -305,6 +370,160 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
     )
   }
 
+  // ── Ubicación ──
+  if (step === "ubicacion") {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          {/* Progress */}
+          <div className="flex items-center gap-2 mb-8">
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="text-xs text-emerald-500 font-medium">Empresa</span>
+            </div>
+            <div className="flex-1 h-px bg-slate-800" />
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-primary" />
+              <span className="text-xs text-primary font-medium">Ubicación</span>
+            </div>
+            <div className="flex-1 h-px bg-slate-800" />
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-slate-700" />
+              <span className="text-xs text-slate-600">Seguridad</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 mb-4">
+            <img src="./assets/logo.png" alt="CryptoGest" className="h-7 w-7" />
+            <span className="text-sm font-semibold text-white">CryptoGest</span>
+          </div>
+
+          {/* Empresa badge */}
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/60 border border-slate-700/50 mb-6">
+            <Building2 className="h-3 w-3 text-slate-400" />
+            <span className="text-xs text-slate-300">{empresaNombre}</span>
+          </div>
+
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-white mb-1">Ubicación de datos</h2>
+            <p className="text-sm text-slate-500">
+              Elige dónde se guardarán la base de datos y los adjuntos de esta empresa.
+            </p>
+          </div>
+
+          <div className="space-y-2.5">
+            {/* Opción: Ruta por defecto */}
+            <button
+              className={`w-full text-left p-3.5 rounded-lg border transition-colors ${
+                locationMode === "default"
+                  ? "border-primary/50 bg-slate-800/80"
+                  : "border-slate-800 bg-slate-900/50 hover:bg-slate-800/50"
+              }`}
+              onClick={() => { setLocationMode("default"); setCustomDataPath(null) }}
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800/80 shrink-0 mt-0.5">
+                  <Database className="h-4 w-4 text-slate-300" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-white">Carpeta por defecto</span>
+                    {locationMode === "default" && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5 truncate font-mono">
+                    {defaultPath || "Cargando..."}
+                  </p>
+                </div>
+              </div>
+            </button>
+
+            {/* Opción: Discos externos */}
+            {loadingVolumes ? (
+              <div className="flex items-center gap-2.5 p-3.5 rounded-lg border border-slate-800 bg-slate-900/50">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                <span className="text-sm text-slate-500">Detectando discos externos...</span>
+              </div>
+            ) : (
+              volumes.map((vol) => (
+                <button
+                  key={vol.path}
+                  className={`w-full text-left p-3.5 rounded-lg border transition-colors ${
+                    locationMode === "volume" && customDataPath === vol.path
+                      ? "border-primary/50 bg-slate-800/80"
+                      : "border-slate-800 bg-slate-900/50 hover:bg-slate-800/50"
+                  }`}
+                  onClick={() => { setLocationMode("volume"); setCustomDataPath(vol.path) }}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800/80 shrink-0 mt-0.5">
+                      <HardDrive className="h-4 w-4 text-slate-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-white">{vol.name}</span>
+                        {locationMode === "volume" && customDataPath === vol.path && (
+                          <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5 truncate font-mono">{vol.path}</p>
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+
+            {/* Opción: Elegir carpeta manualmente */}
+            <button
+              className={`w-full text-left p-3.5 rounded-lg border transition-colors ${
+                locationMode === "custom"
+                  ? "border-primary/50 bg-slate-800/80"
+                  : "border-slate-800 bg-slate-900/50 hover:bg-slate-800/50"
+              }`}
+              onClick={handleSelectCustomFolder}
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-800/80 shrink-0 mt-0.5">
+                  <FolderOpen className="h-4 w-4 text-slate-300" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-white">Elegir carpeta...</span>
+                    {locationMode === "custom" && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5 truncate font-mono">
+                    {locationMode === "custom" && customDataPath ? customDataPath : "Abre el selector de carpetas"}
+                  </p>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          <div className="flex gap-2 pt-6">
+            <Button
+              variant="outline"
+              className="border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-white"
+              onClick={() => { setStep("empresa"); setError(null) }}
+            >
+              <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
+              Atrás
+            </Button>
+            <Button
+              className="flex-1 h-10 bg-white text-slate-900 hover:bg-slate-200 font-medium"
+              onClick={() => setStep("seguridad")}
+            >
+              Siguiente
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+
+          <p className="mt-6 text-[11px] text-slate-700 text-center">
+            Puedes cambiar la ubicación más adelante desde Configuración.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   // ── Seguridad ──
   if (step === "seguridad") {
     return (
@@ -315,6 +534,11 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-emerald-500" />
               <span className="text-xs text-emerald-500 font-medium">Empresa</span>
+            </div>
+            <div className="flex-1 h-px bg-slate-800" />
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="text-xs text-emerald-500 font-medium">Ubicación</span>
             </div>
             <div className="flex-1 h-px bg-slate-800" />
             <div className="flex items-center gap-1.5">
@@ -471,7 +695,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
               <Button
                 variant="outline"
                 className="border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-white"
-                onClick={() => { setStep("empresa"); setError(null) }}
+                onClick={() => { setStep("ubicacion"); setError(null) }}
               >
                 <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
                 Atrás

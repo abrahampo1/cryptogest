@@ -333,11 +333,14 @@ interface ElectronAPI {
 
   empresa: {
     list: () => Promise<ApiResponse<EmpresaListResult>>
-    create: (data: { nombre: string }) => Promise<ApiResponse<EmpresaInfo>>
+    create: (data: { nombre: string; customDataPath?: string }) => Promise<ApiResponse<EmpresaInfo>>
     select: (id: string) => Promise<ApiResponse<EmpresaSelectResult>>
     rename: (id: string, nombre: string) => Promise<ApiResponse<void>>
     delete: (id: string) => Promise<ApiResponse<void>>
     getActive: () => Promise<ApiResponse<EmpresaInfo | null>>
+    getDefaultPath: () => Promise<ApiResponse<{ path: string }>>
+    detectVolumes: () => Promise<ApiResponse<{ name: string; path: string; available: boolean }[]>>
+    selectDirectory: () => Promise<ApiResponse<{ path: string } | null>>
   }
 
   auth: {

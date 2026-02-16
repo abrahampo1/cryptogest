@@ -35,11 +35,14 @@ const electronAPI = {
   // Empresas
   empresa: {
     list: () => ipcRenderer.invoke('empresa:list') as Promise<ApiResponse<any>>,
-    create: (data: { nombre: string }) => ipcRenderer.invoke('empresa:create', data) as Promise<ApiResponse<any>>,
+    create: (data: { nombre: string; customDataPath?: string }) => ipcRenderer.invoke('empresa:create', data) as Promise<ApiResponse<any>>,
     select: (id: string) => ipcRenderer.invoke('empresa:select', id) as Promise<ApiResponse<any>>,
     rename: (id: string, nombre: string) => ipcRenderer.invoke('empresa:rename', id, nombre) as Promise<ApiResponse<void>>,
     delete: (id: string) => ipcRenderer.invoke('empresa:delete', id) as Promise<ApiResponse<void>>,
     getActive: () => ipcRenderer.invoke('empresa:getActive') as Promise<ApiResponse<any>>,
+    getDefaultPath: () => ipcRenderer.invoke('empresa:getDefaultPath') as Promise<ApiResponse<{ path: string }>>,
+    detectVolumes: () => ipcRenderer.invoke('empresa:detectVolumes') as Promise<ApiResponse<{ name: string; path: string; available: boolean }[]>>,
+    selectDirectory: () => ipcRenderer.invoke('empresa:selectDirectory') as Promise<ApiResponse<{ path: string } | null>>,
   },
 
   // Autenticación

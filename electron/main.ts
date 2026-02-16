@@ -457,10 +457,88 @@ ipcMain.handle('empresa:list', async () => {
   }
 })
 
-ipcMain.handle('empresa:create', async (_, data: { nombre: string }) => {
+ipcMain.handle('empresa:create', async (_, data: { nombre: string; customDataPath?: string }) => {
   try {
-    const empresa = crypto.createEmpresa(data.nombre)
+    const empresa = crypto.createEmpresa(data.nombre, data.customDataPath)
     return { success: true, data: empresa }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('empresa:getDefaultPath', async () => {
+  try {
+    return { success: true, data: { path: crypto.getDefaultPath() } }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('empresa:detectVolumes', async () => {
+  try {
+    const volumes: { name: string; path: string; available: boolean }[] = []
+
+    if (process.platform === 'darwin') {
+      const volumesDir = '/Volumes'
+      if (fs.existsSync(volumesDir)) {
+        const entries = fs.readdirSync(volumesDir)
+        for (const name of entries) {
+          const volumePath = path.join(volumesDir, name)
+          // Filtrar el volumen del sistema
+          try {
+            const resolved = fs.realpathSync(volumePath)
+            if (resolved === '/') continue
+          } catch {
+            // Si no se puede resolver, verificar nombres conocidos
+            if (name === 'Macintosh HD' || name === 'Macintosh HD - Data') continue
+          }
+
+          // Verificar permisos de escritura
+          let available = false
+          try {
+            const testFile = path.join(volumePath, `.cryptogest_write_test_${Date.now()}`)
+            fs.writeFileSync(testFile, 'test')
+            fs.unlinkSync(testFile)
+            available = true
+          } catch {
+            available = false
+          }
+
+          volumes.push({ name, path: volumePath, available })
+        }
+      }
+    }
+
+    return { success: true, data: volumes }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('empresa:selectDirectory', async () => {
+  try {
+    const mainWindow = BrowserWindow.getAllWindows()[0]
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Seleccionar carpeta para datos de empresa',
+      properties: ['openDirectory', 'createDirectory'],
+    })
+
+    if (result.canceled || !result.filePaths[0]) {
+      return { success: true, data: null }
+    }
+
+    const selectedPath = result.filePaths[0]
+
+    // Verificar permisos de escritura
+    const testFile = path.join(selectedPath, `.cryptogest_write_test_${Date.now()}`)
+    try {
+      fs.writeFileSync(testFile, 'test')
+      fs.unlinkSync(testFile)
+    } catch {
+      return { success: false, error: 'No se tienen permisos de escritura en la carpeta seleccionada' }
+    }
+
+    return { success: true, data: { path: selectedPath } }
   } catch (error) {
     return { success: false, error: String(error) }
   }

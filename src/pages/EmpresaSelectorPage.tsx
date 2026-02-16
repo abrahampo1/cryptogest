@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -10,6 +10,12 @@ import {
   Pencil,
   X,
   Check,
+  ArrowLeft,
+  ArrowRight,
+  HardDrive,
+  FolderOpen,
+  CheckCircle2,
+  Database,
 } from "lucide-react"
 import {
   AlertDialog,
@@ -36,6 +42,15 @@ interface EmpresaSelectorPageProps {
   onCreated: () => void
 }
 
+type CreationStep = "name" | "location"
+type LocationMode = "default" | "volume" | "custom"
+
+interface VolumeInfo {
+  name: string
+  path: string
+  available: boolean
+}
+
 export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCreated }: EmpresaSelectorPageProps) {
   const [isCreating, setIsCreating] = useState(false)
   const [newName, setNewName] = useState("")
@@ -46,15 +61,78 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
   const [deleteTarget, setDeleteTarget] = useState<EmpresaInfo | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
+  // 2-step creation
+  const [creationStep, setCreationStep] = useState<CreationStep>("name")
+  const [locationMode, setLocationMode] = useState<LocationMode>("default")
+  const [customDataPath, setCustomDataPath] = useState<string | null>(null)
+  const [defaultPath, setDefaultPath] = useState<string>("")
+  const [volumes, setVolumes] = useState<VolumeInfo[]>([])
+  const [loadingVolumes, setLoadingVolumes] = useState(false)
+
+  const loadLocationData = useCallback(async () => {
+    setLoadingVolumes(true)
+    try {
+      const [defaultRes, volumesRes] = await Promise.all([
+        window.electronAPI?.empresa.getDefaultPath(),
+        window.electronAPI?.empresa.detectVolumes(),
+      ])
+      if (defaultRes?.success && defaultRes.data) {
+        setDefaultPath(defaultRes.data.path)
+      }
+      if (volumesRes?.success && volumesRes.data) {
+        setVolumes(volumesRes.data.filter(v => v.available))
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingVolumes(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (creationStep === "location") {
+      loadLocationData()
+    }
+  }, [creationStep, loadLocationData])
+
+  const handleNameNext = () => {
+    if (!newName.trim()) return
+    setError(null)
+    setCreationStep("location")
+  }
+
+  const handleSelectCustomFolder = async () => {
+    const result = await window.electronAPI?.empresa.selectDirectory()
+    if (result?.success && result.data) {
+      setCustomDataPath(result.data.path)
+      setLocationMode("custom")
+    }
+  }
+
+  const resetCreation = () => {
+    setIsCreating(false)
+    setNewName("")
+    setCreationStep("name")
+    setLocationMode("default")
+    setCustomDataPath(null)
+    setError(null)
+  }
+
   const handleCreate = async () => {
     if (!newName.trim()) return
     setIsSubmitting(true)
     setError(null)
     try {
-      const result = await window.electronAPI?.empresa.create({ nombre: newName.trim() })
+      const selectedPath =
+        locationMode === "default" ? undefined :
+        (locationMode === "custom" || locationMode === "volume") && customDataPath ? customDataPath :
+        undefined
+      const result = await window.electronAPI?.empresa.create({
+        nombre: newName.trim(),
+        ...(selectedPath ? { customDataPath: selectedPath } : {}),
+      })
       if (result?.success) {
-        setNewName("")
-        setIsCreating(false)
+        resetCreation()
         onCreated()
       } else {
         setError(result?.error || "Error al crear empresa")
@@ -201,33 +279,143 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
         {/* Crear empresa */}
         {isCreating ? (
           <div className="p-4 rounded-lg border border-slate-700 bg-slate-900/50 space-y-3">
-            <Input
-              className="h-9 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
-              placeholder="Nombre de la empresa..."
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreate()
-                if (e.key === "Escape") { setIsCreating(false); setNewName("") }
-              }}
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={handleCreate}
-                disabled={!newName.trim() || isSubmitting}
-                className="flex-1"
-              >
-                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
-                Crear empresa
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => { setIsCreating(false); setNewName("") }}
-                className="border-slate-600 text-slate-300 hover:bg-slate-800"
-              >
-                Cancelar
-              </Button>
-            </div>
+            {creationStep === "name" ? (
+              <>
+                <Input
+                  className="h-9 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                  placeholder="Nombre de la empresa..."
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleNameNext()
+                    if (e.key === "Escape") resetCreation()
+                  }}
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleNameNext}
+                    disabled={!newName.trim()}
+                    className="flex-1"
+                  >
+                    Siguiente
+                    <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={resetCreation}
+                    className="border-slate-600 text-slate-300 hover:bg-slate-800"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Step indicator */}
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs text-slate-400">
+                    Ubicación para <span className="text-slate-200 font-medium">{newName}</span>
+                  </span>
+                </div>
+
+                {/* Opción: Por defecto */}
+                <button
+                  className={`w-full text-left p-2.5 rounded-md border transition-colors ${
+                    locationMode === "default"
+                      ? "border-primary/50 bg-slate-800/80"
+                      : "border-slate-700 bg-slate-800/30 hover:bg-slate-800/50"
+                  }`}
+                  onClick={() => { setLocationMode("default"); setCustomDataPath(null) }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Database className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-medium text-white">Carpeta por defecto</span>
+                      <p className="text-[10px] text-slate-500 truncate font-mono">{defaultPath || "..."}</p>
+                    </div>
+                    {locationMode === "default" && <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />}
+                  </div>
+                </button>
+
+                {/* Discos externos */}
+                {loadingVolumes ? (
+                  <div className="flex items-center gap-2 p-2.5 rounded-md border border-slate-700 bg-slate-800/30">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
+                    <span className="text-xs text-slate-500">Detectando discos...</span>
+                  </div>
+                ) : (
+                  volumes.map((vol) => (
+                    <button
+                      key={vol.path}
+                      className={`w-full text-left p-2.5 rounded-md border transition-colors ${
+                        locationMode === "volume" && customDataPath === vol.path
+                          ? "border-primary/50 bg-slate-800/80"
+                          : "border-slate-700 bg-slate-800/30 hover:bg-slate-800/50"
+                      }`}
+                      onClick={() => { setLocationMode("volume"); setCustomDataPath(vol.path) }}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <HardDrive className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs font-medium text-white">{vol.name}</span>
+                          <p className="text-[10px] text-slate-500 truncate font-mono">{vol.path}</p>
+                        </div>
+                        {locationMode === "volume" && customDataPath === vol.path && (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
+
+                {/* Elegir carpeta */}
+                <button
+                  className={`w-full text-left p-2.5 rounded-md border transition-colors ${
+                    locationMode === "custom"
+                      ? "border-primary/50 bg-slate-800/80"
+                      : "border-slate-700 bg-slate-800/30 hover:bg-slate-800/50"
+                  }`}
+                  onClick={handleSelectCustomFolder}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-medium text-white">Elegir carpeta...</span>
+                      <p className="text-[10px] text-slate-500 truncate font-mono">
+                        {locationMode === "custom" && customDataPath ? customDataPath : "Abre el selector"}
+                      </p>
+                    </div>
+                    {locationMode === "custom" && <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />}
+                  </div>
+                </button>
+
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCreationStep("name")}
+                    className="border-slate-600 text-slate-300 hover:bg-slate-800"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+                    Atrás
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleCreate}
+                    disabled={isSubmitting}
+                    className="flex-1"
+                  >
+                    {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
+                    Crear empresa
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={resetCreation}
+                    className="border-slate-600 text-slate-300 hover:bg-slate-800"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <Button

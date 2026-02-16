@@ -83,10 +83,16 @@ export function getActiveEmpresa(): EmpresaInfo | null {
 
 export function createEmpresa(nombre: string, customDataPath?: string): EmpresaInfo {
   const config = loadEmpresasConfig()
+  // Si hay ruta personalizada, crear subcarpeta con el nombre de la empresa
+  let finalDataPath: string | null = null
+  if (customDataPath) {
+    const safeName = nombre.trim().replace(/[<>:"/\\|?*]+/g, '_').replace(/\s+/g, ' ')
+    finalDataPath = path.join(customDataPath, safeName)
+  }
   const empresa: EmpresaInfo = {
     id: crypto.randomUUID(),
     nombre,
-    dataPath: customDataPath || null,
+    dataPath: finalDataPath,
     creadaEn: new Date().toISOString(),
   }
 
