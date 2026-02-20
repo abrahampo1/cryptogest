@@ -27,7 +27,8 @@
     },
     "linux": {
       "icon": "assets/logo.png",
-      "category": "Office"
+      "category": "Office",
+      "target": ["AppImage", "deb"]
     },
     "npmRebuild": false,
     "files": [
