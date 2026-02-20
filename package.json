@@ -1,7 +1,7 @@
 {
   "name": "cryptogest",
   "productName": "CryptoGest",
-  "version": "1.0.2.1",
+  "version": "1.0.3",
   "description": "ERP para gestión contable",
   "license": "SEE LICENSE IN LICENSE",
   "author": "Abraham Leiro <abraham@leiro.dev>",
