@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
+import { translateError } from "@/lib/formatting"
 import {
   Dialog,
   DialogContent,
@@ -38,6 +40,7 @@ export function SendEmailDialog({
   defaultSubject,
   defaultBody,
 }: SendEmailDialogProps) {
+  const { t } = useTranslation(['buzon', 'common'])
   const [to, setTo] = useState("")
   const [cc, setCc] = useState("")
   const [subject, setSubject] = useState("")
@@ -60,7 +63,7 @@ export function SendEmailDialog({
 
   const handleSend = async () => {
     if (!to.trim()) {
-      setError("El destinatario es obligatorio")
+      setError(t('recipientRequired'))
       return
     }
 
@@ -83,7 +86,7 @@ export function SendEmailDialog({
           onClose()
         }, 1500)
       } else {
-        setError(result?.error || "Error al enviar el email")
+        setError(result?.error ? translateError(result.error) : t('sendErrorFallback'))
       }
     } catch (err) {
       setError(String(err))
@@ -98,7 +101,7 @@ export function SendEmailDialog({
         <DialogHeader>
           <DialogTitle className="text-base flex items-center gap-2">
             <Mail className="h-4 w-4" />
-            Enviar por Email
+            {t('sendByEmail')}
           </DialogTitle>
         </DialogHeader>
 
@@ -106,7 +109,7 @@ export function SendEmailDialog({
           {success && (
             <div className="flex items-center gap-2 bg-green-50 text-green-700 p-2 rounded text-xs">
               <CheckCircle className="h-3.5 w-3.5" />
-              Email enviado correctamente
+              {t('emailSentSuccess')}
             </div>
           )}
 
@@ -118,47 +121,47 @@ export function SendEmailDialog({
           )}
 
           <div className="grid gap-1.5">
-            <Label className="text-xs">Para *</Label>
+            <Label className="text-xs">{t('toRequired')}</Label>
             <Input
               className="h-8 text-sm"
               type="email"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              placeholder="destinatario@email.com"
+              placeholder={t('recipientPlaceholder')}
               disabled={sending || success}
             />
           </div>
 
           <div className="grid gap-1.5">
-            <Label className="text-xs">CC</Label>
+            <Label className="text-xs">{t('cc')}</Label>
             <Input
               className="h-8 text-sm"
               type="email"
               value={cc}
               onChange={(e) => setCc(e.target.value)}
-              placeholder="copia@email.com"
+              placeholder={t('ccPlaceholder')}
               disabled={sending || success}
             />
           </div>
 
           <div className="grid gap-1.5">
-            <Label className="text-xs">Asunto</Label>
+            <Label className="text-xs">{t('subject')}</Label>
             <Input
               className="h-8 text-sm"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="Asunto del mensaje"
+              placeholder={t('subjectPlaceholder')}
               disabled={sending || success}
             />
           </div>
 
           <div className="grid gap-1.5">
-            <Label className="text-xs">Mensaje</Label>
+            <Label className="text-xs">{t('message')}</Label>
             <Textarea
               className="text-sm min-h-[100px] resize-none"
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Cuerpo del mensaje..."
+              placeholder={t('bodyPlaceholder')}
               disabled={sending || success}
             />
           </div>
@@ -166,7 +169,7 @@ export function SendEmailDialog({
           {attachmentName && (
             <div className="flex items-center gap-2 p-2 bg-muted/50 rounded border text-xs">
               <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-muted-foreground">Adjunto:</span>
+              <span className="text-muted-foreground">{t('attachment')}</span>
               <span className="font-medium truncate">{attachmentName}</span>
             </div>
           )}
@@ -174,7 +177,7 @@ export function SendEmailDialog({
 
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose} disabled={sending}>
-            Cancelar
+            {t('common:cancel')}
           </Button>
           <Button size="sm" onClick={handleSend} disabled={sending || success || !to.trim()}>
             {sending ? (
@@ -182,7 +185,7 @@ export function SendEmailDialog({
             ) : (
               <Send className="mr-1.5 h-3.5 w-3.5" />
             )}
-            Enviar
+            {t('send')}
           </Button>
         </DialogFooter>
       </DialogContent>

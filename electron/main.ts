@@ -601,7 +601,7 @@ ipcMain.handle('empresa:selectDirectory', async () => {
       fs.writeFileSync(testFile, 'test')
       fs.unlinkSync(testFile)
     } catch {
-      return { success: false, error: 'No se tienen permisos de escritura en la carpeta seleccionada' }
+      return { success: false, error: 'permissionDenied' }
     }
 
     return { success: true, data: { path: selectedPath } }
@@ -627,7 +627,7 @@ ipcMain.handle('empresa:select', async (_, id: string) => {
     const config = crypto.loadEmpresasConfig()
     const empresa = config.empresas.find(e => e.id === id)
     if (!empresa) {
-      return { success: false, error: 'Empresa no encontrada' }
+      return { success: false, error: 'notFound' }
     }
 
     // Activar empresa
@@ -671,7 +671,7 @@ ipcMain.handle('empresa:delete', async (_, id: string) => {
   try {
     // No permitir eliminar la empresa activa si está autenticada
     if (activeEmpresaId === id && isAuthenticated) {
-      return { success: false, error: 'No se puede eliminar la empresa activa. Cambia a otra empresa primero.' }
+      return { success: false, error: 'cannotDeleteActiveCompany' }
     }
     const result = crypto.deleteEmpresaData(id)
     if (!result.success) {
@@ -755,13 +755,13 @@ ipcMain.handle('auth:unlock', async (_, password: string) => {
   try {
     // Verificar contraseña
     if (!crypto.verifyPassword(password)) {
-      return { success: false, error: 'Contraseña incorrecta' }
+      return { success: false, error: 'passwordIncorrect' }
     }
 
     // Desencriptar base de datos
     const decryptResult = crypto.decryptDatabase(password)
     if (!decryptResult.success) {
-      return { success: false, error: decryptResult.error || 'Error al desencriptar' }
+      return { success: false, error: decryptResult.error || 'decryptionError' }
     }
 
     // Guardar contraseña en memoria
@@ -823,7 +823,7 @@ ipcMain.handle('auth:setupPasskey', async (_, password: string) => {
   try {
     // Verificar que la contraseña es correcta
     if (!crypto.verifyPassword(password)) {
-      return { success: false, error: 'Contraseña incorrecta' }
+      return { success: false, error: 'passwordIncorrect' }
     }
 
     const result = crypto.setupPasskey(password)
@@ -838,7 +838,7 @@ ipcMain.handle('auth:unlockWithPasskey', async () => {
     // Obtener contraseña del passkey (ahora es async y pide autenticación biométrica)
     const passkeyResult = await crypto.unlockWithPasskey()
     if (!passkeyResult.success || !passkeyResult.password) {
-      return { success: false, error: passkeyResult.error || 'Error al obtener passkey' }
+      return { success: false, error: passkeyResult.error || 'decryptionError' }
     }
 
     const password = passkeyResult.password
@@ -846,7 +846,7 @@ ipcMain.handle('auth:unlockWithPasskey', async () => {
     // Desencriptar base de datos
     const decryptResult = crypto.decryptDatabase(password)
     if (!decryptResult.success) {
-      return { success: false, error: decryptResult.error || 'Error al desencriptar' }
+      return { success: false, error: decryptResult.error || 'decryptionError' }
     }
 
     // Guardar contraseña en memoria
@@ -879,7 +879,7 @@ ipcMain.handle('auth:disablePasskey', async () => {
 // Middleware para verificar autenticación
 function requireAuth() {
   if (!isAuthenticated || !prisma) {
-    throw new Error('No autenticado')
+    throw new Error('notAuthenticated')
   }
   return prisma
 }
@@ -1314,13 +1314,13 @@ ipcMain.handle('adjuntos:upload', async (_, gastoId: number, fileData: {
   try {
     const db = requireAuth()
     if (!currentPassword) {
-      return { success: false, error: 'No autenticado' }
+      return { success: false, error: 'notAuthenticated' }
     }
 
     // Verificar que el gasto existe
     const gasto = await db.gasto.findUnique({ where: { id: gastoId } })
     if (!gasto) {
-      return { success: false, error: 'Gasto no encontrado' }
+      return { success: false, error: 'notFound' }
     }
 
     // Convertir array de números a Buffer
@@ -1329,7 +1329,7 @@ ipcMain.handle('adjuntos:upload', async (_, gastoId: number, fileData: {
     // Encriptar y guardar el archivo
     const encryptResult = crypto.encryptFile(buffer, currentPassword)
     if (!encryptResult.success || !encryptResult.encryptedFileName) {
-      return { success: false, error: encryptResult.error || 'Error al encriptar archivo' }
+      return { success: false, error: encryptResult.error || 'encryptionError' }
     }
 
     // Crear registro en la base de datos
@@ -1359,19 +1359,19 @@ ipcMain.handle('adjuntos:download', async (_, adjuntoId: number) => {
   try {
     const db = requireAuth()
     if (!currentPassword) {
-      return { success: false, error: 'No autenticado' }
+      return { success: false, error: 'notAuthenticated' }
     }
 
     // Obtener información del adjunto
     const adjunto = await db.adjuntoGasto.findUnique({ where: { id: adjuntoId } })
     if (!adjunto) {
-      return { success: false, error: 'Adjunto no encontrado' }
+      return { success: false, error: 'notFound' }
     }
 
     // Desencriptar archivo
     const decryptResult = crypto.decryptFile(adjunto.nombreEncriptado, currentPassword)
     if (!decryptResult.success || !decryptResult.data) {
-      return { success: false, error: decryptResult.error || 'Error al desencriptar archivo' }
+      return { success: false, error: decryptResult.error || 'decryptionError' }
     }
 
     return {
@@ -1394,7 +1394,7 @@ ipcMain.handle('adjuntos:delete', async (_, adjuntoId: number) => {
     // Obtener información del adjunto
     const adjunto = await db.adjuntoGasto.findUnique({ where: { id: adjuntoId } })
     if (!adjunto) {
-      return { success: false, error: 'Adjunto no encontrado' }
+      return { success: false, error: 'notFound' }
     }
 
     // Eliminar archivo encriptado
@@ -1813,7 +1813,7 @@ ipcMain.handle('backup:export', async () => {
     })
 
     if (result.canceled || !result.filePath) {
-      return { success: false, error: 'Operación cancelada' }
+      return { success: false, error: 'operationCancelled' }
     }
 
     const exportPath = result.filePath
@@ -1892,7 +1892,7 @@ ipcMain.handle('backup:import', async () => {
     })
 
     if (result.canceled || result.filePaths.length === 0) {
-      return { success: false, error: 'Operación cancelada' }
+      return { success: false, error: 'operationCancelled' }
     }
 
     const importPath = result.filePaths[0]
@@ -1905,7 +1905,7 @@ ipcMain.handle('backup:import', async () => {
     const hasMetadata = entries.some(e => e.entryName === 'metadata.json')
 
     if (!hasDatabase) {
-      return { success: false, error: 'El archivo no contiene una base de datos válida de CryptoGest' }
+      return { success: false, error: 'invalidDatabase' }
     }
 
     // Leer metadatos si existen
@@ -2042,7 +2042,7 @@ ipcMain.handle('backup:migrate', async () => {
     })
 
     if (result.canceled || result.filePaths.length === 0) {
-      return { success: false, error: 'Operación cancelada' }
+      return { success: false, error: 'operationCancelled' }
     }
 
     const destinationFolder = result.filePaths[0]
@@ -2054,7 +2054,7 @@ ipcMain.handle('backup:migrate', async () => {
       if (existingFiles.length > 0) {
         return {
           success: false,
-          error: 'La carpeta CryptoGest-Data ya existe y contiene archivos. Selecciona otra ubicación o elimina la carpeta existente.'
+          error: 'folderAlreadyExists'
         }
       }
     }
@@ -2165,10 +2165,10 @@ ipcMain.handle('cloud:configure', async (_, data: { serverUrl: string; token: st
     } catch (err) {
       cloud.clearCloudConfig()
       if (err instanceof cloud.CloudAuthError) {
-        return { success: false, error: 'Token inválido o expirado' }
+        return { success: false, error: 'tokenInvalid' }
       }
       if (err instanceof cloud.CloudNetworkError) {
-        return { success: false, error: 'No se puede conectar con el servidor: ' + (err as Error).message }
+        return { success: false, error: 'connectionError' }
       }
       return { success: false, error: String(err) }
     }
@@ -2261,7 +2261,7 @@ ipcMain.handle('cloud:checkAuth', async () => {
     return { success: true, data: { user: result.user } }
   } catch (error) {
     if (error instanceof cloud.CloudAuthError) {
-      return { success: false, error: 'Token inválido o expirado' }
+      return { success: false, error: 'tokenInvalid' }
     }
     return { success: false, error: String(error) }
   }
@@ -2283,7 +2283,7 @@ ipcMain.handle('cloud:upload', async (_, notes?: string) => {
   try {
     requireAuth()
     if (!currentPassword) {
-      return { success: false, error: 'No hay contraseña maestra disponible' }
+      return { success: false, error: 'masterPasswordNotAvailable' }
     }
 
     // 1. Force SQLite WAL checkpoint
@@ -2380,7 +2380,7 @@ ipcMain.handle('cloud:upload', async (_, notes?: string) => {
     return { success: true, data: cloudBackup }
   } catch (error) {
     if (error instanceof cloud.CloudQuotaError) {
-      return { success: false, error: 'Cuota de almacenamiento excedida. Mejora tu plan o elimina backups antiguos.' }
+      return { success: false, error: 'storageQuotaExceeded' }
     }
     return { success: false, error: String(error) }
   }
@@ -2391,7 +2391,7 @@ ipcMain.handle('cloud:download', async (_, backupId: number) => {
   try {
     requireAuth()
     if (!currentPassword) {
-      return { success: false, error: 'No hay contraseña maestra disponible' }
+      return { success: false, error: 'masterPasswordNotAvailable' }
     }
 
     // Get backup info for filename
@@ -2406,7 +2406,7 @@ ipcMain.handle('cloud:download', async (_, backupId: number) => {
     })
 
     if (result.canceled || !result.filePath) {
-      return { success: false, error: 'Operación cancelada' }
+      return { success: false, error: 'operationCancelled' }
     }
 
     // Download encrypted file to temp
@@ -2434,7 +2434,7 @@ ipcMain.handle('cloud:download', async (_, backupId: number) => {
     } catch {
       try { fs.unlinkSync(tempEncPath) } catch { /* ignore */ }
       try { fs.unlinkSync(result.filePath) } catch { /* ignore */ }
-      return { success: false, error: 'Error al descifrar el backup. ¿La contraseña maestra ha cambiado desde que se subió?' }
+      return { success: false, error: 'backupDecryptError' }
     }
 
     return { success: true, data: { path: result.filePath } }
@@ -2448,7 +2448,7 @@ ipcMain.handle('cloud:import', async (_, backupId: number) => {
   try {
     requireAuth()
     if (!currentPassword) {
-      return { success: false, error: 'No hay contraseña maestra disponible' }
+      return { success: false, error: 'masterPasswordNotAvailable' }
     }
 
     // Download encrypted file to temp
@@ -2474,7 +2474,7 @@ ipcMain.handle('cloud:import', async (_, backupId: number) => {
       zipData = crypto.decrypt(encryptedPayload, key)
     } catch {
       try { fs.unlinkSync(tempEncPath) } catch { /* ignore */ }
-      return { success: false, error: 'Error al descifrar el backup. ¿La contraseña maestra ha cambiado desde que se subió?' }
+      return { success: false, error: 'backupDecryptError' }
     }
 
     // Write decrypted ZIP to temp and validate
@@ -2487,7 +2487,7 @@ ipcMain.handle('cloud:import', async (_, backupId: number) => {
 
     if (!hasDatabase) {
       try { fs.unlinkSync(tempZipPath) } catch { /* ignore */ }
-      return { success: false, error: 'El backup descifrado no contiene una base de datos válida de CryptoGest' }
+      return { success: false, error: 'invalidBackupDatabase' }
     }
 
     // Read metadata if exists
@@ -2676,7 +2676,7 @@ ipcMain.handle('shell:openExternal', async (_, url: string) => {
     // Only allow http/https URLs
     const parsed = new URL(url)
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return { success: false, error: 'Solo se permiten URLs http/https' }
+      return { success: false, error: 'invalidUrl' }
     }
     await shell.openExternal(url)
     return { success: true }
@@ -2694,7 +2694,7 @@ ipcMain.handle('logo:upload', async (_, fileData: { data: number[]; nombre: stri
     requireAuth()
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg']
     if (!validTypes.includes(fileData.tipoMime)) {
-      return { success: false, error: 'Formato no soportado. Usa PNG o JPG.' }
+      return { success: false, error: 'unsupportedFormat' }
     }
     const buffer = Buffer.from(fileData.data)
     const logoPath = path.join(getDataPath(), 'logo.png')
@@ -2710,7 +2710,7 @@ ipcMain.handle('logo:read', async () => {
     requireAuth()
     const logoPath = path.join(getDataPath(), 'logo.png')
     if (!fs.existsSync(logoPath)) {
-      return { success: false, error: 'No hay logo configurado' }
+      return { success: false, error: 'noLogoConfigured' }
     }
     const buffer = fs.readFileSync(logoPath)
     return { success: true, data: { data: Array.from(buffer), tipoMime: 'image/png' } }
@@ -2852,10 +2852,10 @@ ipcMain.handle('cuentas:delete', async (_, id: number) => {
   try {
     const db = requireAuth()
     const cuenta = await db.cuentaContable.findUnique({ where: { id } })
-    if (!cuenta) return { success: false, error: 'Cuenta no encontrada' }
-    if (cuenta.esSistema) return { success: false, error: 'No se puede eliminar una cuenta del sistema' }
+    if (!cuenta) return { success: false, error: 'notFound' }
+    if (cuenta.esSistema) return { success: false, error: 'cannotDeleteSystemAccount' }
     const movimientos = await db.lineaAsiento.count({ where: { cuentaId: id } })
-    if (movimientos > 0) return { success: false, error: 'No se puede eliminar una cuenta con movimientos contables' }
+    if (movimientos > 0) return { success: false, error: 'cannotDeleteAccountWithMovements' }
     await db.cuentaContable.delete({ where: { id } })
     return { success: true }
   } catch (error) {
@@ -2971,7 +2971,7 @@ ipcMain.handle('ejercicios:delete', async (_, id: number) => {
     // Verificar que no tenga asientos
     const asientosCount = await db.asiento.count({ where: { ejercicioId: id } })
     if (asientosCount > 0) {
-      return { success: false, error: `No se puede eliminar: tiene ${asientosCount} asiento(s) asociado(s)` }
+      return { success: false, error: 'hasAssociatedEntries' }
     }
     await db.ejercicioFiscal.delete({ where: { id } })
     return { success: true }
@@ -2985,7 +2985,7 @@ ipcMain.handle('ejercicios:getStats', async (_, id: number) => {
     const db = requireAuth()
     const ejercicio = await db.ejercicioFiscal.findUnique({ where: { id } })
     if (!ejercicio) {
-      return { success: false, error: 'Ejercicio no encontrado' }
+      return { success: false, error: 'notFound' }
     }
 
     const asientos = await db.asiento.findMany({
@@ -3127,7 +3127,7 @@ ipcMain.handle('asientos:create', async (_, data: {
     const totalDebe = lineas.reduce((sum, l) => sum + l.debe, 0)
     const totalHaber = lineas.reduce((sum, l) => sum + l.haber, 0)
     if (Math.abs(totalDebe - totalHaber) > 0.01) {
-      return { success: false, error: `El asiento no cuadra. Debe: ${totalDebe.toFixed(2)}, Haber: ${totalHaber.toFixed(2)}` }
+      return { success: false, error: 'entryUnbalanced' }
     }
 
     // Auto-numerar dentro del ejercicio
@@ -3171,7 +3171,7 @@ ipcMain.handle('asientos:update', async (_, id: number, data: {
       const totalDebe = lineas.reduce((sum, l) => sum + l.debe, 0)
       const totalHaber = lineas.reduce((sum, l) => sum + l.haber, 0)
       if (Math.abs(totalDebe - totalHaber) > 0.01) {
-        return { success: false, error: `El asiento no cuadra. Debe: ${totalDebe.toFixed(2)}, Haber: ${totalHaber.toFixed(2)}` }
+        return { success: false, error: 'entryUnbalanced' }
       }
       await db.lineaAsiento.deleteMany({ where: { asientoId: id } })
       updateData.lineas = { create: lineas }
@@ -3195,9 +3195,9 @@ ipcMain.handle('asientos:delete', async (_, id: number) => {
   try {
     const db = requireAuth()
     const asiento = await db.asiento.findUnique({ where: { id } })
-    if (!asiento) return { success: false, error: 'Asiento no encontrado' }
+    if (!asiento) return { success: false, error: 'notFound' }
     if (asiento.tipo === 'factura' || asiento.tipo === 'gasto') {
-      return { success: false, error: 'No se puede eliminar un asiento generado automáticamente' }
+      return { success: false, error: 'cannotDeleteAutoEntry' }
     }
     await db.lineaAsiento.deleteMany({ where: { asientoId: id } })
     await db.asiento.delete({ where: { id } })
@@ -3261,7 +3261,7 @@ ipcMain.handle('contabilidad:generarAsientoFactura', async (_, facturaId: number
       where: { id: facturaId },
       include: { lineas: { include: { impuesto: true, retencion: true } }, cliente: true }
     })
-    if (!factura) return { success: false, error: 'Factura no encontrada' }
+    if (!factura) return { success: false, error: 'notFound' }
 
     const year = new Date(factura.fecha).getFullYear()
     let ejercicio = await db.ejercicioFiscal.findUnique({ where: { anio: year } })
@@ -3272,7 +3272,7 @@ ipcMain.handle('contabilidad:generarAsientoFactura', async (_, facturaId: number
     }
 
     const existing = await db.asiento.findFirst({ where: { facturaId } })
-    if (existing) return { success: false, error: 'Ya existe un asiento para esta factura' }
+    if (existing) return { success: false, error: 'invoiceEntryExists' }
 
     const cuenta430 = await db.cuentaContable.findFirst({ where: { codigo: '430' } })
     const cuenta700 = await db.cuentaContable.findFirst({ where: { codigo: '700' } })
@@ -3281,7 +3281,7 @@ ipcMain.handle('contabilidad:generarAsientoFactura', async (_, facturaId: number
     const cuenta4751 = await db.cuentaContable.findFirst({ where: { codigo: '4751' } })
 
     if (!cuenta430 || !cuenta477) {
-      return { success: false, error: 'Faltan cuentas contables necesarias (430, 477). Inicializa el PGC primero.' }
+      return { success: false, error: 'missingInvoiceAccounts' }
     }
 
     // IVA desde impuesto de cada línea, IRPF desde retención de cada línea
@@ -3371,7 +3371,7 @@ ipcMain.handle('contabilidad:generarAsientoGasto', async (_, gastoId: number) =>
       where: { id: gastoId },
       include: { categoria: true, impuesto: true }
     })
-    if (!gasto) return { success: false, error: 'Gasto no encontrado' }
+    if (!gasto) return { success: false, error: 'notFound' }
 
     const year = new Date(gasto.fecha).getFullYear()
     let ejercicio = await db.ejercicioFiscal.findUnique({ where: { anio: year } })
@@ -3382,14 +3382,14 @@ ipcMain.handle('contabilidad:generarAsientoGasto', async (_, gastoId: number) =>
     }
 
     const existing = await db.asiento.findFirst({ where: { gastoId } })
-    if (existing) return { success: false, error: 'Ya existe un asiento para este gasto' }
+    if (existing) return { success: false, error: 'expenseEntryExists' }
 
     const cuenta472 = await db.cuentaContable.findFirst({ where: { codigo: '472' } })
     const cuenta410 = await db.cuentaContable.findFirst({ where: { codigo: '410' } })
     const cuenta629 = await db.cuentaContable.findFirst({ where: { codigo: '629' } })
 
     if (!cuenta472 || !cuenta410 || !cuenta629) {
-      return { success: false, error: 'Faltan cuentas contables necesarias. Inicializa el PGC primero.' }
+      return { success: false, error: 'missingAccounts' }
     }
 
     // Mapeo categoría -> cuenta contable del grupo 6
@@ -3496,7 +3496,7 @@ ipcMain.handle('modelos:modelo303', async (_, params: { ejercicioId: number; tri
   try {
     const db = requireAuth()
     const ejercicio = await db.ejercicioFiscal.findUnique({ where: { id: params.ejercicioId } })
-    if (!ejercicio) return { success: false, error: 'Ejercicio no encontrado' }
+    if (!ejercicio) return { success: false, error: 'notFound' }
 
     const year = ejercicio.anio
     const startMonth = (params.trimestre - 1) * 3
@@ -3585,7 +3585,7 @@ ipcMain.handle('modelos:modelo111', async (_, params: { ejercicioId: number; tri
   try {
     const db = requireAuth()
     const ejercicio = await db.ejercicioFiscal.findUnique({ where: { id: params.ejercicioId } })
-    if (!ejercicio) return { success: false, error: 'Ejercicio no encontrado' }
+    if (!ejercicio) return { success: false, error: 'notFound' }
 
     const year = ejercicio.anio
     const startMonth = (params.trimestre - 1) * 3
@@ -3640,7 +3640,7 @@ ipcMain.handle('modelos:modelo390', async (_, params: { ejercicioId: number }) =
   try {
     const db = requireAuth()
     const ejercicio = await db.ejercicioFiscal.findUnique({ where: { id: params.ejercicioId } })
-    if (!ejercicio) return { success: false, error: 'Ejercicio no encontrado' }
+    if (!ejercicio) return { success: false, error: 'notFound' }
 
     const trimestres = []
     for (let t = 1; t <= 4; t++) {
@@ -3717,7 +3717,7 @@ ipcMain.handle('export:saveFile', async (_, data: { content: string; defaultFile
     })
 
     if (result.canceled || !result.filePath) {
-      return { success: false, error: 'Operación cancelada' }
+      return { success: false, error: 'operationCancelled' }
     }
 
     const isBinary = data.defaultFilename.endsWith('.xlsx') || data.defaultFilename.endsWith('.pdf')
@@ -3778,7 +3778,7 @@ ipcMain.handle('email:test', async () => {
     for (const row of rows) cfg[row.clave] = row.valor
 
     if (!cfg['email.host'] || !cfg['email.user'] || !cfg['email.pass']) {
-      return { success: false, error: 'Configuración SMTP incompleta. Guarda la configuración primero.' }
+      return { success: false, error: 'smtpIncomplete' }
     }
 
     const decryptedPass = safeStorage.decryptString(Buffer.from(cfg['email.pass'], 'base64'))
@@ -3817,7 +3817,7 @@ ipcMain.handle('email:send', async (_, data: {
     for (const row of rows) cfg[row.clave] = row.valor
 
     if (!cfg['email.host'] || !cfg['email.user'] || !cfg['email.pass']) {
-      return { success: false, error: 'Configuración SMTP no encontrada. Ve a Configuración > Email.' }
+      return { success: false, error: 'smtpNotFound' }
     }
 
     const decryptedPass = safeStorage.decryptString(Buffer.from(cfg['email.pass'], 'base64'))
@@ -4000,7 +4000,7 @@ ipcMain.handle('buzon:testConnection', async (_, id: number) => {
   try {
     requireAuth()
     const rows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, id)
-    if (!rows.length) return { success: false, error: 'Cuenta no encontrada' }
+    if (!rows.length) return { success: false, error: 'notFound' }
     const account = rows[0]
 
     // Test IMAP
@@ -4024,7 +4024,7 @@ ipcMain.handle('buzon:syncFolders', async (_, cuentaId: number) => {
   try {
     requireAuth()
     const rows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
-    if (!rows.length) return { success: false, error: 'Cuenta no encontrada' }
+    if (!rows.length) return { success: false, error: 'notFound' }
 
     const imap = createImapConnection(rows[0])
     await imap.connect()
@@ -4089,9 +4089,9 @@ ipcMain.handle('buzon:syncMessages', async (_, cuentaId: number, carpetaId: numb
   try {
     requireAuth()
     const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
-    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    if (!accountRows.length) return { success: false, error: 'notFound' }
     const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
-    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+    if (!folderRows.length) return { success: false, error: 'notFound' }
 
     const imap = createImapConnection(accountRows[0])
     await imap.connect()
@@ -4190,9 +4190,9 @@ ipcMain.handle('buzon:getMessage', async (_, cuentaId: number, carpetaId: number
   try {
     requireAuth()
     const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
-    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    if (!accountRows.length) return { success: false, error: 'notFound' }
     const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
-    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+    if (!folderRows.length) return { success: false, error: 'notFound' }
 
     const imap = createImapConnection(accountRows[0])
     await imap.connect()
@@ -4248,9 +4248,9 @@ ipcMain.handle('buzon:downloadAttachment', async (_, cuentaId: number, carpetaId
   try {
     requireAuth()
     const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
-    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    if (!accountRows.length) return { success: false, error: 'notFound' }
     const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
-    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+    if (!folderRows.length) return { success: false, error: 'notFound' }
 
     const imap = createImapConnection(accountRows[0])
     await imap.connect()
@@ -4294,9 +4294,9 @@ ipcMain.handle('buzon:markRead', async (_, cuentaId: number, carpetaId: number, 
   try {
     requireAuth()
     const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
-    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    if (!accountRows.length) return { success: false, error: 'notFound' }
     const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
-    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+    if (!folderRows.length) return { success: false, error: 'notFound' }
 
     const imap = createImapConnection(accountRows[0])
     await imap.connect()
@@ -4322,9 +4322,9 @@ ipcMain.handle('buzon:markUnread', async (_, cuentaId: number, carpetaId: number
   try {
     requireAuth()
     const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
-    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    if (!accountRows.length) return { success: false, error: 'notFound' }
     const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
-    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+    if (!folderRows.length) return { success: false, error: 'notFound' }
 
     const imap = createImapConnection(accountRows[0])
     await imap.connect()
@@ -4350,9 +4350,9 @@ ipcMain.handle('buzon:deleteMessage', async (_, cuentaId: number, carpetaId: num
   try {
     requireAuth()
     const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
-    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    if (!accountRows.length) return { success: false, error: 'notFound' }
     const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
-    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+    if (!folderRows.length) return { success: false, error: 'notFound' }
 
     const imap = createImapConnection(accountRows[0])
     await imap.connect()
@@ -4379,9 +4379,9 @@ ipcMain.handle('buzon:moveMessage', async (_, cuentaId: number, carpetaId: numbe
   try {
     requireAuth()
     const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
-    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    if (!accountRows.length) return { success: false, error: 'notFound' }
     const folderRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CarpetaEmail" WHERE "id"=?`, carpetaId)
-    if (!folderRows.length) return { success: false, error: 'Carpeta no encontrada' }
+    if (!folderRows.length) return { success: false, error: 'notFound' }
 
     const imap = createImapConnection(accountRows[0])
     await imap.connect()
@@ -4415,7 +4415,7 @@ ipcMain.handle('buzon:sendEmail', async (_, cuentaId: number, data: {
   try {
     requireAuth()
     const accountRows = await prisma!.$queryRawUnsafe<any[]>(`SELECT * FROM "CuentaEmail" WHERE "id"=?`, cuentaId)
-    if (!accountRows.length) return { success: false, error: 'Cuenta no encontrada' }
+    if (!accountRows.length) return { success: false, error: 'notFound' }
 
     const account = accountRows[0]
     const transporter = createAccountTransporter(account)

@@ -1,0 +1,21 @@
+{
+  "modules": "Modules",
+  "beta": "Bêta",
+  "cloud": "Cloud",
+  "system": "Système",
+  "help": "Aide",
+  "dashboard": "Tableau de Bord",
+  "clientes": "Clients",
+  "productos": "Produits et Services",
+  "facturas": "Facturation",
+  "gastos": "Dépenses",
+  "ejercicios": "Exercices Fiscaux",
+  "contabilidad": "Comptabilité",
+  "modelos": "Déclarations Fiscales",
+  "buzon": "Messagerie",
+  "cloudBackup": "Sauvegardes et Licence",
+  "configuracion": "Paramètres",
+  "manual": "Manuel d'Utilisation",
+  "lockSystem": "Verrouiller le Système",
+  "activeCompany": "Entreprise active"
+}

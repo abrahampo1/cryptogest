@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
+import { translateError } from "@/lib/formatting"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -46,8 +48,10 @@ import {
   Filter,
   HelpCircle,
 } from "lucide-react"
+import { formatCurrency } from "@/lib/formatting"
 
 export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
+  const { t } = useTranslation(['productos', 'common'])
   const [productos, setProductos] = useState<Producto[]>([])
   const [impuestos, setImpuestos] = useState<Impuesto[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -110,9 +114,6 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
     return matchesSearch && matchesTipo && matchesStatus
   })
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(amount)
-
   const handleOpenDialog = (producto?: Producto) => {
     setError(null)
     if (producto) {
@@ -174,7 +175,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
           await loadData()
           setIsDialogOpen(false)
         } else {
-          setError(result?.error || 'Error al actualizar el producto')
+          setError(result?.error ? translateError(result.error) : t('errorUpdating'))
         }
       } else {
         const result = await window.electronAPI?.productos.create(data)
@@ -182,7 +183,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
           await loadData()
           setIsDialogOpen(false)
         } else {
-          setError(result?.error || 'Error al crear el producto')
+          setError(result?.error ? translateError(result.error) : t('errorCreating'))
         }
       }
     } catch (err) {
@@ -281,20 +282,20 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
       <div className="flex items-center justify-between border-b pb-3">
         <div className="flex items-center gap-2">
           <div>
-            <h1 className="text-xl font-semibold">Productos y Servicios</h1>
+            <h1 className="text-xl font-semibold">{t('title')}</h1>
             <p className="text-sm text-muted-foreground">
-              Catálogo de productos y servicios facturables
+              {t('subtitle')}
             </p>
           </div>
           {onHelp && (
-            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title={t('common:viewHelp')}>
               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           )}
         </div>
         <Button size="sm" onClick={() => handleOpenDialog()}>
           <Plus className="mr-1 h-4 w-4" />
-          Nuevo
+          {t('common:create')}
         </Button>
       </div>
 
@@ -302,25 +303,25 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
       <div className="grid grid-cols-4 gap-3">
         <Card className="border-l-4 border-l-blue-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Total Items</p>
+            <p className="text-xs text-muted-foreground">{t('totalItems')}</p>
             <p className="text-lg font-semibold tabular-nums">{stats.total}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-green-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Servicios</p>
+            <p className="text-xs text-muted-foreground">{t('services')}</p>
             <p className="text-lg font-semibold tabular-nums">{stats.servicios}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-amber-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Productos</p>
+            <p className="text-xs text-muted-foreground">{t('products')}</p>
             <p className="text-lg font-semibold tabular-nums">{stats.productosCount}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-slate-400">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Activos</p>
+            <p className="text-xs text-muted-foreground">{t('activeItems')}</p>
             <p className="text-lg font-semibold tabular-nums">{stats.activos}</p>
           </CardContent>
         </Card>
@@ -330,12 +331,12 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
       <Card>
         <CardHeader className="py-3 px-4 border-b">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium">Catálogo</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('catalog')}</CardTitle>
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar..."
+                  placeholder={t('common:search')}
                   className="pl-8 h-8 w-48 text-sm"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -346,9 +347,9 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="servicio">Servicios</SelectItem>
-                  <SelectItem value="producto">Productos</SelectItem>
+                  <SelectItem value="all">{t('common:all')}</SelectItem>
+                  <SelectItem value="servicio">{t('services')}</SelectItem>
+                  <SelectItem value="producto">{t('products')}</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -357,9 +358,9 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="active">Activos</SelectItem>
-                  <SelectItem value="inactive">Inactivos</SelectItem>
+                  <SelectItem value="all">{t('common:all')}</SelectItem>
+                  <SelectItem value="active">{t('common:activeStatus')}</SelectItem>
+                  <SelectItem value="inactive">{t('common:inactiveStatus')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -369,14 +370,14 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-9 text-xs">Código</TableHead>
-                <TableHead className="h-9 text-xs">Nombre</TableHead>
-                <TableHead className="h-9 text-xs">Tipo</TableHead>
-                <TableHead className="h-9 text-xs text-right">Precio Base</TableHead>
-                <TableHead className="h-9 text-xs">Impuesto</TableHead>
-                <TableHead className="h-9 text-xs text-right">P.V.P.</TableHead>
-                <TableHead className="h-9 text-xs text-center">Estado</TableHead>
-                <TableHead className="h-9 text-xs text-right">Acciones</TableHead>
+                <TableHead className="h-9 text-xs">{t('code')}</TableHead>
+                <TableHead className="h-9 text-xs">{t('common:name')}</TableHead>
+                <TableHead className="h-9 text-xs">{t('type')}</TableHead>
+                <TableHead className="h-9 text-xs text-right">{t('basePrice')}</TableHead>
+                <TableHead className="h-9 text-xs">{t('tax')}</TableHead>
+                <TableHead className="h-9 text-xs text-right">{t('pvp')}</TableHead>
+                <TableHead className="h-9 text-xs text-center">{t('common:status')}</TableHead>
+                <TableHead className="h-9 text-xs text-right">{t('common:actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -399,7 +400,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                         ? "bg-blue-50 text-blue-700"
                         : "bg-slate-100 text-slate-700"
                     }`}>
-                      {producto.tipo === "servicio" ? "Servicio" : "Producto"}
+                      {producto.tipo === "servicio" ? t('service') : t('product')}
                     </span>
                   </TableCell>
                   <TableCell className="py-2 text-right font-mono tabular-nums">
@@ -430,7 +431,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                         ? "bg-green-50 text-green-700"
                         : "bg-slate-100 text-slate-500"
                     }`}>
-                      {producto.activo ? "Activo" : "Inactivo"}
+                      {producto.activo ? t('common:active') : t('common:inactive')}
                     </span>
                   </TableCell>
                   <TableCell className="py-2 text-right">
@@ -462,8 +463,8 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <p className="text-sm text-muted-foreground">
                 {searchTerm || filterTipo !== "all" || filterStatus !== "all"
-                  ? "No se encontraron productos"
-                  : "No hay productos registrados"}
+                  ? t('noProductsFound')
+                  : t('noProductsRegistered')}
               </p>
             </div>
           )}
@@ -475,7 +476,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base">
-              {editingProducto ? "Editar Producto" : "Nuevo Producto/Servicio"}
+              {editingProducto ? t('editProduct') : t('newProductService')}
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -486,7 +487,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
             )}
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs">Código</Label>
+                <Label className="text-xs">{t('code')}</Label>
                 <Input
                   className="h-8 text-sm"
                   value={formData.codigo}
@@ -495,7 +496,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs">Tipo *</Label>
+                <Label className="text-xs">{t('typeRequired')}</Label>
                 <Select
                   value={formData.tipo}
                   onValueChange={(value) => setFormData({ ...formData, tipo: value })}
@@ -504,14 +505,14 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="servicio">Servicio</SelectItem>
-                    <SelectItem value="producto">Producto</SelectItem>
+                    <SelectItem value="servicio">{t('service')}</SelectItem>
+                    <SelectItem value="producto">{t('product')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="grid gap-1.5">
-              <Label className="text-xs">Nombre *</Label>
+              <Label className="text-xs">{t('nameRequired')}</Label>
               <Input
                 className="h-8 text-sm"
                 value={formData.nombre}
@@ -519,7 +520,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
               />
             </div>
             <div className="grid gap-1.5">
-              <Label className="text-xs">Descripción</Label>
+              <Label className="text-xs">{t('common:description')}</Label>
               <Textarea
                 className="text-sm resize-none"
                 rows={2}
@@ -529,7 +530,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs">Impuesto (IVA)</Label>
+                <Label className="text-xs">{t('taxIva')}</Label>
                 <Select
                   value={formData.impuestoId}
                   onValueChange={handleImpuestoChange}
@@ -537,10 +538,10 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                   <SelectTrigger className="h-8 text-sm">
                     {formData.impuestoId
                       ? <span className="truncate">{(() => { const imp = impuestos.find(i => i.id === Number(formData.impuestoId)); return imp ? `${imp.nombre} (${imp.porcentaje}%)` : "" })()}</span>
-                      : <SelectValue placeholder="Sin IVA" />}
+                      : <SelectValue placeholder={t('noIva')} />}
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Sin IVA</SelectItem>
+                    <SelectItem value="">{t('noIva')}</SelectItem>
                     {impuestos
                       .filter(i => (i.activo && i.tipo === 'IVA') || String(i.id) === formData.impuestoId)
                       .map((imp) => (
@@ -552,7 +553,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                 </Select>
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs">Retención (IRPF)</Label>
+                <Label className="text-xs">{t('retentionIrpf')}</Label>
                 <Select
                   value={formData.retencionId}
                   onValueChange={(value) => setFormData({ ...formData, retencionId: value })}
@@ -560,10 +561,10 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                   <SelectTrigger className="h-8 text-sm">
                     {formData.retencionId
                       ? <span className="truncate">{(() => { const ret = impuestos.find(i => i.id === Number(formData.retencionId)); return ret ? `${ret.nombre} (${ret.porcentaje}%)` : "" })()}</span>
-                      : <SelectValue placeholder="Sin retención" />}
+                      : <SelectValue placeholder={t('noRetention')} />}
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Sin retención</SelectItem>
+                    <SelectItem value="">{t('noRetention')}</SelectItem>
                     {impuestos
                       .filter(i => (i.activo && i.tipo === 'IRPF') || String(i.id) === formData.retencionId)
                       .map((imp) => (
@@ -577,7 +578,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs">Precio Base *</Label>
+                <Label className="text-xs">{t('basePriceRequired')}</Label>
                 <Input
                   className="h-8 text-sm"
                   type="number"
@@ -587,7 +588,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs">P.V.P.</Label>
+                <Label className="text-xs">{t('pvp')}</Label>
                 <Input
                   className="h-8 text-sm"
                   type="number"
@@ -609,7 +610,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                   return (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Base:</span>
+                        <span className="text-muted-foreground">{t('base')}</span>
                         <span className="tabular-nums">{formatCurrency(base)}</span>
                       </div>
                       {imp && (
@@ -626,7 +627,7 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                       )}
                       {(imp || ret) && (
                         <div className="flex justify-between font-medium border-t pt-1">
-                          <span>Total factura:</span>
+                          <span>{t('invoiceTotal')}</span>
                           <span className="tabular-nums">{formatCurrency(total)}</span>
                         </div>
                       )}
@@ -641,16 +642,16 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                 checked={formData.activo}
                 onCheckedChange={(checked) => setFormData({ ...formData, activo: checked })}
               />
-              <Label htmlFor="activo" className="text-xs">Activo</Label>
+              <Label htmlFor="activo" className="text-xs">{t('activeLabel')}</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setIsDialogOpen(false)}>
-              Cancelar
+              {t('common:cancel')}
             </Button>
             <Button size="sm" onClick={handleSubmit} disabled={isSaving || !formData.nombre || !formData.precioBase}>
               {isSaving && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-              {editingProducto ? "Guardar" : "Crear"}
+              {editingProducto ? t('common:save') : t('common:create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -660,15 +661,15 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base">Eliminar Producto</AlertDialogTitle>
+            <AlertDialogTitle className="text-base">{t('deleteProduct')}</AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
-              ¿Confirma la eliminación de "{productoToDelete?.nombre}"?
+              {t('deleteConfirm', { name: productoToDelete?.nombre })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="text-sm">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="text-sm">{t('common:cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-sm">
-              Eliminar
+              {t('common:delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

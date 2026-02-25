@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import { translateError } from '@/lib/formatting'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -34,6 +36,7 @@ type AuthMode = 'login' | 'setup' | 'loading' | 'configuring' | 'welcome'
 type InputMode = 'password' | 'pin'
 
 export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPageProps) {
+  const { t } = useTranslation(['auth', 'common'])
   const [mode, setMode] = useState<AuthMode>('loading')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -53,7 +56,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
   const checkAuthStatus = async () => {
     if (!window.electronAPI?.auth) {
-      setError('API de autenticación no disponible')
+      setError(t('authApiNotAvailable'))
       setMode('setup')
       return
     }
@@ -64,11 +67,11 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
         setMode(result.data.isConfigured ? 'login' : 'setup')
         setPasskeyEnabled(result.data.passkeyEnabled || false)
       } else {
-        setError(result.error || 'Error al verificar estado')
+        setError(result.error ? translateError(result.error) : t('errorCheckingStatus'))
         setMode('setup')
       }
     } catch (err) {
-      setError('Error de conexión')
+      setError(t('connectionError'))
       setMode('setup')
     }
   }
@@ -80,20 +83,20 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
     if (inputMode === 'pin') {
       if (pin.length < 4 || pin.length > 8) {
-        setError('El PIN debe tener entre 4 y 8 dígitos')
+        setError(t('pinLengthError'))
         return
       }
       if (!/^\d+$/.test(pin)) {
-        setError('El PIN solo debe contener números')
+        setError(t('pinOnlyNumbers'))
         return
       }
     } else {
       if (password.length < 6) {
-        setError('La contraseña debe tener al menos 6 caracteres')
+        setError(t('passwordMinLength'))
         return
       }
       if (password !== confirmPassword) {
-        setError('Las contraseñas no coinciden')
+        setError(t('passwordsDoNotMatch'))
         return
       }
     }
@@ -103,7 +106,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
     try {
       if (!window.electronAPI?.auth) {
-        throw new Error('API no disponible')
+        throw new Error(t('apiNotAvailable'))
       }
 
       // Paso 1: Configurando seguridad
@@ -123,11 +126,11 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
         setMode('welcome')
       } else {
-        setError(result.error || 'Error al configurar')
+        setError(result.error ? translateError(result.error) : t('errorConfiguring'))
         setMode('setup')
       }
     } catch (err) {
-      setError('Error al configurar la seguridad')
+      setError(t('errorConfiguring'))
       setMode('setup')
     }
   }
@@ -138,7 +141,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
     const finalPassword = inputMode === 'pin' ? pin : password
 
     if (!finalPassword) {
-      setError('Ingresa tu contraseña o PIN')
+      setError(t('enterPasswordOrPin'))
       return
     }
 
@@ -146,7 +149,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
     try {
       if (!window.electronAPI?.auth) {
-        throw new Error('API no disponible')
+        throw new Error(t('apiNotAvailable'))
       }
 
       const result = await window.electronAPI.auth.unlock(finalPassword)
@@ -154,12 +157,12 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
       if (result.success) {
         onAuthenticated()
       } else {
-        setError(result.error || 'Credenciales incorrectas')
+        setError(result.error ? translateError(result.error) : t('incorrectCredentials'))
         setPassword('')
         setPin('')
       }
     } catch (err) {
-      setError('Error al desbloquear')
+      setError(t('errorUnlocking'))
     } finally {
       setIsLoading(false)
     }
@@ -171,7 +174,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
     try {
       if (!window.electronAPI?.auth) {
-        throw new Error('API no disponible')
+        throw new Error(t('apiNotAvailable'))
       }
 
       const result = await window.electronAPI.auth.unlockWithPasskey()
@@ -179,10 +182,10 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
       if (result.success) {
         onAuthenticated()
       } else {
-        setError(result.error || 'Error de autenticación biométrica')
+        setError(result.error ? translateError(result.error) : t('biometricError'))
       }
     } catch (err) {
-      setError('Error al usar passkey')
+      setError(t('passkeyError'))
     } finally {
       setIsLoading(false)
     }
@@ -210,7 +213,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
         await checkAuthStatus()
       } else {
         if (result?.error !== 'Operación cancelada') {
-          setError(result?.error || 'Error al importar')
+          setError(result?.error ? translateError(result.error) : t('errors:importError'))
         }
       }
     } catch (err) {
@@ -233,7 +236,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
       <div className="flex min-h-screen items-center justify-center bg-slate-950">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-slate-400 mx-auto" />
-          <p className="mt-3 text-sm text-slate-500">Verificando seguridad...</p>
+          <p className="mt-3 text-sm text-slate-500">{t('verifyingSecurity')}</p>
         </div>
       </div>
     )
@@ -241,10 +244,10 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
   if (mode === 'configuring') {
     const steps = [
-      { icon: Lock, label: 'Configurando seguridad...' },
-      { icon: Database, label: 'Creando base de datos...' },
-      { icon: Shield, label: 'Encriptando datos...' },
-      { icon: CheckCircle2, label: 'Finalizando configuración...' },
+      { icon: Lock, label: t('configuringSecurity') },
+      { icon: Database, label: t('creatingDatabase') },
+      { icon: Shield, label: t('encryptingData') },
+      { icon: CheckCircle2, label: t('finalizingSetup') },
     ]
 
     return (
@@ -261,8 +264,8 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
                 <span className="text-xs text-slate-300">{empresaNombre}</span>
               </div>
             )}
-            <h2 className="text-lg font-semibold text-white">Preparando tu empresa</h2>
-            <p className="mt-1 text-sm text-slate-500">Esto solo tardará unos segundos...</p>
+            <h2 className="text-lg font-semibold text-white">{t('preparingCompany')}</h2>
+            <p className="mt-1 text-sm text-slate-500">{t('onlyFewSeconds')}</p>
           </div>
 
           <div className="space-y-3">
@@ -324,29 +327,29 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
             <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-emerald-900/30 border border-emerald-800/40 mx-auto mb-5">
               <CheckCircle2 className="h-8 w-8 text-emerald-500" />
             </div>
-            <h2 className="text-xl font-semibold text-white mb-2">Todo listo</h2>
+            <h2 className="text-xl font-semibold text-white mb-2">{t('allReady')}</h2>
             {empresaNombre && (
               <p className="text-sm text-slate-400 mb-1">
-                <strong className="text-slate-300">{empresaNombre}</strong> se ha configurado correctamente.
+                {t('companyConfigured', { name: empresaNombre })}
               </p>
             )}
             <p className="text-sm text-slate-500">
-              Tu base de datos está creada y protegida con encriptación AES-256.
+              {t('dbEncryptedReady')}
             </p>
           </div>
 
           <div className="space-y-3 text-left mb-8 px-2">
             <div className="flex items-center gap-3 text-xs text-slate-400">
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-              Base de datos encriptada y lista
+              {t('dbEncryptedAndReady')}
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-400">
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-              Contraseña maestra configurada
+              {t('masterPasswordConfigured')}
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-400">
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-              Empieza añadiendo clientes, productos y facturas
+              {t('startAddingData')}
             </div>
           </div>
 
@@ -355,7 +358,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
             onClick={onAuthenticated}
           >
             <Rocket className="mr-2 h-4 w-4" />
-            Comenzar
+            {t('begin')}
           </Button>
         </div>
       </div>
@@ -375,25 +378,24 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
         <div className="space-y-6">
           <h2 className="text-2xl font-semibold text-white leading-tight">
-            Gestión contable<br />segura y privada
+            {t('secureAccounting')}
           </h2>
           <p className="text-sm text-slate-400 leading-relaxed">
-            Tus datos financieros protegidos con encriptación AES-256.
-            Sin servidores externos, sin terceros. Todo permanece en tu dispositivo.
+            {t('secureDescription')}
           </p>
 
           <div className="space-y-3 pt-2">
             <div className="flex items-center gap-3">
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span className="text-xs text-slate-400">Encriptación de extremo a extremo</span>
+              <span className="text-xs text-slate-400">{t('endToEndEncryption')}</span>
             </div>
             <div className="flex items-center gap-3">
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span className="text-xs text-slate-400">Almacenamiento 100% local</span>
+              <span className="text-xs text-slate-400">{t('localStorageOnly')}</span>
             </div>
             <div className="flex items-center gap-3">
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span className="text-xs text-slate-400">Copias de seguridad portátiles</span>
+              <span className="text-xs text-slate-400">{t('portableBackups')}</span>
             </div>
           </div>
         </div>
@@ -431,12 +433,12 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-xl font-semibold text-white">
-              {mode === 'setup' ? 'Configuración inicial' : 'Bienvenido de nuevo'}
+              {mode === 'setup' ? t('initialSetup') : t('welcomeBack')}
             </h1>
             <p className="mt-1.5 text-sm text-slate-400">
               {mode === 'setup'
-                ? 'Establece una contraseña maestra para proteger tus datos'
-                : 'Introduce tus credenciales para desbloquear'}
+                ? t('setupDescription')
+                : t('loginDescription')}
             </p>
           </div>
 
@@ -452,8 +454,8 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
                   <ScanFace className="h-5 w-5 text-slate-300" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white">Desbloquear con biometría</p>
-                  <p className="text-xs text-slate-500">Touch ID, Face ID o Windows Hello</p>
+                  <p className="text-sm font-medium text-white">{t('unlockWithBiometrics')}</p>
+                  <p className="text-xs text-slate-500">{t('biometricsDescription')}</p>
                 </div>
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
@@ -467,7 +469,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
                   <div className="w-full border-t border-slate-800" />
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="bg-slate-950 px-3 text-xs text-slate-600">o</span>
+                  <span className="bg-slate-950 px-3 text-xs text-slate-600">{t('common:or')}</span>
                 </div>
               </div>
             </>
@@ -483,7 +485,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
               }`}
               onClick={() => setInputMode('password')}
             >
-              Contraseña
+              {t('password')}
             </button>
             <button
               className={`flex-1 text-xs font-medium py-1.5 rounded transition-colors ${
@@ -493,7 +495,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
               }`}
               onClick={() => setInputMode('pin')}
             >
-              PIN
+              {t('pin')}
             </button>
           </div>
 
@@ -503,7 +505,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
               <>
                 <div className="space-y-1.5">
                   <Label htmlFor="password" className="text-xs text-slate-400 font-normal">
-                    {mode === 'setup' ? 'Contraseña maestra' : 'Contraseña'}
+                    {mode === 'setup' ? t('masterPassword') : t('password')}
                   </Label>
                   <div className="relative">
                     <Input
@@ -513,7 +515,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
                       onChange={(e) => setPassword(e.target.value)}
                       onKeyPress={handleKeyPress}
                       className="h-10 bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 pr-10 focus-visible:ring-slate-700 focus-visible:ring-offset-slate-950"
-                      placeholder="Introduce tu contraseña"
+                      placeholder={t('enterPassword')}
                       autoFocus
                     />
                     <button
@@ -529,7 +531,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
                 {mode === 'setup' && (
                   <div className="space-y-1.5">
                     <Label htmlFor="confirmPassword" className="text-xs text-slate-400 font-normal">
-                      Confirmar contraseña
+                      {t('confirmPassword')}
                     </Label>
                     <Input
                       id="confirmPassword"
@@ -538,7 +540,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       onKeyPress={handleKeyPress}
                       className="h-10 bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-slate-700 focus-visible:ring-offset-slate-950"
-                      placeholder="Repite la contraseña"
+                      placeholder={t('repeatPassword')}
                     />
                   </div>
                 )}
@@ -546,7 +548,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
             ) : (
               <div className="space-y-3">
                 <Label className="text-xs text-slate-400 font-normal block text-center">
-                  {mode === 'setup' ? 'Establece un PIN numérico' : 'Introduce tu PIN'}
+                  {mode === 'setup' ? t('setNumericPin') : t('enterPin')}
                 </Label>
                 <div className="flex justify-center">
                   <InputOTP
@@ -592,7 +594,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
                   />
                 </div>
                 <p className="text-[11px] text-slate-600 text-center">
-                  {mode === 'setup' ? 'Mínimo 4 dígitos' : ''}
+                  {mode === 'setup' ? t('minDigits') : ''}
                 </p>
               </div>
             )}
@@ -622,12 +624,12 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {mode === 'setup' ? 'Configurando...' : 'Desbloqueando...'}
+                  {mode === 'setup' ? t('configuring') : t('unlocking')}
                 </>
               ) : (
                 <>
                   <Lock className="mr-2 h-3.5 w-3.5" />
-                  {mode === 'setup' ? 'Crear contraseña' : 'Desbloquear'}
+                  {mode === 'setup' ? t('createPassword') : t('unlock')}
                 </>
               )}
             </Button>
@@ -645,15 +647,14 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
               ) : (
                 <Upload className="h-3.5 w-3.5" />
               )}
-              Importar copia de seguridad
+              {t('importBackup')}
             </button>
           </div>
 
           {/* Security note - solo en setup */}
           {mode === 'setup' && (
             <p className="mt-6 text-[11px] text-slate-700 text-center leading-relaxed">
-              Esta contraseña no se puede recuperar. Asegúrate de guardarla en un lugar seguro.
-              Todos los datos se encriptan localmente con AES-256.
+              {t('securityNote')}
             </p>
           )}
         </div>

@@ -1,5 +1,7 @@
 import { useState, useRef } from "react"
+import { useTranslation } from "react-i18next"
 import Papa from "papaparse"
+import { formatCurrency, formatDate } from "@/lib/formatting"
 import {
   Dialog,
   DialogContent,
@@ -72,14 +74,14 @@ const FIELD_ALIASES: Record<string, string[]> = {
   categoria: ["categoria", "categoría", "category", "tipo", "type", "grupo"],
 }
 
-const GASTO_FIELDS = [
-  { key: "descripcion", label: "Descripción *", required: true },
-  { key: "monto", label: "Monto *", required: true },
-  { key: "fecha", label: "Fecha", required: false },
-  { key: "proveedor", label: "Proveedor", required: false },
-  { key: "numeroFactura", label: "Nº Factura", required: false },
-  { key: "notas", label: "Notas", required: false },
-  { key: "categoria", label: "Categoría", required: false },
+const GASTO_FIELD_KEYS = [
+  { key: "descripcion", labelKey: "descriptionRequired", required: true },
+  { key: "monto", labelKey: "amountRequired", required: true },
+  { key: "fecha", labelKey: "date", required: false },
+  { key: "proveedor", labelKey: "provider", required: false },
+  { key: "numeroFactura", labelKey: "invoiceNumber", required: false },
+  { key: "notas", labelKey: "import.notes", required: false },
+  { key: "categoria", labelKey: "category", required: false },
 ]
 
 function parseNumeroES(str: string): number | null {
@@ -146,7 +148,7 @@ function fuzzyMatchCategoria(nombre: string, categorias: CategoriaGasto[]): numb
 
 function autoDetectMapping(headers: string[]): Record<string, string> {
   const mapping: Record<string, string> = {}
-  for (const field of GASTO_FIELDS) {
+  for (const field of GASTO_FIELD_KEYS) {
     const aliases = FIELD_ALIASES[field.key] || []
     const match = headers.find(h =>
       aliases.some(a => h.toLowerCase().trim().includes(a))
@@ -174,6 +176,7 @@ interface ValidatedRow {
 }
 
 export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos, onImportComplete }: Props) {
+  const { t } = useTranslation(['gastos', 'common'])
   const [step, setStep] = useState(1)
   const [csvData, setCsvData] = useState<Record<string, string>[]>([])
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
@@ -248,15 +251,15 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
       const errors: string[] = []
 
       const descripcion = mapping.descripcion ? (row[mapping.descripcion] || "").trim() : ""
-      if (!descripcion) errors.push("Sin descripción")
+      if (!descripcion) errors.push(t('import.noDescription'))
 
       const montoStr = mapping.monto ? (row[mapping.monto] || "") : ""
       const monto = parseNumeroES(montoStr)
-      if (monto === null || monto <= 0) errors.push("Monto inválido")
+      if (monto === null || monto <= 0) errors.push(t('import.invalidAmount'))
 
       const fechaStr = mapping.fecha ? (row[mapping.fecha] || "") : ""
       const fecha = fechaStr ? parseFechaFlexible(fechaStr) : new Date()
-      if (fechaStr && !parseFechaFlexible(fechaStr)) errors.push("Fecha inválida")
+      if (fechaStr && !parseFechaFlexible(fechaStr)) errors.push(t('import.invalidDate'))
 
       const proveedor = mapping.proveedor ? (row[mapping.proveedor] || "").trim() : ""
       const numeroFactura = mapping.numeroFactura ? (row[mapping.numeroFactura] || "").trim() : ""
@@ -347,15 +350,15 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
-            Importar Gastos desde CSV
+            {t('import.title')}
           </DialogTitle>
           {/* Step indicators */}
           <div className="flex items-center gap-2 pt-2">
             {[
-              { n: 1, label: "Archivo" },
-              { n: 2, label: "Mapeo" },
-              { n: 3, label: "Validación" },
-              { n: 4, label: "Importar" },
+              { n: 1, label: t('import.stepFile') },
+              { n: 2, label: t('import.stepMapping') },
+              { n: 3, label: t('import.stepValidation') },
+              { n: 4, label: t('import.stepImport') },
             ].map((s, idx) => (
               <div key={s.n} className="flex items-center gap-1">
                 {idx > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
@@ -388,11 +391,11 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
                   <div className="space-y-3">
                     <FileText className="h-12 w-12 mx-auto text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">
-                      Selecciona un archivo CSV con los gastos a importar
+                      {t('import.selectFileDesc')}
                     </p>
                     <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                       <Upload className="h-4 w-4 mr-2" />
-                      Seleccionar archivo
+                      {t('import.selectFile')}
                     </Button>
                   </div>
                 ) : (
@@ -400,7 +403,7 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
                     <div className="flex items-center justify-center gap-2">
                       <FileText className="h-5 w-5 text-green-600" />
                       <span className="text-sm font-medium">{fileName}</span>
-                      <Badge variant="secondary">{csvData.length} filas</Badge>
+                      <Badge variant="secondary">{csvData.length} {t('import.rows')}</Badge>
                       <Button variant="ghost" size="sm" onClick={() => {
                         setCsvData([])
                         setCsvHeaders([])
@@ -417,7 +420,7 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
 
               {csvData.length > 0 && (
                 <div className="space-y-2">
-                  <Label className="text-xs font-medium">Vista previa (primeras 5 filas)</Label>
+                  <Label className="text-xs font-medium">{t('import.previewRows')}</Label>
                   <div className="border rounded overflow-auto max-h-48">
                     <Table>
                       <TableHeader>
@@ -449,14 +452,13 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
           {step === 2 && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Asigna cada columna del CSV al campo correspondiente de gasto.
-                Los campos marcados con * son obligatorios.
+                {t('import.mappingDesc')}
               </p>
 
               <div className="grid grid-cols-2 gap-3">
-                {GASTO_FIELDS.map(field => (
+                {GASTO_FIELD_KEYS.map(field => (
                   <div key={field.key} className="space-y-1">
-                    <Label className="text-xs">{field.label}</Label>
+                    <Label className="text-xs">{t(field.labelKey)}</Label>
                     <Select
                       value={mapping[field.key] || "__none__"}
                       onValueChange={(v) => setMapping(prev => {
@@ -472,10 +474,10 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
                       <SelectTrigger className="h-8 text-xs">
                         {mapping[field.key]
                           ? <span className="truncate">{mapping[field.key]}</span>
-                          : <SelectValue placeholder="No importar" />}
+                          : <SelectValue placeholder={t('import.doNotImport')} />}
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">No importar</SelectItem>
+                        <SelectItem value="__none__">{t('import.doNotImport')}</SelectItem>
                         {csvHeaders.map(h => (
                           <SelectItem key={h} value={h}>{h}</SelectItem>
                         ))}
@@ -486,18 +488,18 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
               </div>
 
               <div className="border-t pt-3 space-y-3">
-                <Label className="text-xs font-medium">Valores por defecto (se aplican a todos los registros)</Label>
+                <Label className="text-xs font-medium">{t('import.defaultValues')}</Label>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Categoría por defecto</Label>
+                    <Label className="text-xs">{t('import.defaultCategory')}</Label>
                     <Select value={defaultCategoriaId || "__none__"} onValueChange={(v) => setDefaultCategoriaId(v === "__none__" ? "" : v)}>
                       <SelectTrigger className="h-8 text-xs">
                         {defaultCategoriaId
                           ? <span className="truncate">{categorias.find(c => c.id === Number(defaultCategoriaId))?.nombre}</span>
-                          : <SelectValue placeholder="Sin categoría" />}
+                          : <SelectValue placeholder={t('noCategory')} />}
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">Sin categoría</SelectItem>
+                        <SelectItem value="__none__">{t('noCategory')}</SelectItem>
                         {categorias.filter(c => c.activo).map(c => (
                           <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>
                         ))}
@@ -505,15 +507,15 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Impuesto por defecto</Label>
+                    <Label className="text-xs">{t('import.defaultTax')}</Label>
                     <Select value={defaultImpuestoId || "__none__"} onValueChange={(v) => setDefaultImpuestoId(v === "__none__" ? "" : v)}>
                       <SelectTrigger className="h-8 text-xs">
                         {defaultImpuestoId
                           ? <span className="truncate">{impuestos.find(i => i.id === Number(defaultImpuestoId))?.nombre} ({impuestos.find(i => i.id === Number(defaultImpuestoId))?.porcentaje}%)</span>
-                          : <SelectValue placeholder="Sin impuesto" />}
+                          : <SelectValue placeholder={t('noTax')} />}
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">Sin impuesto</SelectItem>
+                        <SelectItem value="__none__">{t('noTax')}</SelectItem>
                         {impuestos.filter(i => i.activo && i.tipo === "IVA").map(i => (
                           <SelectItem key={i.id} value={String(i.id)}>{i.nombre} ({i.porcentaje}%)</SelectItem>
                         ))}
@@ -530,11 +532,11 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <Badge variant={validCount === validatedRows.length ? "default" : "secondary"}>
-                  {validCount} de {validatedRows.length} registros válidos
+                  {t('import.validOf', { valid: validCount, total: validatedRows.length })}
                 </Badge>
                 {validatedRows.length - validCount > 0 && (
                   <Badge variant="destructive">
-                    {validatedRows.length - validCount} con errores
+                    {t('import.withErrors', { count: validatedRows.length - validCount })}
                   </Badge>
                 )}
               </div>
@@ -544,12 +546,12 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-xs w-10">#</TableHead>
-                      <TableHead className="text-xs">Estado</TableHead>
-                      <TableHead className="text-xs">Descripción</TableHead>
-                      <TableHead className="text-xs text-right">Monto</TableHead>
-                      <TableHead className="text-xs">Fecha</TableHead>
-                      <TableHead className="text-xs">Proveedor</TableHead>
-                      <TableHead className="text-xs">Categoría</TableHead>
+                      <TableHead className="text-xs">{t('common:status')}</TableHead>
+                      <TableHead className="text-xs">{t('description')}</TableHead>
+                      <TableHead className="text-xs text-right">{t('amount')}</TableHead>
+                      <TableHead className="text-xs">{t('date')}</TableHead>
+                      <TableHead className="text-xs">{t('provider')}</TableHead>
+                      <TableHead className="text-xs">{t('category')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -571,12 +573,12 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
                         </TableCell>
                         <TableCell className="text-xs py-1 text-right font-mono">
                           {row.mapped.monto !== null
-                            ? new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(row.mapped.monto)
+                            ? formatCurrency(row.mapped.monto)
                             : "—"}
                         </TableCell>
                         <TableCell className="text-xs py-1">
                           {row.mapped.fecha
-                            ? row.mapped.fecha.toLocaleDateString("es-ES")
+                            ? formatDate(row.mapped.fecha)
                             : "—"}
                         </TableCell>
                         <TableCell className="text-xs py-1 max-w-[120px] truncate">
@@ -602,7 +604,7 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
                 <div className="space-y-4 text-center">
                   <Loader2 className="h-10 w-10 mx-auto animate-spin text-primary" />
                   <p className="text-sm font-medium">
-                    Importando {importProgress} de {validCount}...
+                    {t('import.importingProgress', { current: importProgress, total: validCount })}
                   </p>
                   <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
                     <div
@@ -619,14 +621,14 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
                     <AlertCircle className="h-12 w-12 mx-auto text-orange-500" />
                   )}
                   <div>
-                    <p className="text-lg font-semibold">Importación completada</p>
+                    <p className="text-lg font-semibold">{t('import.importComplete')}</p>
                     <div className="flex items-center justify-center gap-4 mt-2">
                       <Badge variant="default" className="bg-green-600">
-                        {importResults.success} importados
+                        {t('import.imported', { count: importResults.success })}
                       </Badge>
                       {importResults.errors > 0 && (
                         <Badge variant="destructive">
-                          {importResults.errors} errores
+                          {t('import.errors', { count: importResults.errors })}
                         </Badge>
                       )}
                     </div>
@@ -642,26 +644,26 @@ export function ImportarGastosDialog({ open, onOpenChange, categorias, impuestos
             {step > 1 && step < 4 && !importing && (
               <Button variant="outline" size="sm" onClick={() => setStep(s => s - 1)}>
                 <ChevronLeft className="h-4 w-4 mr-1" />
-                Anterior
+                {t('import.back')}
               </Button>
             )}
           </div>
           <div className="flex gap-2">
             {!importing && (
               <Button variant="ghost" size="sm" onClick={handleClose}>
-                {importResults ? "Cerrar" : "Cancelar"}
+                {importResults ? t('common:close') : t('common:cancel')}
               </Button>
             )}
             {step < 4 && (
               <Button size="sm" onClick={handleNext} disabled={!canGoNext()}>
                 {step === 3 ? (
                   <>
-                    Importar {validCount} gastos
+                    {t('import.importCount', { count: validCount })}
                     <Upload className="h-4 w-4 ml-1" />
                   </>
                 ) : (
                   <>
-                    Siguiente
+                    {t('common:next')}
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </>
                 )}

@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
+import { translateError } from "@/lib/formatting"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -57,6 +59,7 @@ import {
   HelpCircle,
 } from "lucide-react"
 import { ImportarGastosDialog } from "@/components/ImportarGastosDialog"
+import { formatCurrency, formatDate } from "@/lib/formatting"
 
 interface AdjuntoGasto {
   id: number
@@ -126,6 +129,7 @@ const emptyFormData = {
 }
 
 export function GastosPage({ onHelp }: { onHelp?: () => void }) {
+  const { t } = useTranslation(['gastos', 'common'])
   const [gastos, setGastos] = useState<Gasto[]>([])
   const [categorias, setCategorias] = useState<CategoriaGasto[]>([])
   const [impuestos, setImpuestos] = useState<Impuesto[]>([])
@@ -190,19 +194,19 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
   }
 
   const meses = [
-    { value: "todos", label: "Todos los meses" },
-    { value: "01", label: "Enero" },
-    { value: "02", label: "Febrero" },
-    { value: "03", label: "Marzo" },
-    { value: "04", label: "Abril" },
-    { value: "05", label: "Mayo" },
-    { value: "06", label: "Junio" },
-    { value: "07", label: "Julio" },
-    { value: "08", label: "Agosto" },
-    { value: "09", label: "Septiembre" },
-    { value: "10", label: "Octubre" },
-    { value: "11", label: "Noviembre" },
-    { value: "12", label: "Diciembre" },
+    { value: "todos", label: t('allMonths') },
+    { value: "01", label: t('months.01') },
+    { value: "02", label: t('months.02') },
+    { value: "03", label: t('months.03') },
+    { value: "04", label: t('months.04') },
+    { value: "05", label: t('months.05') },
+    { value: "06", label: t('months.06') },
+    { value: "07", label: t('months.07') },
+    { value: "08", label: t('months.08') },
+    { value: "09", label: t('months.09') },
+    { value: "10", label: t('months.10') },
+    { value: "11", label: t('months.11') },
+    { value: "12", label: t('months.12') },
   ]
 
   const filteredGastos = gastos.filter((gasto) => {
@@ -233,21 +237,6 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
     const now = new Date()
     return fecha.getMonth() === now.getMonth() && fecha.getFullYear() === now.getFullYear()
   }).reduce((acc, g) => acc + g.monto, 0)
-
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("es-ES", {
-      style: "currency",
-      currency: "EUR",
-      minimumFractionDigits: 2,
-    }).format(amount)
-
-  const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    })
-  }
 
   const handleOpenDialog = (gasto?: Gasto) => {
     setError(null)
@@ -304,7 +293,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
           await loadData()
           setIsDialogOpen(false)
         } else {
-          setError(response?.error || 'Error al actualizar el gasto')
+          setError(response?.error ? translateError(response.error) : t('errorUpdating'))
         }
       } else {
         const response = await window.electronAPI?.gastos.create(gastoData)
@@ -312,7 +301,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
           await loadData()
           setIsDialogOpen(false)
         } else {
-          setError(response?.error || 'Error al crear el gasto')
+          setError(response?.error ? translateError(response.error) : t('errorCreating'))
         }
       }
     } catch (err) {
@@ -350,7 +339,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
 
     // Validar tamaño (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
-      setAdjuntoError("El archivo no puede superar 10MB")
+      setAdjuntoError(t('fileSizeError'))
       return
     }
 
@@ -377,7 +366,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
           setSelectedGasto(updatedGasto.data)
         }
       } else {
-        setAdjuntoError(response?.error || "Error al subir archivo")
+        setAdjuntoError(response?.error ? translateError(response.error) : t('errorUploadingFile'))
       }
     } catch (err) {
       setAdjuntoError(String(err))
@@ -405,7 +394,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
         document.body.removeChild(link)
         URL.revokeObjectURL(url)
       } else {
-        setAdjuntoError(response?.error || "Error al descargar archivo")
+        setAdjuntoError(response?.error ? translateError(response.error) : t('errorDownloadingFile'))
       }
     } catch (err) {
       setAdjuntoError(String(err))
@@ -426,7 +415,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
           setSelectedGasto(updatedGasto.data)
         }
       } else {
-        setAdjuntoError(response?.error || "Error al eliminar archivo")
+        setAdjuntoError(response?.error ? translateError(response.error) : t('errorDeletingFile'))
       }
     } catch (err) {
       setAdjuntoError(String(err))
@@ -466,7 +455,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
         const blobUrl = URL.createObjectURL(blob)
         setPreviewData({ url: blobUrl, nombre, tipo: tipoMime })
       } else {
-        setAdjuntoError(response?.error || "Error al cargar previsualización")
+        setAdjuntoError(response?.error ? translateError(response.error) : t('errorLoadingPreview'))
       }
     } catch (err) {
       setAdjuntoError(String(err))
@@ -505,9 +494,9 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
   }
 
   const getCategoriaNombre = (categoriaId?: number | null) => {
-    if (!categoriaId) return "Sin categoría"
+    if (!categoriaId) return t('noCategory')
     const cat = categorias.find((c) => c.id === categoriaId)
-    return cat?.nombre || "Sin categoría"
+    return cat?.nombre || t('noCategory')
   }
 
   if (isLoading) {
@@ -524,13 +513,13 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
       <div className="flex items-center justify-between border-b pb-3">
         <div className="flex items-center gap-2">
           <div>
-            <h1 className="text-xl font-semibold">Gastos</h1>
+            <h1 className="text-xl font-semibold">{t('title')}</h1>
             <p className="text-sm text-muted-foreground">
-              Control y seguimiento de gastos empresariales
+              {t('subtitle')}
             </p>
           </div>
           {onHelp && (
-            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title={t('common:viewHelp')}>
               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           )}
@@ -538,11 +527,11 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setIsImportOpen(true)}>
             <Upload className="mr-1.5 h-3.5 w-3.5" />
-            Importar CSV
+            {t('importCsv')}
           </Button>
           <Button size="sm" onClick={() => handleOpenDialog()}>
             <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Nuevo Gasto
+            {t('newExpense')}
           </Button>
         </div>
       </div>
@@ -551,36 +540,36 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
       <div className="grid gap-3 md:grid-cols-4">
         <Card className="border-l-4 border-l-orange-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Total Acumulado</p>
+            <p className="text-xs text-muted-foreground">{t('totalAccumulated')}</p>
             <p className="text-lg font-semibold tabular-nums">{formatCurrency(totalGastos)}</p>
-            <p className="text-xs text-muted-foreground">{gastos.length} registros</p>
+            <p className="text-xs text-muted-foreground">{t('recordCount', { count: gastos.length })}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-blue-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Mes Actual</p>
+            <p className="text-xs text-muted-foreground">{t('currentMonth')}</p>
             <p className="text-lg font-semibold tabular-nums">{formatCurrency(gastosMesActual)}</p>
             <p className="text-xs text-muted-foreground">
-              {gastos.filter((g) => {
+              {t('expenseCount', { count: gastos.filter((g) => {
                 const fecha = new Date(g.fecha)
                 const now = new Date()
                 return fecha.getMonth() === now.getMonth() && fecha.getFullYear() === now.getFullYear()
-              }).length} gastos
+              }).length })}
             </p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-slate-400">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Total Filtrado</p>
+            <p className="text-xs text-muted-foreground">{t('totalFiltered')}</p>
             <p className="text-lg font-semibold tabular-nums">{formatCurrency(totalFiltrado)}</p>
-            <p className="text-xs text-muted-foreground">{filteredGastos.length} resultados</p>
+            <p className="text-xs text-muted-foreground">{t('resultCount', { count: filteredGastos.length })}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-green-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Categorías</p>
+            <p className="text-xs text-muted-foreground">{t('categories')}</p>
             <p className="text-lg font-semibold tabular-nums">{categorias.filter(c => c.activo).length}</p>
-            <p className="text-xs text-muted-foreground">activas</p>
+            <p className="text-xs text-muted-foreground">{t('activeCategories')}</p>
           </CardContent>
         </Card>
       </div>
@@ -588,7 +577,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
       {/* Desglose por categoría - Compacto */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Distribución por Categoría</CardTitle>
+          <CardTitle className="text-sm font-medium">{t('categoryDistribution')}</CardTitle>
         </CardHeader>
         <CardContent className="pb-3">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -628,16 +617,16 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-sm font-medium">
-              Registro de Gastos
+              {t('expenseRecord')}
               <span className="ml-2 text-xs font-normal text-muted-foreground">
-                {filteredGastos.length} de {gastos.length}
+                {t('ofTotal', { filtered: filteredGastos.length, total: gastos.length })}
               </span>
             </CardTitle>
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar..."
+                  placeholder={t('common:search')}
                   className="h-8 w-48 pl-7 text-xs"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -645,10 +634,10 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
               </div>
               <Select value={filterCategoria} onValueChange={setFilterCategoria}>
                 <SelectTrigger className="h-8 w-36 text-xs">
-                  <SelectValue placeholder="Categoría" />
+                  <SelectValue placeholder={t('category')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todas">Todas las categorías</SelectItem>
+                  <SelectItem value="todas">{t('allCategories')}</SelectItem>
                   {categorias.filter(c => c.activo).map((cat) => (
                     <SelectItem key={cat.id} value={String(cat.id)}>
                       <div className="flex items-center gap-2">
@@ -664,7 +653,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
               </Select>
               <Select value={filterMes} onValueChange={setFilterMes}>
                 <SelectTrigger className="h-8 w-36 text-xs">
-                  <SelectValue placeholder="Mes" />
+                  <SelectValue placeholder={t('allMonths')} />
                 </SelectTrigger>
                 <SelectContent>
                   {meses.map((mes) => (
@@ -681,13 +670,13 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-8 text-xs font-medium">Fecha</TableHead>
-                <TableHead className="h-8 text-xs font-medium">Descripción</TableHead>
-                <TableHead className="h-8 text-xs font-medium">Categoría</TableHead>
-                <TableHead className="h-8 text-xs font-medium">Proveedor</TableHead>
-                <TableHead className="h-8 text-xs font-medium">Nº Factura</TableHead>
-                <TableHead className="h-8 text-xs font-medium text-right">Importe</TableHead>
-                <TableHead className="h-8 text-xs font-medium text-center w-20">Acciones</TableHead>
+                <TableHead className="h-8 text-xs font-medium">{t('date')}</TableHead>
+                <TableHead className="h-8 text-xs font-medium">{t('description')}</TableHead>
+                <TableHead className="h-8 text-xs font-medium">{t('category')}</TableHead>
+                <TableHead className="h-8 text-xs font-medium">{t('provider')}</TableHead>
+                <TableHead className="h-8 text-xs font-medium">{t('invoiceNumber')}</TableHead>
+                <TableHead className="h-8 text-xs font-medium text-right">{t('amountLabel')}</TableHead>
+                <TableHead className="h-8 text-xs font-medium text-center w-20">{t('common:actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -696,11 +685,11 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                   <TableCell colSpan={7} className="h-32 text-center">
                     <div className="flex flex-col items-center justify-center text-muted-foreground">
                       <FileText className="h-8 w-8 mb-2 opacity-50" />
-                      <p className="text-sm">No hay gastos registrados</p>
+                      <p className="text-sm">{t('noExpensesRegistered')}</p>
                       <p className="text-xs">
                         {searchTerm || filterCategoria !== "todas" || filterMes !== "todos"
-                          ? "Prueba ajustando los filtros"
-                          : "Registra tu primer gasto"}
+                          ? t('adjustFilters')
+                          : t('registerFirst')}
                       </p>
                     </div>
                   </TableCell>
@@ -723,7 +712,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                         />
                         <span className="text-xs font-medium">{gasto.descripcion}</span>
                         {gasto.adjuntos && gasto.adjuntos.length > 0 && (
-                          <span className="flex items-center gap-0.5 text-muted-foreground" title={`${gasto.adjuntos.length} adjunto(s)`}>
+                          <span className="flex items-center gap-0.5 text-muted-foreground" title={t('attachmentCount', { count: gasto.adjuntos.length })}>
                             <Paperclip className="h-3 w-3" />
                             <span className="text-[10px]">{gasto.adjuntos.length}</span>
                           </span>
@@ -783,10 +772,10 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
             <div className="border-t bg-muted/30 px-4 py-2">
               <div className="flex justify-end gap-8 text-xs">
                 <span className="text-muted-foreground">
-                  {filteredGastos.length} gasto{filteredGastos.length !== 1 ? "s" : ""}
+                  {t('expenseCountSummary', { count: filteredGastos.length })}
                 </span>
                 <span className="font-medium">
-                  Total: <span className="tabular-nums">{formatCurrency(totalFiltrado)}</span>
+                  {t('common:total')}: <span className="tabular-nums">{formatCurrency(totalFiltrado)}</span>
                 </span>
               </div>
             </div>
@@ -799,7 +788,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base">
-              {editingGasto ? "Editar Gasto" : "Nuevo Gasto"}
+              {editingGasto ? t('editExpense') : t('newExpenseDialog')}
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-3">
@@ -809,18 +798,18 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
               </div>
             )}
             <div className="grid gap-1.5">
-              <Label htmlFor="descripcion" className="text-xs">Descripción *</Label>
+              <Label htmlFor="descripcion" className="text-xs">{t('descriptionRequired')}</Label>
               <Input
                 id="descripcion"
                 className="h-8 text-sm"
                 value={formData.descripcion}
                 onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                placeholder="Descripción del gasto"
+                placeholder={t('descriptionPlaceholder')}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label htmlFor="categoria" className="text-xs">Categoría</Label>
+                <Label htmlFor="categoria" className="text-xs">{t('category')}</Label>
                 <Select
                   value={formData.categoriaId}
                   onValueChange={(value) => setFormData({ ...formData, categoriaId: value })}
@@ -828,7 +817,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                   <SelectTrigger className="h-8 text-sm">
                     {formData.categoriaId
                       ? <span className="truncate">{categorias.find(c => c.id === Number(formData.categoriaId))?.nombre}</span>
-                      : <SelectValue placeholder="Seleccionar" />}
+                      : <SelectValue placeholder={t('selectPlaceholder')} />}
                   </SelectTrigger>
                   <SelectContent>
                     {categorias.filter(c => c.activo).map((cat) => (
@@ -846,7 +835,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                 </Select>
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="monto" className="text-xs">Importe *</Label>
+                <Label htmlFor="monto" className="text-xs">{t('amountRequired')}</Label>
                 <Input
                   id="monto"
                   type="number"
@@ -860,7 +849,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs">Impuesto</Label>
+                <Label className="text-xs">{t('taxLabel')}</Label>
                 <Select
                   value={formData.impuestoId}
                   onValueChange={(value) => setFormData({ ...formData, impuestoId: value })}
@@ -868,10 +857,10 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                   <SelectTrigger className="h-8 text-sm">
                     {formData.impuestoId
                       ? <span className="truncate">{(() => { const imp = impuestos.find(i => i.id === Number(formData.impuestoId)); return imp ? `${imp.nombre} (${imp.porcentaje}%)` : "" })()}</span>
-                      : <SelectValue placeholder="Sin impuesto" />}
+                      : <SelectValue placeholder={t('noTax')} />}
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Sin impuesto</SelectItem>
+                    <SelectItem value="">{t('noTax')}</SelectItem>
                     {impuestos
                       .filter(i => i.activo)
                       .map((imp) => (
@@ -893,7 +882,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                   <Label htmlFor="impuestoIncluido" className="text-xs">
                     {(() => {
                       const imp = impuestos.find(i => String(i.id) === formData.impuestoId)
-                      return imp ? `${imp.nombre} incluido` : "Impuesto incluido"
+                      return imp ? t('taxIncludedLabel', { name: imp.nombre }) : t('taxIncludedGeneric')
                     })()}
                   </Label>
                 </div>
@@ -901,7 +890,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label htmlFor="fecha" className="text-xs">Fecha</Label>
+                <Label htmlFor="fecha" className="text-xs">{t('date')}</Label>
                 <Input
                   id="fecha"
                   type="date"
@@ -911,41 +900,41 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="proveedor" className="text-xs">Proveedor</Label>
+                <Label htmlFor="proveedor" className="text-xs">{t('provider')}</Label>
                 <Input
                   id="proveedor"
                   className="h-8 text-sm"
                   value={formData.proveedor}
                   onChange={(e) => setFormData({ ...formData, proveedor: e.target.value })}
-                  placeholder="Nombre"
+                  placeholder={t('providerPlaceholder')}
                 />
               </div>
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="numeroFactura" className="text-xs">Nº Factura Proveedor</Label>
+              <Label htmlFor="numeroFactura" className="text-xs">{t('providerInvoiceNumber')}</Label>
               <Input
                 id="numeroFactura"
                 className="h-8 text-sm font-mono"
                 value={formData.numeroFactura}
                 onChange={(e) => setFormData({ ...formData, numeroFactura: e.target.value })}
-                placeholder="Referencia de factura"
+                placeholder={t('invoiceRefPlaceholder')}
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="notas" className="text-xs">Notas</Label>
+              <Label htmlFor="notas" className="text-xs">{t('notesLabel')}</Label>
               <Textarea
                 id="notas"
                 className="text-sm min-h-[60px]"
                 value={formData.notas}
                 onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
-                placeholder="Observaciones adicionales..."
+                placeholder={t('notesPlaceholder')}
                 rows={2}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setIsDialogOpen(false)}>
-              Cancelar
+              {t('common:cancel')}
             </Button>
             <Button
               size="sm"
@@ -953,7 +942,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
               disabled={isSaving || !formData.descripcion.trim() || !formData.monto}
             >
               {isSaving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              {editingGasto ? "Guardar" : "Registrar"}
+              {editingGasto ? t('common:save') : t('register')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -969,7 +958,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
       }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base">Detalle del Gasto</DialogTitle>
+            <DialogTitle className="text-base">{t('detailTitle')}</DialogTitle>
           </DialogHeader>
           {selectedGasto && (
             <div className="space-y-3 py-2">
@@ -988,34 +977,36 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-xs text-muted-foreground">Importe</p>
+                  <p className="text-xs text-muted-foreground">{t('amountLabel')}</p>
                   <p className="font-semibold tabular-nums">{formatCurrency(selectedGasto.monto)}</p>
                   <p className="text-[10px] text-muted-foreground">
                     {selectedGasto.impuesto
-                      ? `${selectedGasto.impuesto.nombre} (${selectedGasto.impuesto.porcentaje}%) ${selectedGasto.impuestoIncluido ? "incluido" : "no incluido"}`
-                      : "Sin impuesto"}
+                      ? (selectedGasto.impuestoIncluido
+                          ? t('taxInfoIncluded', { name: selectedGasto.impuesto.nombre, percentage: selectedGasto.impuesto.porcentaje })
+                          : t('taxInfoNotIncluded', { name: selectedGasto.impuesto.nombre, percentage: selectedGasto.impuesto.porcentaje }))
+                      : t('noTaxApplied')}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Fecha</p>
+                  <p className="text-xs text-muted-foreground">{t('date')}</p>
                   <p className="font-medium tabular-nums">{formatDate(selectedGasto.fecha)}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-xs text-muted-foreground">Proveedor</p>
+                  <p className="text-xs text-muted-foreground">{t('provider')}</p>
                   <p className="font-medium">{selectedGasto.proveedor || "-"}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Nº Factura</p>
+                  <p className="text-xs text-muted-foreground">{t('invoiceNumber')}</p>
                   <p className="font-mono text-sm">{selectedGasto.numeroFactura || "-"}</p>
                 </div>
               </div>
 
               {selectedGasto.notas && (
                 <div>
-                  <p className="text-xs text-muted-foreground">Notas</p>
+                  <p className="text-xs text-muted-foreground">{t('notesLabel')}</p>
                   <p className="text-sm whitespace-pre-wrap">{selectedGasto.notas}</p>
                 </div>
               )}
@@ -1025,7 +1016,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium flex items-center gap-1.5">
                     <Paperclip className="h-3.5 w-3.5" />
-                    Documentos Adjuntos
+                    {t('attachedDocuments')}
                     {selectedGasto.adjuntos && selectedGasto.adjuntos.length > 0 && (
                       <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
                         {selectedGasto.adjuntos.length}
@@ -1053,7 +1044,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                         ) : (
                           <Upload className="mr-1 h-3 w-3" />
                         )}
-                        Adjuntar
+                        {t('attach')}
                       </span>
                     </Button>
                   </label>
@@ -1084,7 +1075,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium truncate">{adjunto.nombreOriginal}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {formatFileSize(adjunto.tamano)} · {canPreview(adjunto.tipoMime) ? "Click para ver" : "Click para descargar"}
+                            {formatFileSize(adjunto.tamano)} · {canPreview(adjunto.tipoMime) ? t('clickToView') : t('clickToDownload')}
                           </p>
                         </div>
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
@@ -1094,7 +1085,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                               size="sm"
                               className="h-7 w-7 p-0"
                               onClick={() => handlePreviewAdjunto(adjunto)}
-                              title="Previsualizar"
+                              title={t('previewLabel')}
                             >
                               <Eye className="h-3 w-3" />
                             </Button>
@@ -1104,7 +1095,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                             size="sm"
                             className="h-7 w-7 p-0"
                             onClick={() => handleDownloadAdjunto(adjunto)}
-                            title="Descargar"
+                            title={t('downloadLabel')}
                           >
                             <Download className="h-3 w-3" />
                           </Button>
@@ -1114,7 +1105,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                             className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
                             onClick={() => handleDeleteAdjunto(adjunto.id)}
                             disabled={isDeletingAdjunto === adjunto.id}
-                            title="Eliminar"
+                            title={t('deleteLabel')}
                           >
                             {isDeletingAdjunto === adjunto.id ? (
                               <Loader2 className="h-3 w-3 animate-spin" />
@@ -1129,8 +1120,8 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                 ) : (
                   <div className="text-center py-4 text-muted-foreground">
                     <Paperclip className="h-6 w-6 mx-auto mb-1 opacity-30" />
-                    <p className="text-xs">Sin documentos adjuntos</p>
-                    <p className="text-[10px]">Los archivos se encriptan automáticamente</p>
+                    <p className="text-xs">{t('noAttachedDocuments')}</p>
+                    <p className="text-[10px]">{t('filesAutoEncrypted')}</p>
                   </div>
                 )}
 
@@ -1141,7 +1132,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                       <div className="flex items-center gap-2">
                         <Eye className="h-4 w-4 text-blue-600" />
                         <span className="text-xs font-medium text-blue-700">
-                          Previsualizando: {previewData.nombre}
+                          {t('previewing', { name: previewData.nombre })}
                         </span>
                       </div>
                       <Button
@@ -1150,7 +1141,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                         className="h-6 text-xs"
                         onClick={closePreview}
                       >
-                        Cerrar vista
+                        {t('closeView')}
                       </Button>
                     </div>
                   </div>
@@ -1160,7 +1151,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
           )}
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setIsDetailOpen(false)}>
-              Cerrar
+              {t('common:close')}
             </Button>
             <Button
               size="sm"
@@ -1170,7 +1161,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
               }}
             >
               <Pencil className="mr-1.5 h-3 w-3" />
-              Editar
+              {t('common:edit')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1180,19 +1171,18 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base">Eliminar gasto</AlertDialogTitle>
+            <AlertDialogTitle className="text-base">{t('deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
-              Se eliminará permanentemente el gasto "{gastoToDelete?.descripcion}".
-              Esta acción no se puede deshacer.
+              {t('deleteMessage', { description: gastoToDelete?.descripcion })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="h-8 text-sm">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="h-8 text-sm">{t('common:cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="h-8 text-sm bg-red-600 hover:bg-red-700"
             >
-              Eliminar
+              {t('common:delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1210,7 +1200,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
               )}
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">{previewData?.nombre}</p>
-                <p className="text-xs text-muted-foreground">Documento encriptado</p>
+                <p className="text-xs text-muted-foreground">{t('encryptedDocument')}</p>
               </div>
             </div>
             {previewData && (
@@ -1226,7 +1216,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                 }}
               >
                 <Download className="mr-1.5 h-3.5 w-3.5" />
-                Descargar
+                {t('downloadLabel')}
               </Button>
             )}
           </div>
@@ -1247,7 +1237,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                 />
                 <div className="p-3 bg-muted/30 border-t text-center">
                   <p className="text-xs text-muted-foreground mb-2">
-                    Si el PDF no se muestra correctamente, puedes abrirlo en una nueva ventana
+                    {t('pdfNotDisplayed')}
                   </p>
                   <Button
                     variant="outline"
@@ -1266,7 +1256,7 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
                       }
                     }}
                   >
-                    Abrir en nueva ventana
+                    {t('openNewWindow')}
                   </Button>
                 </div>
               </div>

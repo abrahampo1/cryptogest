@@ -4,6 +4,7 @@ interface ApiResponse<T> {
   success: boolean
   data?: T
   error?: string
+  errorParams?: Record<string, string | number>
   message?: string
 }
 

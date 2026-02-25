@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Table,
@@ -10,6 +11,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Page } from "@/components/layout/Sidebar"
+import { formatCurrency, formatDate } from "@/lib/formatting"
 import {
   FileText,
   Loader2,
@@ -32,6 +34,7 @@ interface DashboardPageProps {
 }
 
 export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
+  const { t } = useTranslation(['dashboard', 'common'])
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [activities, setActivities] = useState<RecentActivity[]>([])
   const [pendingInvoices, setPendingInvoices] = useState<Factura[]>([])
@@ -66,21 +69,6 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
     }
   }
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("es-ES", {
-      style: "currency",
-      currency: "EUR",
-      minimumFractionDigits: 2,
-    }).format(amount)
-
-  const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    })
-  }
-
   const getDaysUntilDue = (fechaVencimiento: Date | string | null | undefined) => {
     if (!fechaVencimiento) return null
     const vencimiento = new Date(fechaVencimiento)
@@ -103,13 +91,13 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
       {/* Header */}
       <div className="flex items-center justify-between border-b pb-3">
         <div>
-          <h1 className="text-xl font-semibold">Panel de Control</h1>
+          <h1 className="text-xl font-semibold">{t('title')}</h1>
           <p className="text-sm text-muted-foreground">
-            Resumen del ejercicio fiscal actual
+            {t('subtitle')}
           </p>
         </div>
         {onHelp && (
-          <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+          <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title={t('common:viewHelp')}>
             <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
         )}
@@ -117,22 +105,22 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
 
       {/* Quick Actions */}
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground mr-1">Acciones rápidas:</span>
+        <span className="text-xs text-muted-foreground mr-1">{t('quickActions')}</span>
         <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => onNavigate('clientes')}>
           <UserPlus className="h-3.5 w-3.5" />
-          Nuevo Cliente
+          {t('newClient')}
         </Button>
         <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => onNavigate('productos')}>
           <PackagePlus className="h-3.5 w-3.5" />
-          Nuevo Producto
+          {t('newProduct')}
         </Button>
         <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => onNavigate('facturas')}>
           <FilePlus className="h-3.5 w-3.5" />
-          Nueva Factura
+          {t('newInvoice')}
         </Button>
         <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => onNavigate('gastos')}>
           <Receipt className="h-3.5 w-3.5" />
-          Nuevo Gasto
+          {t('newExpense')}
         </Button>
       </div>
 
@@ -140,41 +128,41 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
       <div className="grid grid-cols-4 gap-3">
         <Card className="border-l-4 border-l-blue-600">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Ingresos</p>
+            <p className="text-xs text-muted-foreground">{t('income')}</p>
             <p className="text-lg font-semibold tabular-nums">
               {formatCurrency(stats?.ingresosTotales || 0)}
             </p>
             <p className="text-xs text-muted-foreground">
-              {stats?.facturasEmitidas || 0} facturas
+              {stats?.facturasEmitidas || 0} {t('invoices')}
             </p>
           </CardContent>
         </Card>
 
         <Card className="border-l-4 border-l-red-600">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Gastos</p>
+            <p className="text-xs text-muted-foreground">{t('expenses')}</p>
             <p className="text-lg font-semibold tabular-nums">
               {formatCurrency(stats?.gastosTotales || 0)}
             </p>
             <p className="text-xs text-muted-foreground">
-              {stats?.gastosRegistrados || 0} registros
+              {stats?.gastosRegistrados || 0} {t('records')}
             </p>
           </CardContent>
         </Card>
 
         <Card className={`border-l-4 ${balance >= 0 ? 'border-l-green-600' : 'border-l-amber-600'}`}>
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Balance</p>
+            <p className="text-xs text-muted-foreground">{t('balance')}</p>
             <p className={`text-lg font-semibold tabular-nums ${balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
               {formatCurrency(balance)}
             </p>
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               {balance > 0 ? (
-                <><TrendingUp className="h-3 w-3 text-green-600" /> Positivo</>
+                <><TrendingUp className="h-3 w-3 text-green-600" /> {t('positive')}</>
               ) : balance < 0 ? (
-                <><TrendingDown className="h-3 w-3 text-red-600" /> Negativo</>
+                <><TrendingDown className="h-3 w-3 text-red-600" /> {t('negative')}</>
               ) : (
-                <><Minus className="h-3 w-3" /> Neutro</>
+                <><Minus className="h-3 w-3" /> {t('neutral')}</>
               )}
             </div>
           </CardContent>
@@ -182,12 +170,12 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
 
         <Card className="border-l-4 border-l-amber-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Pendiente Cobro</p>
+            <p className="text-xs text-muted-foreground">{t('pendingCollection')}</p>
             <p className="text-lg font-semibold tabular-nums text-amber-700">
               {formatCurrency(stats?.facturasPendientesTotal || 0)}
             </p>
             <p className="text-xs text-muted-foreground">
-              {stats?.facturasPendientesCount || 0} facturas
+              {stats?.facturasPendientesCount || 0} {t('invoices')}
             </p>
           </CardContent>
         </Card>
@@ -199,7 +187,7 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
           <CardHeader className="py-3 px-4 border-b">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              Facturas Pendientes de Cobro
+              {t('pendingInvoices')}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -207,18 +195,18 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <CheckCircle2 className="h-8 w-8 text-green-600" />
                 <p className="mt-2 text-sm text-muted-foreground">
-                  No hay facturas pendientes
+                  {t('noPendingInvoices')}
                 </p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="h-9 text-xs">Nº Factura</TableHead>
-                    <TableHead className="h-9 text-xs">Cliente</TableHead>
-                    <TableHead className="h-9 text-xs">Vencimiento</TableHead>
-                    <TableHead className="h-9 text-xs text-right">Importe</TableHead>
-                    <TableHead className="h-9 text-xs text-center">Estado</TableHead>
+                    <TableHead className="h-9 text-xs">{t('invoiceNumber')}</TableHead>
+                    <TableHead className="h-9 text-xs">{t('client')}</TableHead>
+                    <TableHead className="h-9 text-xs">{t('dueDate')}</TableHead>
+                    <TableHead className="h-9 text-xs text-right">{t('amountLabel')}</TableHead>
+                    <TableHead className="h-9 text-xs text-center">{t('common:status')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -243,7 +231,7 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
                           {isOverdue ? (
                             <span className="inline-flex items-center gap-1 text-xs text-red-700 bg-red-50 px-2 py-0.5 rounded">
                               <AlertTriangle className="h-3 w-3" />
-                              Vencida
+                              {t('overdue')}
                             </span>
                           ) : isUrgent ? (
                             <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
@@ -252,7 +240,7 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-xs text-slate-600 bg-slate-50 px-2 py-0.5 rounded">
-                              Pendiente
+                              {t('pending')}
                             </span>
                           )}
                         </TableCell>
@@ -270,7 +258,7 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
           <CardHeader className="py-3 px-4 border-b">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              Movimientos Recientes
+              {t('recentMovements')}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -278,17 +266,17 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <Clock className="h-8 w-8 text-muted-foreground/50" />
                 <p className="mt-2 text-sm text-muted-foreground">
-                  No hay movimientos recientes
+                  {t('noRecentMovements')}
                 </p>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="h-9 text-xs">Tipo</TableHead>
-                    <TableHead className="h-9 text-xs">Descripción</TableHead>
-                    <TableHead className="h-9 text-xs">Fecha</TableHead>
-                    <TableHead className="h-9 text-xs text-right">Importe</TableHead>
+                    <TableHead className="h-9 text-xs">{t('typeLabel')}</TableHead>
+                    <TableHead className="h-9 text-xs">{t('descriptionLabel')}</TableHead>
+                    <TableHead className="h-9 text-xs">{t('dateLabel')}</TableHead>
+                    <TableHead className="h-9 text-xs text-right">{t('amountLabel')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -301,10 +289,10 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
                           activity.tipo === 'cliente' ? 'bg-green-50 text-green-700' :
                           'bg-slate-50 text-slate-700'
                         }`}>
-                          {activity.tipo === 'factura' ? 'Factura' :
-                           activity.tipo === 'gasto' ? 'Gasto' :
-                           activity.tipo === 'cliente' ? 'Cliente' :
-                           activity.tipo === 'producto' ? 'Producto' : activity.tipo}
+                          {activity.tipo === 'factura' ? t('activityInvoice') :
+                           activity.tipo === 'gasto' ? t('activityExpense') :
+                           activity.tipo === 'cliente' ? t('activityClient') :
+                           activity.tipo === 'producto' ? t('activityProduct') : activity.tipo}
                         </span>
                       </TableCell>
                       <TableCell className="py-2 truncate max-w-[180px]" title={activity.descripcion}>
@@ -333,25 +321,25 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
       <div className="grid grid-cols-4 gap-3">
         <Card className="border-l-4 border-l-blue-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Clientes Activos</p>
+            <p className="text-xs text-muted-foreground">{t('activeClients')}</p>
             <p className="text-lg font-semibold tabular-nums">{stats?.clientesActivos || 0}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-green-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Facturas Emitidas</p>
+            <p className="text-xs text-muted-foreground">{t('issuedInvoices')}</p>
             <p className="text-lg font-semibold tabular-nums">{stats?.facturasEmitidas || 0}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-amber-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Facturas Pendientes</p>
+            <p className="text-xs text-muted-foreground">{t('pendingInvoicesCount')}</p>
             <p className="text-lg font-semibold tabular-nums">{stats?.facturasPendientesCount || 0}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-slate-400">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Gastos Registrados</p>
+            <p className="text-xs text-muted-foreground">{t('registeredExpenses')}</p>
             <p className="text-lg font-semibold tabular-nums">{stats?.gastosRegistrados || 0}</p>
           </CardContent>
         </Card>

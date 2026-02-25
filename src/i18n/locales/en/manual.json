@@ -1,0 +1,29 @@
+{
+  "title": "User Manual",
+  "searchPlaceholder": "Search the manual...",
+  "home": "Home",
+  "gettingStarted": "Getting Started",
+  "sections": {
+    "dashboard": "Dashboard",
+    "clientes": "Clients",
+    "productos": "Products",
+    "facturas": "Invoicing",
+    "gastos": "Expenses",
+    "ejercicios": "Fiscal Years",
+    "contabilidad": "Accounting",
+    "modelos": "Tax Forms",
+    "buzon": "Mailbox",
+    "cloud": "Cloud & Backups",
+    "configuracion": "Settings",
+    "security": "Security",
+    "shortcuts": "Shortcuts"
+  },
+  "welcomeTitle": "CryptoGest Manual",
+  "welcomeDescription": "Complete guide to using CryptoGest. Select a section from the side menu to get started.",
+  "tip": "Tip",
+  "warning": "Important",
+  "steps": "Steps",
+  "faq": "Frequently Asked Questions",
+  "concepts": "Key Concepts",
+  "quickActions": "Quick Actions"
+}

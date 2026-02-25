@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
+import { formatCurrency, formatDate, translateError } from "@/lib/formatting"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -86,15 +88,16 @@ const emptyLinea: LineaFormData = {
   descuento: 0,
 }
 
-const estadoConfig: Record<string, { label: string; color: string; icon: typeof Clock }> = {
-  borrador: { label: "Borrador", color: "bg-slate-100 text-slate-600", icon: FileText },
-  emitida: { label: "Emitida", color: "bg-blue-50 text-blue-700", icon: Send },
-  pagada: { label: "Pagada", color: "bg-green-50 text-green-700", icon: CheckCircle },
-  vencida: { label: "Vencida", color: "bg-red-50 text-red-700", icon: AlertCircle },
-  anulada: { label: "Anulada", color: "bg-slate-100 text-slate-500", icon: Ban },
+const estadoConfig: Record<string, { labelKey: string; color: string; icon: typeof Clock }> = {
+  borrador: { labelKey: "draft", color: "bg-slate-100 text-slate-600", icon: FileText },
+  emitida: { labelKey: "issued", color: "bg-blue-50 text-blue-700", icon: Send },
+  pagada: { labelKey: "paid", color: "bg-green-50 text-green-700", icon: CheckCircle },
+  vencida: { labelKey: "overdue", color: "bg-red-50 text-red-700", icon: AlertCircle },
+  anulada: { labelKey: "cancelled", color: "bg-slate-100 text-slate-500", icon: Ban },
 }
 
 export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
+  const { t } = useTranslation(['facturas', 'common'])
   const [facturas, setFacturas] = useState<Factura[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [productos, setProductos] = useState<Producto[]>([])
@@ -203,21 +206,6 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
     pendiente: facturas.filter((f) => f.estado === "emitida").reduce((acc, f) => acc + f.total, 0),
     pagado: facturas.filter((f) => f.estado === "pagada").reduce((acc, f) => acc + f.total, 0),
     vencido: facturas.filter((f) => f.estado === "vencida").reduce((acc, f) => acc + f.total, 0),
-  }
-
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("es-ES", {
-      style: "currency",
-      currency: "EUR",
-      minimumFractionDigits: 2,
-    }).format(amount)
-
-  const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    })
   }
 
   const calculateLineTotal = (linea: LineaFormData) => {
@@ -360,7 +348,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
           await loadData()
           setIsDialogOpen(false)
         } else {
-          setError(response?.error || 'Error al actualizar la factura')
+          setError(response?.error ? translateError(response.error) : t('errorUpdating'))
         }
       } else {
         const response = await window.electronAPI?.facturas.create(facturaData)
@@ -368,7 +356,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
           await loadData()
           setIsDialogOpen(false)
         } else {
-          setError(response?.error || 'Error al crear la factura')
+          setError(response?.error ? translateError(response.error) : t('errorCreating'))
         }
       }
     } catch (err) {
@@ -442,7 +430,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
       NIF: f.cliente?.nif || "",
       Fecha: formatDate(f.fecha),
       Vencimiento: f.fechaVencimiento ? formatDate(f.fechaVencimiento) : "",
-      Estado: estadoConfig[f.estado]?.label || f.estado,
+      Estado: estadoConfig[f.estado] ? t(estadoConfig[f.estado].labelKey) : f.estado,
       Subtotal: f.subtotal,
       IVA: f.totalImpuestos,
       IRPF: f.totalRetenciones,
@@ -632,12 +620,12 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
       setEmailAttachmentName(`Factura-${factura.numero}.pdf`)
       setEmailAttachmentBase64(pdfBase64)
       setEmailDefaultRecipient(clienteEmail)
-      setEmailDefaultSubject(`Factura ${factura.numero} - ${empresaNombre}`)
+      setEmailDefaultSubject(t('emailSubject', { number: factura.numero, company: empresaNombre }))
       setEmailDefaultBody(
-        `Estimado/a ${fullFactura.cliente?.nombre || 'cliente'},\n\n` +
-        `Adjunto encontrará la factura ${factura.numero} por importe de ${formatCurrency(factura.total)}.\n\n` +
-        `Quedamos a su disposición para cualquier consulta.\n\n` +
-        `Un cordial saludo,\n${empresaNombre}`
+        `${t('emailGreeting', { name: fullFactura.cliente?.nombre || 'cliente' })}\n\n` +
+        `${t('emailBody', { number: factura.numero, amount: formatCurrency(factura.total) })}\n\n` +
+        `${t('emailClosing')}\n\n` +
+        `${t('emailRegards')}\n${empresaNombre}`
       )
       setEmailDialogOpen(true)
     } catch (err) {
@@ -746,20 +734,20 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
       <div className="flex items-center justify-between border-b pb-3">
         <div className="flex items-center gap-2">
           <div>
-            <h1 className="text-xl font-semibold">Facturación</h1>
+            <h1 className="text-xl font-semibold">{t('title')}</h1>
             <p className="text-sm text-muted-foreground">
-              Gestión de facturas y cobros
+              {t('subtitleAlt')}
             </p>
           </div>
           {onHelp && (
-            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title={t('common:viewHelp')}>
               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           )}
         </div>
         <Button size="sm" onClick={() => handleOpenDialog()}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
-          Nueva Factura
+          {t('newInvoice')}
         </Button>
       </div>
 
@@ -767,35 +755,35 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
       <div className="grid gap-3 md:grid-cols-4">
         <Card className="border-l-4 border-l-slate-400">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Facturación Total</p>
+            <p className="text-xs text-muted-foreground">{t('totalBilling')}</p>
             <p className="text-lg font-semibold tabular-nums">{formatCurrency(stats.total)}</p>
-            <p className="text-xs text-muted-foreground">{facturas.length} facturas</p>
+            <p className="text-xs text-muted-foreground">{t('invoiceCount', { count: facturas.length })}</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-blue-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Pendiente de Cobro</p>
+            <p className="text-xs text-muted-foreground">{t('pendingAmount')}</p>
             <p className="text-lg font-semibold tabular-nums text-blue-600">{formatCurrency(stats.pendiente)}</p>
             <p className="text-xs text-muted-foreground">
-              {facturas.filter(f => f.estado === 'emitida').length} emitidas
+              {t('issuedCount', { count: facturas.filter(f => f.estado === 'emitida').length })}
             </p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-green-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Cobrado</p>
+            <p className="text-xs text-muted-foreground">{t('collected')}</p>
             <p className="text-lg font-semibold tabular-nums text-green-600">{formatCurrency(stats.pagado)}</p>
             <p className="text-xs text-muted-foreground">
-              {facturas.filter(f => f.estado === 'pagada').length} pagadas
+              {t('paidCount', { count: facturas.filter(f => f.estado === 'pagada').length })}
             </p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-red-500">
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Vencido</p>
+            <p className="text-xs text-muted-foreground">{t('overdueAmount')}</p>
             <p className="text-lg font-semibold tabular-nums text-red-600">{formatCurrency(stats.vencido)}</p>
             <p className="text-xs text-muted-foreground">
-              {facturas.filter(f => f.estado === 'vencida').length} vencidas
+              {t('overdueCount', { count: facturas.filter(f => f.estado === 'vencida').length })}
             </p>
           </CardContent>
         </Card>
@@ -806,16 +794,16 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
         <CardHeader className="pb-3 space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-sm font-medium">
-              Listado de Facturas
+              {t('invoiceList')}
               <span className="ml-2 text-xs font-normal text-muted-foreground">
-                {filteredFacturas.length} de {facturas.length}
+                {t('ofTotal', { filtered: filteredFacturas.length, total: facturas.length })}
               </span>
             </CardTitle>
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar..."
+                  placeholder={t('common:search')}
                   className="h-8 w-48 pl-7 text-xs"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -823,15 +811,15 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
               </div>
               <Select value={filterEstado} onValueChange={setFilterEstado}>
                 <SelectTrigger className="h-8 w-32 text-xs">
-                  <SelectValue placeholder="Estado" />
+                  <SelectValue placeholder={t('status')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todas">Todos los estados</SelectItem>
-                  <SelectItem value="borrador">Borrador</SelectItem>
-                  <SelectItem value="emitida">Emitida</SelectItem>
-                  <SelectItem value="pagada">Pagada</SelectItem>
-                  <SelectItem value="vencida">Vencida</SelectItem>
-                  <SelectItem value="anulada">Anulada</SelectItem>
+                  <SelectItem value="todas">{t('allStatuses')}</SelectItem>
+                  <SelectItem value="borrador">{t('draft')}</SelectItem>
+                  <SelectItem value="emitida">{t('issued')}</SelectItem>
+                  <SelectItem value="pagada">{t('paid')}</SelectItem>
+                  <SelectItem value="vencida">{t('overdue')}</SelectItem>
+                  <SelectItem value="anulada">{t('cancelled')}</SelectItem>
                 </SelectContent>
               </Select>
               <Button
@@ -841,7 +829,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
               >
                 <Filter className="h-3.5 w-3.5" />
-                Filtros
+                {t('filters')}
                 {activeFiltersCount > 0 && (
                   <Badge variant="secondary" className="h-4 px-1 text-[10px] min-w-4 justify-center">
                     {activeFiltersCount}
@@ -853,21 +841,21 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="h-8 text-xs gap-1" disabled={filteredFacturas.length === 0}>
                     <Download className="h-3.5 w-3.5" />
-                    Exportar
+                    {t('export')}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={handleExportCSV} className="text-xs">
                     <FileText className="mr-2 h-3.5 w-3.5" />
-                    Exportar CSV
+                    {t('exportCsv')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleExportExcel} className="text-xs">
                     <FileText className="mr-2 h-3.5 w-3.5" />
-                    Exportar Excel
+                    {t('exportExcel')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleExportJSON} className="text-xs">
                     <FileText className="mr-2 h-3.5 w-3.5" />
-                    Exportar JSON
+                    {t('exportJson')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -878,13 +866,13 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
           {showAdvancedFilters && (
             <div className="flex flex-wrap items-end gap-3 pt-2 border-t">
               <div className="grid gap-1">
-                <Label className="text-[10px] text-muted-foreground">Cliente</Label>
+                <Label className="text-[10px] text-muted-foreground">{t('client')}</Label>
                 <Select value={filterClienteId} onValueChange={setFilterClienteId}>
                   <SelectTrigger className="h-8 w-44 text-xs">
-                    <SelectValue placeholder="Todos" />
+                    <SelectValue placeholder={t('common:all')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="todos">Todos los clientes</SelectItem>
+                    <SelectItem value="todos">{t('allClients')}</SelectItem>
                     {clientes.map((c) => (
                       <SelectItem key={c.id} value={String(c.id)}>{c.nombre}</SelectItem>
                     ))}
@@ -892,7 +880,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                 </Select>
               </div>
               <div className="grid gap-1">
-                <Label className="text-[10px] text-muted-foreground">Fecha desde</Label>
+                <Label className="text-[10px] text-muted-foreground">{t('dateFrom')}</Label>
                 <Input
                   type="date"
                   className="h-8 w-36 text-xs"
@@ -901,7 +889,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                 />
               </div>
               <div className="grid gap-1">
-                <Label className="text-[10px] text-muted-foreground">Fecha hasta</Label>
+                <Label className="text-[10px] text-muted-foreground">{t('dateTo')}</Label>
                 <Input
                   type="date"
                   className="h-8 w-36 text-xs"
@@ -910,7 +898,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                 />
               </div>
               <div className="grid gap-1">
-                <Label className="text-[10px] text-muted-foreground">Importe mín.</Label>
+                <Label className="text-[10px] text-muted-foreground">{t('amountMin')}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -921,7 +909,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                 />
               </div>
               <div className="grid gap-1">
-                <Label className="text-[10px] text-muted-foreground">Importe máx.</Label>
+                <Label className="text-[10px] text-muted-foreground">{t('amountMax')}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -934,7 +922,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
               {activeFiltersCount > 0 && (
                 <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground" onClick={clearAdvancedFilters}>
                   <X className="h-3 w-3" />
-                  Limpiar
+                  {t('clear')}
                 </Button>
               )}
             </div>
@@ -944,13 +932,13 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-8 text-xs font-medium">Nº Factura</TableHead>
-                <TableHead className="h-8 text-xs font-medium">Cliente</TableHead>
-                <TableHead className="h-8 text-xs font-medium">Fecha</TableHead>
-                <TableHead className="h-8 text-xs font-medium">Vencimiento</TableHead>
-                <TableHead className="h-8 text-xs font-medium">Estado</TableHead>
-                <TableHead className="h-8 text-xs font-medium text-right">Importe</TableHead>
-                <TableHead className="h-8 text-xs font-medium text-center w-28">Acciones</TableHead>
+                <TableHead className="h-8 text-xs font-medium">{t('invoiceNumber')}</TableHead>
+                <TableHead className="h-8 text-xs font-medium">{t('client')}</TableHead>
+                <TableHead className="h-8 text-xs font-medium">{t('date')}</TableHead>
+                <TableHead className="h-8 text-xs font-medium">{t('dueDateShort')}</TableHead>
+                <TableHead className="h-8 text-xs font-medium">{t('status')}</TableHead>
+                <TableHead className="h-8 text-xs font-medium text-right">{t('amount')}</TableHead>
+                <TableHead className="h-8 text-xs font-medium text-center w-28">{t('common:actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -959,11 +947,11 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                   <TableCell colSpan={7} className="h-32 text-center">
                     <div className="flex flex-col items-center justify-center text-muted-foreground">
                       <FileText className="h-8 w-8 mb-2 opacity-50" />
-                      <p className="text-sm">No hay facturas registradas</p>
+                      <p className="text-sm">{t('noInvoicesRegistered')}</p>
                       <p className="text-xs">
                         {searchTerm || filterEstado !== "todas"
-                          ? "Prueba ajustando los filtros"
-                          : "Crea tu primera factura"}
+                          ? t('adjustFilters')
+                          : t('createFirst')}
                       </p>
                     </div>
                   </TableCell>
@@ -991,7 +979,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                       </TableCell>
                       <TableCell className="py-2">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${config.color}`}>
-                          {config.label}
+                          {t(config.labelKey)}
                         </span>
                       </TableCell>
                       <TableCell className="py-2 text-right">
@@ -1016,7 +1004,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                                 size="sm"
                                 className="h-7 w-7 p-0"
                                 onClick={() => handlePreviewPdf(factura)}
-                                title="Previsualizar PDF"
+                                title={t('previewPdfTooltip')}
                               >
                                 <FileSearch className="h-3 w-3" />
                               </Button>
@@ -1025,7 +1013,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                                 size="sm"
                                 className="h-7 w-7 p-0"
                                 onClick={() => handleGeneratePdf(factura)}
-                                title="Descargar PDF"
+                                title={t('downloadPdfTooltip')}
                               >
                                 <Download className="h-3 w-3" />
                               </Button>
@@ -1034,7 +1022,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                                 size="sm"
                                 className="h-7 w-7 p-0"
                                 onClick={() => handleSendEmail(factura)}
-                                title="Enviar por email"
+                                title={t('sendEmailTooltip')}
                               >
                                 <Mail className="h-3 w-3" />
                               </Button>
@@ -1055,7 +1043,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                                 size="sm"
                                 className="h-7 w-7 p-0 text-blue-600"
                                 onClick={() => confirmEmitir(factura)}
-                                title="Emitir"
+                                title={t('emit')}
                               >
                                 <Send className="h-3 w-3" />
                               </Button>
@@ -1067,7 +1055,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                               size="sm"
                               className="h-7 w-7 p-0 text-green-600"
                               onClick={() => confirmMarcarPagada(factura)}
-                              title="Marcar pagada"
+                              title={t('markAsPaid')}
                             >
                               <CheckCircle className="h-3 w-3" />
                             </Button>
@@ -1096,10 +1084,10 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
             <div className="border-t bg-muted/30 px-4 py-2">
               <div className="flex justify-end gap-8 text-xs">
                 <span className="text-muted-foreground">
-                  {filteredFacturas.length} factura{filteredFacturas.length !== 1 ? "s" : ""}
+                  {t('invoiceCountFiltered', { count: filteredFacturas.length })}
                 </span>
                 <span className="font-medium">
-                  Total: <span className="tabular-nums">{formatCurrency(totalFiltrado)}</span>
+                  {t('total')}: <span className="tabular-nums">{formatCurrency(totalFiltrado)}</span>
                 </span>
               </div>
             </div>
@@ -1112,7 +1100,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
         <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base">
-              {editingFactura ? `Editar Factura #${editingFactura.numero}` : "Nueva Factura"}
+              {editingFactura ? t('editInvoiceNumber', { number: editingFactura.numero }) : t('newInvoice')}
             </DialogTitle>
           </DialogHeader>
 
@@ -1126,7 +1114,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
             {/* Datos generales */}
             <div className="grid grid-cols-3 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs">Cliente *</Label>
+                <Label className="text-xs">{t('clientRequired')}</Label>
                 <Select
                   value={formData.clienteId}
                   onValueChange={(value) => setFormData({ ...formData, clienteId: value })}
@@ -1134,7 +1122,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                   <SelectTrigger className="h-8 text-sm">
                     {formData.clienteId
                       ? <span className="truncate">{clientes.find(c => c.id === Number(formData.clienteId))?.nombre}</span>
-                      : <SelectValue placeholder="Seleccionar cliente" />}
+                      : <SelectValue placeholder={t('selectClient')} />}
                   </SelectTrigger>
                   <SelectContent>
                     {clientes.map((cliente) => (
@@ -1146,7 +1134,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                 </Select>
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs">Fecha *</Label>
+                <Label className="text-xs">{t('dateRequired')}</Label>
                 <Input
                   type="date"
                   className="h-8 text-sm"
@@ -1155,7 +1143,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs">Vencimiento</Label>
+                <Label className="text-xs">{t('dueDateShort')}</Label>
                 <Input
                   type="date"
                   className="h-8 text-sm"
@@ -1167,7 +1155,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs">Serie</Label>
+                <Label className="text-xs">{t('serie')}</Label>
                 <Input
                   className="h-8 text-sm"
                   value={formData.serie}
@@ -1176,19 +1164,19 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs">Forma de Pago</Label>
+                <Label className="text-xs">{t('paymentMethod')}</Label>
                 <Select
                   value={formData.formaPago}
                   onValueChange={(value) => setFormData({ ...formData, formaPago: value })}
                 >
                   <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="Seleccionar" />
+                    <SelectValue placeholder={t('selectOption')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="transferencia">Transferencia</SelectItem>
-                    <SelectItem value="efectivo">Efectivo</SelectItem>
-                    <SelectItem value="tarjeta">Tarjeta</SelectItem>
-                    <SelectItem value="bizum">Bizum</SelectItem>
+                    <SelectItem value="transferencia">{t('transfer')}</SelectItem>
+                    <SelectItem value="efectivo">{t('cash')}</SelectItem>
+                    <SelectItem value="tarjeta">{t('card')}</SelectItem>
+                    <SelectItem value="bizum">{t('bizum')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1197,10 +1185,10 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
             {/* Líneas de factura */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium">Líneas de Factura</Label>
+                <Label className="text-xs font-medium">{t('linesShort')}</Label>
                 <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={handleAddLinea}>
                   <Plus className="mr-1 h-3 w-3" />
-                  Añadir
+                  {t('add')}
                 </Button>
               </div>
 
@@ -1208,7 +1196,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                 {lineas.map((linea, index) => (
                   <div key={index} className="flex gap-2 items-end p-2 border rounded bg-muted/30">
                     <div className="w-40 shrink-0">
-                      <Label className="text-[10px] text-muted-foreground">Producto</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t('product')}</Label>
                       <Select
                         value={linea.productoId ? String(linea.productoId) : ""}
                         onValueChange={(value) => handleLineaChange(index, "productoId", value ? Number(value) : undefined)}
@@ -1216,7 +1204,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                         <SelectTrigger className="h-7 text-xs">
                           {linea.productoId
                             ? <span className="truncate">{productos.find(p => p.id === linea.productoId)?.nombre}</span>
-                            : <SelectValue placeholder="Seleccionar..." />}
+                            : <SelectValue placeholder={t('selectEllipsis')} />}
                         </SelectTrigger>
                         <SelectContent>
                           {productos.map((producto) => (
@@ -1228,7 +1216,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                       </Select>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <Label className="text-[10px] text-muted-foreground">Descripción *</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t('descriptionRequired')}</Label>
                       <Input
                         className="h-7 text-xs"
                         value={linea.descripcion}
@@ -1236,7 +1224,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                       />
                     </div>
                     <div className="w-16 shrink-0">
-                      <Label className="text-[10px] text-muted-foreground">Cant.</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t('quantityShort')}</Label>
                       <Input
                         className="h-7 text-xs tabular-nums"
                         type="number"
@@ -1246,7 +1234,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                       />
                     </div>
                     <div className="w-24 shrink-0">
-                      <Label className="text-[10px] text-muted-foreground">Precio</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t('price')}</Label>
                       <Input
                         className="h-7 text-xs tabular-nums"
                         type="number"
@@ -1256,7 +1244,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                       />
                     </div>
                     <div className="w-28 shrink-0">
-                      <Label className="text-[10px] text-muted-foreground">IVA</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t('iva')}</Label>
                       <Select
                         value={linea.impuestoId ? String(linea.impuestoId) : ""}
                         onValueChange={(value) => handleLineaChange(index, "impuestoId", value ? Number(value) : undefined)}
@@ -1264,10 +1252,10 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                         <SelectTrigger className="h-7 text-xs">
                           {linea.impuestoId
                             ? <span className="truncate">{(() => { const imp = impuestos.find(i => i.id === linea.impuestoId); return imp ? `${imp.nombre} (${imp.porcentaje}%)` : "" })()}</span>
-                            : <SelectValue placeholder="Sin IVA" />}
+                            : <SelectValue placeholder={t('noIva')} />}
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Sin IVA</SelectItem>
+                          <SelectItem value="">{t('noIva')}</SelectItem>
                           {impuestos.filter(i => i.tipo === "IVA").map((imp) => (
                             <SelectItem key={imp.id} value={String(imp.id)}>
                               {imp.nombre} ({imp.porcentaje}%)
@@ -1277,7 +1265,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                       </Select>
                     </div>
                     <div className="w-28 shrink-0">
-                      <Label className="text-[10px] text-muted-foreground">IRPF</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t('irpf')}</Label>
                       <Select
                         value={linea.retencionId ? String(linea.retencionId) : ""}
                         onValueChange={(value) => handleLineaChange(index, "retencionId", value ? Number(value) : undefined)}
@@ -1285,10 +1273,10 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                         <SelectTrigger className="h-7 text-xs">
                           {linea.retencionId
                             ? <span className="truncate">{(() => { const ret = impuestos.find(i => i.id === linea.retencionId); return ret ? `${ret.nombre} (${ret.porcentaje}%)` : "" })()}</span>
-                            : <SelectValue placeholder="Sin ret." />}
+                            : <SelectValue placeholder={t('noRetention')} />}
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Sin ret.</SelectItem>
+                          <SelectItem value="">{t('noRetention')}</SelectItem>
                           {impuestos.filter(i => i.tipo === "IRPF").map((imp) => (
                             <SelectItem key={imp.id} value={String(imp.id)}>
                               {imp.nombre} ({imp.porcentaje}%)
@@ -1298,7 +1286,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                       </Select>
                     </div>
                     <div className="w-24 shrink-0 text-right">
-                      <Label className="text-[10px] text-muted-foreground">Total</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t('total')}</Label>
                       <p className="h-7 flex items-center justify-end text-xs font-medium tabular-nums">
                         {formatCurrency(calculateLineTotal(linea).total)}
                       </p>
@@ -1324,21 +1312,21 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
             <div className="flex justify-end">
               <div className="w-56 space-y-1 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal:</span>
+                  <span className="text-muted-foreground">{t('subtotal')}:</span>
                   <span className="tabular-nums">{formatCurrency(totals.subtotal)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">IVA:</span>
+                  <span className="text-muted-foreground">{t('iva')}:</span>
                   <span className="tabular-nums">+{formatCurrency(totals.totalImpuestos)}</span>
                 </div>
                 {totals.totalRetenciones > 0 && (
                   <div className="flex justify-between text-orange-600">
-                    <span>IRPF:</span>
+                    <span>{t('irpf')}:</span>
                     <span className="tabular-nums">-{formatCurrency(totals.totalRetenciones)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-semibold border-t pt-1">
-                  <span>Total:</span>
+                  <span>{t('total')}:</span>
                   <span className="tabular-nums">{formatCurrency(totals.total)}</span>
                 </div>
               </div>
@@ -1346,12 +1334,12 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
 
             {/* Notas */}
             <div className="grid gap-1.5">
-              <Label className="text-xs">Notas</Label>
+              <Label className="text-xs">{t('common:notes')}</Label>
               <Textarea
                 className="text-sm min-h-[50px]"
                 value={formData.notas}
                 onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
-                placeholder="Observaciones..."
+                placeholder={t('observations')}
                 rows={2}
               />
             </div>
@@ -1359,11 +1347,11 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
 
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setIsDialogOpen(false)}>
-              Cancelar
+              {t('common:cancel')}
             </Button>
             <Button size="sm" onClick={handleSubmit} disabled={isSaving || !formData.clienteId}>
               {isSaving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              {editingFactura ? "Guardar" : "Crear Factura"}
+              {editingFactura ? t('common:save') : t('createInvoice')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1376,11 +1364,11 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
             <div className="flex items-center justify-between">
               <DialogTitle className="text-base flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-                Factura {selectedFactura?.numero}
+                {t('invoiceTitle', { number: selectedFactura?.numero })}
               </DialogTitle>
               {selectedFactura && (
                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${estadoConfig[selectedFactura.estado]?.color}`}>
-                  {estadoConfig[selectedFactura.estado]?.label}
+                  {estadoConfig[selectedFactura.estado] ? t(estadoConfig[selectedFactura.estado].labelKey) : selectedFactura.estado}
                 </span>
               )}
             </div>
@@ -1391,18 +1379,18 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
               {/* Datos generales */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Cliente</p>
+                  <p className="text-xs text-muted-foreground">{t('client')}</p>
                   <p className="font-medium">{selectedFactura.cliente?.nombre}</p>
                   {selectedFactura.cliente?.nif && (
-                    <p className="text-xs text-muted-foreground">NIF: {selectedFactura.cliente.nif}</p>
+                    <p className="text-xs text-muted-foreground">{t('nif', { nif: selectedFactura.cliente.nif })}</p>
                   )}
                 </div>
                 <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Fechas</p>
-                  <p className="font-medium">Emisión: {formatDate(selectedFactura.fecha)}</p>
+                  <p className="text-xs text-muted-foreground">{t('dates')}</p>
+                  <p className="font-medium">{t('issueDateLabel', { date: formatDate(selectedFactura.fecha) })}</p>
                   {selectedFactura.fechaVencimiento && (
                     <p className="text-xs text-muted-foreground">
-                      Vencimiento: {formatDate(selectedFactura.fechaVencimiento)}
+                      {t('dueDateLabel', { date: formatDate(selectedFactura.fechaVencimiento) })}
                     </p>
                   )}
                 </div>
@@ -1413,12 +1401,12 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="h-8 text-xs">Descripción</TableHead>
-                      <TableHead className="h-8 text-xs text-center">Cant.</TableHead>
-                      <TableHead className="h-8 text-xs text-right">Precio</TableHead>
-                      <TableHead className="h-8 text-xs text-right">IVA</TableHead>
-                      <TableHead className="h-8 text-xs text-right">IRPF</TableHead>
-                      <TableHead className="h-8 text-xs text-right">Total</TableHead>
+                      <TableHead className="h-8 text-xs">{t('description')}</TableHead>
+                      <TableHead className="h-8 text-xs text-center">{t('quantityShort')}</TableHead>
+                      <TableHead className="h-8 text-xs text-right">{t('price')}</TableHead>
+                      <TableHead className="h-8 text-xs text-right">{t('iva')}</TableHead>
+                      <TableHead className="h-8 text-xs text-right">{t('irpf')}</TableHead>
+                      <TableHead className="h-8 text-xs text-right">{t('total')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1446,21 +1434,21 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
               <div className="flex justify-end">
                 <div className="w-48 space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Subtotal:</span>
+                    <span className="text-muted-foreground">{t('subtotal')}:</span>
                     <span className="tabular-nums">{formatCurrency(selectedFactura.subtotal)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">IVA:</span>
+                    <span className="text-muted-foreground">{t('iva')}:</span>
                     <span className="tabular-nums">+{formatCurrency(selectedFactura.totalImpuestos)}</span>
                   </div>
                   {selectedFactura.totalRetenciones > 0 && (
                     <div className="flex justify-between text-orange-600">
-                      <span>IRPF:</span>
+                      <span>{t('irpf')}:</span>
                       <span className="tabular-nums">-{formatCurrency(selectedFactura.totalRetenciones)}</span>
                     </div>
                   )}
                   <div className="flex justify-between font-semibold border-t pt-1">
-                    <span>Total:</span>
+                    <span>{t('total')}:</span>
                     <span className="tabular-nums">{formatCurrency(selectedFactura.total)}</span>
                   </div>
                 </div>
@@ -1469,7 +1457,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
               {/* Notas */}
               {selectedFactura.notas && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Notas</p>
+                  <p className="text-xs text-muted-foreground mb-1">{t('common:notes')}</p>
                   <p className="text-sm whitespace-pre-wrap bg-muted/50 p-2 rounded">{selectedFactura.notas}</p>
                 </div>
               )}
@@ -1485,7 +1473,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                   onClick={() => handlePreviewPdf(selectedFactura)}
                 >
                   <FileSearch className="mr-1.5 h-3 w-3" />
-                  Previsualizar PDF
+                  {t('previewPdf')}
                 </Button>
                 <Button
                   variant="outline"
@@ -1493,12 +1481,12 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                   onClick={() => handleGeneratePdf(selectedFactura)}
                 >
                   <Download className="mr-1.5 h-3 w-3" />
-                  Descargar PDF
+                  {t('downloadPdf')}
                 </Button>
               </>
             )}
             <Button variant="outline" size="sm" onClick={() => setIsDetailOpen(false)}>
-              Cerrar
+              {t('common:close')}
             </Button>
             {selectedFactura?.estado === "borrador" && (
               <Button
@@ -1509,7 +1497,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
                 }}
               >
                 <Pencil className="mr-1.5 h-3 w-3" />
-                Editar
+                {t('common:edit')}
               </Button>
             )}
           </DialogFooter>
@@ -1520,19 +1508,18 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base">Eliminar factura</AlertDialogTitle>
+            <AlertDialogTitle className="text-base">{t('deleteInvoice')}</AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
-              Se eliminará permanentemente la factura #{facturaToDelete?.numero}.
-              Esta acción no se puede deshacer.
+              {t('deleteConfirm', { number: facturaToDelete?.numero })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="h-8 text-sm">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="h-8 text-sm">{t('common:cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="h-8 text-sm bg-red-600 hover:bg-red-700"
             >
-              Eliminar
+              {t('common:delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1544,23 +1531,24 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base flex items-center gap-2">
               <Send className="h-4 w-4 text-blue-600" />
-              Emitir factura
+              {t('emitInvoice')}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm">
-              ¿Confirmas la emisión de la factura <strong>#{facturaToEmitir?.numero}</strong> por importe de{" "}
-              <strong>{facturaToEmitir ? formatCurrency(facturaToEmitir.total) : ""}</strong>?
-              <br /><br />
-              Una vez emitida, la factura no podrá ser editada.
+            <AlertDialogDescription asChild className="text-sm">
+              <div>
+                <span dangerouslySetInnerHTML={{ __html: t('emitConfirm', { number: facturaToEmitir?.numero, amount: facturaToEmitir ? formatCurrency(facturaToEmitir.total) : "" }) }} />
+                <br /><br />
+                {t('emitWarning')}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="h-8 text-sm">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="h-8 text-sm">{t('common:cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleEmitir}
               className="h-8 text-sm bg-blue-600 hover:bg-blue-700"
             >
               <Send className="mr-1.5 h-3.5 w-3.5" />
-              Emitir Factura
+              {t('emitInvoiceButton')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1572,23 +1560,24 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-green-600" />
-              Registrar cobro
+              {t('registerPayment')}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm">
-              ¿Confirmas el cobro de la factura <strong>#{facturaToMarcarPagada?.numero}</strong> por importe de{" "}
-              <strong>{facturaToMarcarPagada ? formatCurrency(facturaToMarcarPagada.total) : ""}</strong>?
-              <br /><br />
-              La factura quedará marcada como pagada.
+            <AlertDialogDescription asChild className="text-sm">
+              <div>
+                <span dangerouslySetInnerHTML={{ __html: t('paymentConfirm', { number: facturaToMarcarPagada?.numero, amount: facturaToMarcarPagada ? formatCurrency(facturaToMarcarPagada.total) : "" }) }} />
+                <br /><br />
+                {t('paymentWarning')}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="h-8 text-sm">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="h-8 text-sm">{t('common:cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleMarcarPagada}
               className="h-8 text-sm bg-green-600 hover:bg-green-700"
             >
               <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
-              Confirmar Cobro
+              {t('confirmPayment')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1600,7 +1589,7 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              Previsualización - Factura {pdfPreviewNumero}
+              {t('previewTitle', { number: pdfPreviewNumero })}
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 min-h-0">
@@ -1608,17 +1597,17 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
               <iframe
                 src={pdfPreviewUrl}
                 className="w-full h-full rounded border"
-                title={`PDF Factura ${pdfPreviewNumero}`}
+                title={t('pdfTitle', { number: pdfPreviewNumero })}
               />
             )}
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={handleClosePreview}>
-              Cerrar
+              {t('common:close')}
             </Button>
             <Button size="sm" onClick={handleDownloadFromPreview}>
               <Download className="mr-1.5 h-3 w-3" />
-              Descargar
+              {t('download')}
             </Button>
           </DialogFooter>
         </DialogContent>

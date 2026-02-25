@@ -127,7 +127,7 @@ export function deleteEmpresaData(id: string): { success: boolean; error?: strin
     const config = loadEmpresasConfig()
     const empresa = config.empresas.find(e => e.id === id)
     if (!empresa) {
-      return { success: false, error: 'Empresa no encontrada' }
+      return { success: false, error: 'notFound' }
     }
 
     // Eliminar directorio de datos si es ruta por defecto (dentro de empresas/)
@@ -252,12 +252,12 @@ export function setCustomDataPath(newPath: string | null): { success: boolean; e
     if (newPath) {
       // Verificar que la ruta existe
       if (!fs.existsSync(newPath)) {
-        return { success: false, error: 'La ruta especificada no existe' }
+        return { success: false, error: 'pathNotFound' }
       }
       // Verificar que es un directorio
       const stat = fs.statSync(newPath)
       if (!stat.isDirectory()) {
-        return { success: false, error: 'La ruta especificada no es un directorio' }
+        return { success: false, error: 'pathNotDirectory' }
       }
       // Verificar permisos de escritura
       try {
@@ -265,7 +265,7 @@ export function setCustomDataPath(newPath: string | null): { success: boolean; e
         fs.writeFileSync(testFile, 'test')
         fs.unlinkSync(testFile)
       } catch {
-        return { success: false, error: 'No hay permisos de escritura en la ruta especificada' }
+        return { success: false, error: 'permissionDenied' }
       }
     }
 
@@ -401,7 +401,7 @@ export function setupPassword(password: string): { success: boolean; error?: str
   try {
     // Validar contraseña
     if (password.length < 4) {
-      return { success: false, error: 'La contraseña debe tener al menos 4 caracteres' }
+      return { success: false, error: 'passwordMinLength' }
     }
 
     // Generar sales aleatorias
@@ -500,16 +500,16 @@ export function isPasskeyEnabled(): boolean {
 export function setupPasskey(password: string): { success: boolean; error?: string } {
   try {
     if (!safeStorage.isEncryptionAvailable()) {
-      return { success: false, error: 'Almacenamiento seguro no disponible' }
+      return { success: false, error: 'safeStorageNotAvailable' }
     }
 
     if (!isBiometricSupported()) {
-      return { success: false, error: 'Autenticación biométrica no disponible en este dispositivo' }
+      return { success: false, error: 'biometricNotAvailable' }
     }
 
     // Verificar que la contraseña es correcta primero
     if (!verifyPassword(password)) {
-      return { success: false, error: 'Contraseña incorrecta' }
+      return { success: false, error: 'passwordIncorrect' }
     }
 
     // Encriptar la contraseña con safeStorage (usa keychain del sistema)
@@ -544,7 +544,7 @@ export async function promptBiometric(reason: string): Promise<{ success: boolea
     if (process.platform === 'darwin') {
       // macOS - usar Touch ID
       if (!systemPreferences.canPromptTouchID()) {
-        return { success: false, error: 'Touch ID no disponible' }
+        return { success: false, error: 'touchIdNotAvailable' }
       }
 
       await systemPreferences.promptTouchID(reason)
@@ -555,7 +555,7 @@ export async function promptBiometric(reason: string): Promise<{ success: boolea
       return { success: true }
     } else {
       // Linux u otros - no hay soporte biométrico nativo en Electron
-      return { success: false, error: 'Autenticación biométrica no soportada en esta plataforma' }
+      return { success: false, error: 'biometricNotSupported' }
     }
   } catch (error) {
     // El usuario canceló o falló la autenticación
@@ -563,10 +563,10 @@ export async function promptBiometric(reason: string): Promise<{ success: boolea
 
     // Detectar si el usuario canceló
     if (errorMessage.includes('cancel') || errorMessage.includes('Cancel')) {
-      return { success: false, error: 'Autenticación cancelada' }
+      return { success: false, error: 'authCancelled' }
     }
 
-    return { success: false, error: `Error de autenticación: ${errorMessage}` }
+    return { success: false, error: 'authError' }
   }
 }
 
@@ -577,22 +577,22 @@ export async function promptBiometric(reason: string): Promise<{ success: boolea
 export async function unlockWithPasskey(): Promise<{ success: boolean; password?: string; error?: string }> {
   try {
     if (!isPasskeyEnabled()) {
-      return { success: false, error: 'Passkey no configurado' }
+      return { success: false, error: 'passkeyNotConfigured' }
     }
 
     if (!safeStorage.isEncryptionAvailable()) {
-      return { success: false, error: 'Almacenamiento seguro no disponible' }
+      return { success: false, error: 'safeStorageNotAvailable' }
     }
 
     const passkeyPath = getPasskeyFilePath()
     if (!fs.existsSync(passkeyPath)) {
-      return { success: false, error: 'Archivo de passkey no encontrado' }
+      return { success: false, error: 'fileNotFound' }
     }
 
     // PRIMERO: Solicitar autenticación biométrica
-    const biometricResult = await promptBiometric('Desbloquear CryptoGest')
+    const biometricResult = await promptBiometric('Unlock CryptoGest')
     if (!biometricResult.success) {
-      return { success: false, error: biometricResult.error || 'Autenticación biométrica fallida' }
+      return { success: false, error: biometricResult.error || 'biometricFailed' }
     }
 
     // DESPUÉS: Si la biometría fue exitosa, desencriptar la contraseña
@@ -607,7 +607,7 @@ export async function unlockWithPasskey(): Promise<{ success: boolean; password?
       disablePasskey()
       return {
         success: false,
-        error: 'Passkey corrupto o inválido. Se ha deshabilitado. Por favor, usa tu contraseña.'
+        error: 'passkeyCorrupt'
       }
     }
   } catch (error) {
@@ -648,7 +648,7 @@ export function encryptDatabase(password: string): { success: boolean; error?: s
   try {
     const key = getEncryptionKey(password)
     if (!key) {
-      return { success: false, error: 'No se pudo derivar la clave de encriptación' }
+      return { success: false, error: 'encryptionError' }
     }
 
     // Buscar el archivo de base de datos
@@ -699,7 +699,7 @@ export function decryptDatabase(password: string): { success: boolean; error?: s
 
     const key = getEncryptionKey(password)
     if (!key) {
-      return { success: false, error: 'No se pudo derivar la clave de encriptación' }
+      return { success: false, error: 'encryptionError' }
     }
 
     // Leer y desencriptar
@@ -721,7 +721,7 @@ export function decryptDatabase(password: string): { success: boolean; error?: s
 
       return { success: true }
     } catch (decryptError) {
-      return { success: false, error: 'Contraseña incorrecta o datos corruptos' }
+      return { success: false, error: 'decryptionError' }
     }
   } catch (error) {
     return { success: false, error: String(error) }
@@ -734,7 +734,7 @@ export function decryptDatabase(password: string): { success: boolean; error?: s
 export function changePassword(currentPassword: string, newPassword: string): { success: boolean; error?: string } {
   // Verificar contraseña actual
   if (!verifyPassword(currentPassword)) {
-    return { success: false, error: 'Contraseña actual incorrecta' }
+    return { success: false, error: 'passwordIncorrect' }
   }
 
   // Desencriptar con contraseña actual
@@ -811,7 +811,7 @@ export function encryptFile(
   try {
     const key = getEncryptionKey(password)
     if (!key) {
-      return { success: false, error: 'No se pudo derivar la clave de encriptación' }
+      return { success: false, error: 'encryptionError' }
     }
 
     const encryptedData = encrypt(fileData, key)
@@ -836,7 +836,7 @@ export function decryptFile(
   try {
     const key = getEncryptionKey(password)
     if (!key) {
-      return { success: false, error: 'No se pudo derivar la clave de encriptación' }
+      return { success: false, error: 'encryptionError' }
     }
 
     const filePath = path.join(getAttachmentsDirPath(), encryptedFileName)
@@ -905,12 +905,12 @@ export function migrateDataToPath(newPath: string): { success: boolean; error?: 
   try {
     // Verificar la nueva ruta
     if (!fs.existsSync(newPath)) {
-      return { success: false, error: 'La ruta especificada no existe' }
+      return { success: false, error: 'pathNotFound' }
     }
 
     const stat = fs.statSync(newPath)
     if (!stat.isDirectory()) {
-      return { success: false, error: 'La ruta especificada no es un directorio' }
+      return { success: false, error: 'pathNotDirectory' }
     }
 
     // Verificar permisos de escritura
@@ -919,7 +919,7 @@ export function migrateDataToPath(newPath: string): { success: boolean; error?: 
       fs.writeFileSync(testFile, 'test')
       fs.unlinkSync(testFile)
     } catch {
-      return { success: false, error: 'No hay permisos de escritura en la ruta especificada' }
+      return { success: false, error: 'permissionDenied' }
     }
 
     const currentPath = getDataPath()

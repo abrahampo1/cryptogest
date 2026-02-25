@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
+import { formatCurrency, formatDate, translateError } from "@/lib/formatting"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -69,50 +71,35 @@ const emptyLineaForm: LineaAsientoForm = {
   concepto: "",
 }
 
-const tipoCuentaConfig: Record<string, { label: string; color: string }> = {
-  activo: { label: "Activo", color: "bg-blue-50 text-blue-700" },
-  pasivo: { label: "Pasivo", color: "bg-red-50 text-red-700" },
-  patrimonio_neto: { label: "Patrimonio Neto", color: "bg-purple-50 text-purple-700" },
-  ingreso: { label: "Ingreso", color: "bg-green-50 text-green-700" },
-  gasto: { label: "Gasto", color: "bg-orange-50 text-orange-700" },
+const tipoCuentaConfig: Record<string, { labelKey: string; color: string }> = {
+  activo: { labelKey: "accounts.typeActivo", color: "bg-blue-50 text-blue-700" },
+  pasivo: { labelKey: "accounts.typePasivo", color: "bg-red-50 text-red-700" },
+  patrimonio_neto: { labelKey: "accounts.typePatrimonio", color: "bg-purple-50 text-purple-700" },
+  ingreso: { labelKey: "accounts.typeIngreso", color: "bg-green-50 text-green-700" },
+  gasto: { labelKey: "accounts.typeGasto", color: "bg-orange-50 text-orange-700" },
 }
 
-const grupoConfig: Record<number, { label: string; color: string }> = {
-  1: { label: "1 - Financiación básica", color: "bg-indigo-50 text-indigo-700" },
-  2: { label: "2 - Inmovilizado", color: "bg-cyan-50 text-cyan-700" },
-  3: { label: "3 - Existencias", color: "bg-amber-50 text-amber-700" },
-  4: { label: "4 - Acreedores y deudores", color: "bg-rose-50 text-rose-700" },
-  5: { label: "5 - Cuentas financieras", color: "bg-teal-50 text-teal-700" },
-  6: { label: "6 - Compras y gastos", color: "bg-orange-50 text-orange-700" },
-  7: { label: "7 - Ventas e ingresos", color: "bg-emerald-50 text-emerald-700" },
+const grupoConfig: Record<number, { color: string }> = {
+  1: { color: "bg-indigo-50 text-indigo-700" },
+  2: { color: "bg-cyan-50 text-cyan-700" },
+  3: { color: "bg-amber-50 text-amber-700" },
+  4: { color: "bg-rose-50 text-rose-700" },
+  5: { color: "bg-teal-50 text-teal-700" },
+  6: { color: "bg-orange-50 text-orange-700" },
+  7: { color: "bg-emerald-50 text-emerald-700" },
 }
 
-const tipoAsientoConfig: Record<string, { label: string; color: string }> = {
-  manual: { label: "Manual", color: "bg-slate-100 text-slate-600" },
-  factura: { label: "Factura", color: "bg-blue-50 text-blue-700" },
-  gasto: { label: "Gasto", color: "bg-orange-50 text-orange-700" },
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────
-
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat("es-ES", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 2,
-  }).format(amount)
-
-const formatDate = (date: Date | string) => {
-  return new Date(date).toLocaleDateString("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })
+const tipoAsientoConfig: Record<string, { labelKey: string; color: string }> = {
+  manual: { labelKey: "entries.typeManual", color: "bg-slate-100 text-slate-600" },
+  factura: { labelKey: "entries.typeFactura", color: "bg-blue-50 text-blue-700" },
+  gasto: { labelKey: "entries.typeGasto", color: "bg-orange-50 text-orange-700" },
 }
 
 // ── Component ───────────────────────────────────────────────────────────
 
 export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
+  const { t } = useTranslation(['contabilidad', 'common'])
+
   // ── Shared state ──────────────────────────────────────────────────────
   const [cuentas, setCuentas] = useState<CuentaContable[]>([])
   const [ejercicios, setEjercicios] = useState<EjercicioFiscal[]>([])
@@ -311,7 +298,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           await loadCuentas()
           setIsCuentaDialogOpen(false)
         } else {
-          setError(res?.error || "Error al actualizar la cuenta")
+          setError(res?.error ? translateError(res.error) : t('accounts.errorUpdate'))
         }
       } else {
         const res = await window.electronAPI?.cuentas.create(data)
@@ -319,7 +306,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           await loadCuentas()
           setIsCuentaDialogOpen(false)
         } else {
-          setError(res?.error || "Error al crear la cuenta")
+          setError(res?.error ? translateError(res.error) : t('accounts.errorCreate'))
         }
       }
     } catch (err) {
@@ -433,7 +420,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           await loadAsientos()
           setIsAsientoDialogOpen(false)
         } else {
-          setError(res?.error || "Error al actualizar el asiento")
+          setError(res?.error ? translateError(res.error) : t('entries.errorUpdate'))
         }
       } else {
         const res = await window.electronAPI?.asientos.create(data)
@@ -441,7 +428,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           await loadAsientos()
           setIsAsientoDialogOpen(false)
         } else {
-          setError(res?.error || "Error al crear el asiento")
+          setError(res?.error ? translateError(res.error) : t('entries.errorCreate'))
         }
       }
     } catch (err) {
@@ -514,7 +501,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
         await loadAsientos()
         setIsFacturaDialogOpen(false)
       } else {
-        setError(res?.error || "Error al generar asiento desde factura")
+        setError(res?.error ? translateError(res.error) : t('generate.errorFromInvoice'))
       }
     } catch (err) {
       console.error("Error generating asiento from factura:", err)
@@ -531,7 +518,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
         await loadAsientos()
         setIsGastoDialogOpen(false)
       } else {
-        setError(res?.error || "Error al generar asiento desde gasto")
+        setError(res?.error ? translateError(res.error) : t('generate.errorFromExpense'))
       }
     } catch (err) {
       console.error("Error generating asiento from gasto:", err)
@@ -658,13 +645,13 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
       <div className="flex items-center justify-between border-b pb-3">
         <div className="flex items-center gap-2">
           <div>
-            <h1 className="text-xl font-semibold">Contabilidad</h1>
+            <h1 className="text-xl font-semibold">{t('title')}</h1>
             <p className="text-sm text-muted-foreground">
-              Plan de cuentas, asientos contables y libros oficiales
+              {t('subtitle')}
             </p>
           </div>
           {onHelp && (
-            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title={t('common:viewHelp')}>
               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           )}
@@ -675,19 +662,19 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
         <TabsList className="h-8">
           <TabsTrigger value="plan-cuentas" className="text-xs h-7 px-3">
             <List className="mr-1.5 h-3.5 w-3.5" />
-            Plan de Cuentas
+            {t('tabs.accounts')}
           </TabsTrigger>
           <TabsTrigger value="asientos" className="text-xs h-7 px-3">
             <FileText className="mr-1.5 h-3.5 w-3.5" />
-            Asientos
+            {t('tabs.entries')}
           </TabsTrigger>
           <TabsTrigger value="libro-diario" className="text-xs h-7 px-3">
             <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-            Libro Diario
+            {t('tabs.journal')}
           </TabsTrigger>
           <TabsTrigger value="libro-mayor" className="text-xs h-7 px-3">
             <Calendar className="mr-1.5 h-3.5 w-3.5" />
-            Libro Mayor
+            {t('tabs.ledger')}
           </TabsTrigger>
         </TabsList>
 
@@ -699,16 +686,16 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
             <CardHeader className="pb-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle className="text-sm font-medium">
-                  Plan General Contable
+                  {t('accounts.title')}
                   <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    {filteredCuentas.length} de {cuentas.length}
+                    {t('accounts.countFiltered', { filtered: filteredCuentas.length, total: cuentas.length })}
                   </span>
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   <div className="relative">
                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
-                      placeholder="Buscar..."
+                      placeholder={t('common:search')}
                       className="h-8 w-48 pl-7 text-xs"
                       value={cuentaSearch}
                       onChange={(e) => setCuentaSearch(e.target.value)}
@@ -716,20 +703,20 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                   </div>
                   <Select value={cuentaFilterGrupo} onValueChange={setCuentaFilterGrupo}>
                     <SelectTrigger className="h-8 w-36 text-xs">
-                      <SelectValue placeholder="Grupo" />
+                      <SelectValue placeholder={t('accounts.group')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todos">Todos los grupos</SelectItem>
+                      <SelectItem value="todos">{t('accounts.allGroups')}</SelectItem>
                       {[1, 2, 3, 4, 5, 6, 7].map((g) => (
                         <SelectItem key={g} value={String(g)}>
-                          Grupo {g}
+                          {t('accounts.groupNumber', { number: g })}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <Button size="sm" onClick={() => handleOpenCuentaDialog()}>
                     <Plus className="mr-1.5 h-3.5 w-3.5" />
-                    Nueva Cuenta
+                    {t('accounts.newAccount')}
                   </Button>
                 </div>
               </div>
@@ -738,12 +725,12 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="h-9 text-xs">Codigo</TableHead>
-                    <TableHead className="h-9 text-xs">Nombre</TableHead>
-                    <TableHead className="h-9 text-xs">Tipo</TableHead>
-                    <TableHead className="h-9 text-xs">Grupo</TableHead>
-                    <TableHead className="h-9 text-xs text-center">Estado</TableHead>
-                    <TableHead className="h-9 text-xs text-center w-20">Acciones</TableHead>
+                    <TableHead className="h-9 text-xs">{t('accounts.code')}</TableHead>
+                    <TableHead className="h-9 text-xs">{t('accounts.name')}</TableHead>
+                    <TableHead className="h-9 text-xs">{t('accounts.type')}</TableHead>
+                    <TableHead className="h-9 text-xs">{t('accounts.group')}</TableHead>
+                    <TableHead className="h-9 text-xs text-center">{t('common:status')}</TableHead>
+                    <TableHead className="h-9 text-xs text-center w-20">{t('common:actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -752,11 +739,11 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                       <TableCell colSpan={6} className="h-32 text-center">
                         <div className="flex flex-col items-center justify-center text-muted-foreground">
                           <List className="h-8 w-8 mb-2 opacity-50" />
-                          <p className="text-sm">No hay cuentas registradas</p>
+                          <p className="text-sm">{t('accounts.noAccounts')}</p>
                           <p className="text-xs">
                             {cuentaSearch || cuentaFilterGrupo !== "todos"
-                              ? "Prueba ajustando los filtros"
-                              : "El plan de cuentas se cargara automaticamente"}
+                              ? t('accounts.noAccountsFilterHint')
+                              : t('accounts.noAccountsAutoHint')}
                           </p>
                         </div>
                       </TableCell>
@@ -764,7 +751,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                   ) : (
                     filteredCuentas.map((cuenta) => {
                       const tipoConf = tipoCuentaConfig[cuenta.tipo] || {
-                        label: cuenta.tipo,
+                        labelKey: cuenta.tipo,
                         color: "bg-slate-100 text-slate-600",
                       }
                       const grupoConf = grupoConfig[cuenta.grupo]
@@ -791,7 +778,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                             <span
                               className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${tipoConf.color}`}
                             >
-                              {tipoConf.label}
+                              {t(tipoConf.labelKey)}
                             </span>
                           </TableCell>
                           <TableCell className="py-2">
@@ -799,7 +786,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                               <span
                                 className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${grupoConf.color}`}
                               >
-                                Grupo {cuenta.grupo}
+                                {t('accounts.groupNumber', { number: cuenta.grupo })}
                               </span>
                             )}
                           </TableCell>
@@ -811,7 +798,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                                   : "bg-slate-100 text-slate-500"
                               }`}
                             >
-                              {cuenta.activo ? "Activa" : "Inactiva"}
+                              {cuenta.activo ? t('accounts.statusActive') : t('accounts.statusInactive')}
                             </span>
                           </TableCell>
                           <TableCell className="py-2">
@@ -856,7 +843,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                 <div className="border-t bg-muted/30 px-4 py-2">
                   <div className="flex justify-end gap-8 text-xs">
                     <span className="text-muted-foreground">
-                      {filteredCuentas.length} cuenta{filteredCuentas.length !== 1 ? "s" : ""}
+                      {t('accounts.countAccounts', { count: filteredCuentas.length })}
                     </span>
                   </div>
                 </div>
@@ -872,10 +859,10 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           {/* Ejercicio selector + actions */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
-              <Label className="text-xs">Ejercicio:</Label>
+              <Label className="text-xs">{t('entries.exercise')}</Label>
               <Select value={selectedEjercicioId} onValueChange={setSelectedEjercicioId}>
                 <SelectTrigger className="h-8 w-36 text-xs">
-                  <SelectValue placeholder="Seleccionar" />
+                  <SelectValue placeholder={t('entries.exerciseSelect')} />
                 </SelectTrigger>
                 <SelectContent>
                   {ejercicios.map((ej) => (
@@ -889,15 +876,15 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={handleOpenFacturaDialog}>
                 <Receipt className="mr-1.5 h-3.5 w-3.5" />
-                Desde Factura
+                {t('entries.fromInvoice')}
               </Button>
               <Button variant="outline" size="sm" onClick={handleOpenGastoDialog}>
                 <FileText className="mr-1.5 h-3.5 w-3.5" />
-                Desde Gasto
+                {t('entries.fromExpense')}
               </Button>
               <Button size="sm" onClick={() => handleOpenAsientoDialog()}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Nuevo Asiento
+                {t('entries.newEntry')}
               </Button>
             </div>
           </div>
@@ -905,9 +892,9 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">
-                Asientos Contables
+                {t('entries.title')}
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  {asientos.length} asiento{asientos.length !== 1 ? "s" : ""}
+                  {t('entries.countEntries', { count: asientos.length })}
                 </span>
               </CardTitle>
             </CardHeader>
@@ -915,13 +902,13 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="h-9 text-xs">N.º</TableHead>
-                    <TableHead className="h-9 text-xs">Fecha</TableHead>
-                    <TableHead className="h-9 text-xs">Descripcion</TableHead>
-                    <TableHead className="h-9 text-xs">Tipo</TableHead>
-                    <TableHead className="h-9 text-xs text-right">Debe</TableHead>
-                    <TableHead className="h-9 text-xs text-right">Haber</TableHead>
-                    <TableHead className="h-9 text-xs text-center w-20">Acciones</TableHead>
+                    <TableHead className="h-9 text-xs">{t('entries.number')}</TableHead>
+                    <TableHead className="h-9 text-xs">{t('entries.date')}</TableHead>
+                    <TableHead className="h-9 text-xs">{t('entries.description')}</TableHead>
+                    <TableHead className="h-9 text-xs">{t('entries.type')}</TableHead>
+                    <TableHead className="h-9 text-xs text-right">{t('entries.debit')}</TableHead>
+                    <TableHead className="h-9 text-xs text-right">{t('entries.credit')}</TableHead>
+                    <TableHead className="h-9 text-xs text-center w-20">{t('common:actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -930,14 +917,14 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                       <TableCell colSpan={7} className="h-32 text-center">
                         <div className="flex flex-col items-center justify-center text-muted-foreground">
                           <FileText className="h-8 w-8 mb-2 opacity-50" />
-                          <p className="text-sm">No hay asientos registrados</p>
-                          <p className="text-xs">Crea tu primer asiento contable</p>
+                          <p className="text-sm">{t('entries.noEntries')}</p>
+                          <p className="text-xs">{t('entries.noEntriesHint')}</p>
                         </div>
                       </TableCell>
                     </TableRow>
                   ) : (
                     asientos.map((asiento) => {
-                      const tipoConf = tipoAsientoConfig[asiento.tipo] || tipoAsientoConfig.manual
+                      const tipoConf = tipoAsientoConfig[asiento.tipo] || tipoAsientoConfig['manual']
                       return (
                         <TableRow key={asiento.id}>
                           <TableCell className="py-2">
@@ -958,7 +945,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                             <span
                               className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${tipoConf.color}`}
                             >
-                              {tipoConf.label}
+                              {t(tipoConf.labelKey)}
                             </span>
                           </TableCell>
                           <TableCell className="py-2 text-right">
@@ -1004,16 +991,16 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                 <div className="border-t bg-muted/30 px-4 py-2">
                   <div className="flex justify-end gap-8 text-xs">
                     <span className="text-muted-foreground">
-                      {asientos.length} asiento{asientos.length !== 1 ? "s" : ""}
+                      {t('entries.countEntries', { count: asientos.length })}
                     </span>
                     <span className="font-medium">
-                      Debe:{" "}
+                      {t('entries.totalDebit')}{" "}
                       <span className="tabular-nums">
                         {formatCurrency(asientos.reduce((s, a) => s + getAsientoTotalDebe(a), 0))}
                       </span>
                     </span>
                     <span className="font-medium">
-                      Haber:{" "}
+                      {t('entries.totalCredit')}{" "}
                       <span className="tabular-nums">
                         {formatCurrency(asientos.reduce((s, a) => s + getAsientoTotalHaber(a), 0))}
                       </span>
@@ -1032,15 +1019,15 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           {/* Filters */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Filtros del Libro Diario</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('journal.filters')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap items-end gap-3">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Ejercicio</Label>
+                  <Label className="text-xs">{t('journal.exercise')}</Label>
                   <Select value={diarioEjercicioId} onValueChange={setDiarioEjercicioId}>
                     <SelectTrigger className="h-8 w-36 text-xs">
-                      <SelectValue placeholder="Seleccionar" />
+                      <SelectValue placeholder={t('journal.exerciseSelect')} />
                     </SelectTrigger>
                     <SelectContent>
                       {ejercicios.map((ej) => (
@@ -1052,7 +1039,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                   </Select>
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Fecha desde</Label>
+                  <Label className="text-xs">{t('journal.dateFrom')}</Label>
                   <Input
                     type="date"
                     className="h-8 text-sm w-40"
@@ -1061,7 +1048,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Fecha hasta</Label>
+                  <Label className="text-xs">{t('journal.dateTo')}</Label>
                   <Input
                     type="date"
                     className="h-8 text-sm w-40"
@@ -1076,9 +1063,9 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">
-                Libro Diario
+                {t('journal.title')}
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  {diarioAsientos.length} asiento{diarioAsientos.length !== 1 ? "s" : ""} / {diarioLines.length} apunte{diarioLines.length !== 1 ? "s" : ""}
+                  {t('journal.countSummary', { entries: diarioAsientos.length, entriesPlural: diarioAsientos.length !== 1 ? "s" : "", lines: diarioLines.length, linesPlural: diarioLines.length !== 1 ? "s" : "" })}
                 </span>
               </CardTitle>
             </CardHeader>
@@ -1091,12 +1078,12 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="h-9 text-xs">Fecha</TableHead>
-                      <TableHead className="h-9 text-xs">Asiento N.º</TableHead>
-                      <TableHead className="h-9 text-xs">Cuenta</TableHead>
-                      <TableHead className="h-9 text-xs">Concepto</TableHead>
-                      <TableHead className="h-9 text-xs text-right">Debe</TableHead>
-                      <TableHead className="h-9 text-xs text-right">Haber</TableHead>
+                      <TableHead className="h-9 text-xs">{t('journal.date')}</TableHead>
+                      <TableHead className="h-9 text-xs">{t('journal.entryNumber')}</TableHead>
+                      <TableHead className="h-9 text-xs">{t('journal.account')}</TableHead>
+                      <TableHead className="h-9 text-xs">{t('journal.concept')}</TableHead>
+                      <TableHead className="h-9 text-xs text-right">{t('journal.debit')}</TableHead>
+                      <TableHead className="h-9 text-xs text-right">{t('journal.credit')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1105,8 +1092,8 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                         <TableCell colSpan={6} className="h-32 text-center">
                           <div className="flex flex-col items-center justify-center text-muted-foreground">
                             <BookOpen className="h-8 w-8 mb-2 opacity-50" />
-                            <p className="text-sm">Sin movimientos en el libro diario</p>
-                            <p className="text-xs">Selecciona un ejercicio con asientos registrados</p>
+                            <p className="text-sm">{t('journal.noMovements')}</p>
+                            <p className="text-xs">{t('journal.noMovementsHint')}</p>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1158,11 +1145,11 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                 <div className="border-t bg-muted/30 px-4 py-2">
                   <div className="flex justify-end gap-8 text-xs">
                     <span className="font-medium">
-                      Total Debe:{" "}
+                      {t('journal.totalDebit')}{" "}
                       <span className="tabular-nums">{formatCurrency(diarioTotalDebe)}</span>
                     </span>
                     <span className="font-medium">
-                      Total Haber:{" "}
+                      {t('journal.totalCredit')}{" "}
                       <span className="tabular-nums">{formatCurrency(diarioTotalHaber)}</span>
                     </span>
                   </div>
@@ -1179,15 +1166,15 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           {/* Filters */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Filtros del Libro Mayor</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('ledger.filters')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap items-end gap-3">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Cuenta</Label>
+                  <Label className="text-xs">{t('ledger.account')}</Label>
                   <Select value={mayorCuentaId} onValueChange={setMayorCuentaId}>
                     <SelectTrigger className="h-8 w-64 text-xs">
-                      <SelectValue placeholder="Seleccionar cuenta" />
+                      <SelectValue placeholder={t('ledger.selectAccount')} />
                     </SelectTrigger>
                     <SelectContent>
                       {cuentas
@@ -1201,10 +1188,10 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                   </Select>
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Ejercicio</Label>
+                  <Label className="text-xs">{t('ledger.exercise')}</Label>
                   <Select value={mayorEjercicioId} onValueChange={setMayorEjercicioId}>
                     <SelectTrigger className="h-8 w-36 text-xs">
-                      <SelectValue placeholder="Seleccionar" />
+                      <SelectValue placeholder={t('ledger.exerciseSelect')} />
                     </SelectTrigger>
                     <SelectContent>
                       {ejercicios.map((ej) => (
@@ -1216,7 +1203,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                   </Select>
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Fecha desde</Label>
+                  <Label className="text-xs">{t('ledger.dateFrom')}</Label>
                   <Input
                     type="date"
                     className="h-8 text-sm w-40"
@@ -1225,7 +1212,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Fecha hasta</Label>
+                  <Label className="text-xs">{t('ledger.dateTo')}</Label>
                   <Input
                     type="date"
                     className="h-8 text-sm w-40"
@@ -1240,10 +1227,10 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">
-                Libro Mayor
+                {t('ledger.title')}
                 {mayorData && (
                   <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    {mayorData.cuenta.codigo} - {mayorData.cuenta.nombre} ({mayorData.movimientos.length} movimiento{mayorData.movimientos.length !== 1 ? "s" : ""})
+                    {mayorData.cuenta.codigo} - {mayorData.cuenta.nombre} ({t('ledger.movementCount', { count: mayorData.movimientos.length })})
                   </span>
                 )}
               </CardTitle>
@@ -1258,8 +1245,8 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                   <Calendar className="h-8 w-8 mb-2 opacity-50" />
                   <p className="text-sm">
                     {!mayorCuentaId
-                      ? "Selecciona una cuenta para ver el libro mayor"
-                      : "Sin movimientos para la cuenta seleccionada"}
+                      ? t('ledger.noData')
+                      : t('ledger.noMovementsAccount')}
                   </p>
                 </div>
               ) : (
@@ -1267,12 +1254,12 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="h-9 text-xs">Fecha</TableHead>
-                        <TableHead className="h-9 text-xs">Asiento N.º</TableHead>
-                        <TableHead className="h-9 text-xs">Concepto</TableHead>
-                        <TableHead className="h-9 text-xs text-right">Debe</TableHead>
-                        <TableHead className="h-9 text-xs text-right">Haber</TableHead>
-                        <TableHead className="h-9 text-xs text-right">Saldo</TableHead>
+                        <TableHead className="h-9 text-xs">{t('ledger.date')}</TableHead>
+                        <TableHead className="h-9 text-xs">{t('ledger.entryNumber')}</TableHead>
+                        <TableHead className="h-9 text-xs">{t('ledger.concept')}</TableHead>
+                        <TableHead className="h-9 text-xs text-right">{t('ledger.debit')}</TableHead>
+                        <TableHead className="h-9 text-xs text-right">{t('ledger.credit')}</TableHead>
+                        <TableHead className="h-9 text-xs text-right">{t('ledger.balance')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1281,7 +1268,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                           <TableCell colSpan={6} className="h-32 text-center">
                             <div className="flex flex-col items-center justify-center text-muted-foreground">
                               <Calendar className="h-8 w-8 mb-2 opacity-50" />
-                              <p className="text-sm">Sin movimientos</p>
+                              <p className="text-sm">{t('ledger.noMovements')}</p>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1334,19 +1321,19 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                     <div className="border-t p-4">
                       <div className="grid grid-cols-3 gap-4">
                         <div className="text-center p-3 rounded bg-muted/30">
-                          <p className="text-xs text-muted-foreground">Total Debe</p>
+                          <p className="text-xs text-muted-foreground">{t('ledger.totalDebit')}</p>
                           <p className="text-sm font-semibold tabular-nums">
                             {formatCurrency(mayorData.totalDebe)}
                           </p>
                         </div>
                         <div className="text-center p-3 rounded bg-muted/30">
-                          <p className="text-xs text-muted-foreground">Total Haber</p>
+                          <p className="text-xs text-muted-foreground">{t('ledger.totalCredit')}</p>
                           <p className="text-sm font-semibold tabular-nums">
                             {formatCurrency(mayorData.totalHaber)}
                           </p>
                         </div>
                         <div className="text-center p-3 rounded bg-muted/30">
-                          <p className="text-xs text-muted-foreground">Saldo Final</p>
+                          <p className="text-xs text-muted-foreground">{t('ledger.finalBalance')}</p>
                           <p
                             className={`text-sm font-semibold tabular-nums ${
                               mayorData.saldoFinal >= 0 ? "text-green-600" : "text-red-600"
@@ -1374,7 +1361,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base">
-              {editingCuenta ? "Editar Cuenta" : "Nueva Cuenta Contable"}
+              {editingCuenta ? t('accounts.editAccount') : t('accounts.newAccountDialog')}
             </DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-3">
@@ -1387,13 +1374,13 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
             {editingCuenta?.esSistema && (
               <div className="bg-blue-50 border border-blue-200 text-blue-700 px-3 py-2 rounded text-xs flex items-center gap-2">
                 <Lock className="h-3.5 w-3.5 flex-shrink-0" />
-                Cuenta del sistema. Solo puedes modificar el nombre y el estado.
+                {t('accounts.systemWarning')}
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs">Codigo *</Label>
+                <Label className="text-xs">{t('accounts.codeLabel')}</Label>
                 <Input
                   className="h-8 text-sm font-mono"
                   value={cuentaForm.codigo}
@@ -1403,7 +1390,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs">Nivel</Label>
+                <Label className="text-xs">{t('accounts.levelLabel')}</Label>
                 <Input
                   className="h-8 text-sm"
                   type="number"
@@ -1417,18 +1404,18 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
             </div>
 
             <div className="grid gap-1.5">
-              <Label className="text-xs">Nombre *</Label>
+              <Label className="text-xs">{t('accounts.nameLabel')}</Label>
               <Input
                 className="h-8 text-sm"
                 value={cuentaForm.nombre}
                 onChange={(e) => setCuentaForm({ ...cuentaForm, nombre: e.target.value })}
-                placeholder="Nombre de la cuenta"
+                placeholder={t('accounts.accountNamePlaceholder')}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs">Tipo *</Label>
+                <Label className="text-xs">{t('accounts.typeLabel')}</Label>
                 <Select
                   value={cuentaForm.tipo}
                   onValueChange={(v) => setCuentaForm({ ...cuentaForm, tipo: v })}
@@ -1437,16 +1424,16 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="activo">Activo</SelectItem>
-                    <SelectItem value="pasivo">Pasivo</SelectItem>
-                    <SelectItem value="patrimonio_neto">Patrimonio Neto</SelectItem>
-                    <SelectItem value="ingreso">Ingreso</SelectItem>
-                    <SelectItem value="gasto">Gasto</SelectItem>
+                    <SelectItem value="activo">{t('accounts.typeActivo')}</SelectItem>
+                    <SelectItem value="pasivo">{t('accounts.typePasivo')}</SelectItem>
+                    <SelectItem value="patrimonio_neto">{t('accounts.typePatrimonio')}</SelectItem>
+                    <SelectItem value="ingreso">{t('accounts.typeIngreso')}</SelectItem>
+                    <SelectItem value="gasto">{t('accounts.typeGasto')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs">Grupo *</Label>
+                <Label className="text-xs">{t('accounts.groupLabel')}</Label>
                 <Select
                   value={cuentaForm.grupo}
                   onValueChange={(v) => setCuentaForm({ ...cuentaForm, grupo: v })}
@@ -1457,7 +1444,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                   <SelectContent>
                     {[1, 2, 3, 4, 5, 6, 7].map((g) => (
                       <SelectItem key={g} value={String(g)}>
-                        Grupo {g}
+                        {t('accounts.groupNumber', { number: g })}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1466,16 +1453,16 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
             </div>
 
             <div className="grid gap-1.5">
-              <Label className="text-xs">Cuenta Padre (opcional)</Label>
+              <Label className="text-xs">{t('accounts.parentAccount')}</Label>
               <Select
                 value={cuentaForm.cuentaPadreId}
                 onValueChange={(v) => setCuentaForm({ ...cuentaForm, cuentaPadreId: v })}
               >
                 <SelectTrigger className="h-8 text-sm" disabled={!!editingCuenta?.esSistema}>
-                  <SelectValue placeholder="Sin cuenta padre" />
+                  <SelectValue placeholder={t('accounts.noParent')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin cuenta padre</SelectItem>
+                  <SelectItem value="">{t('accounts.noParent')}</SelectItem>
                   {cuentas
                     .filter((c) => c.id !== editingCuenta?.id)
                     .map((c) => (
@@ -1494,13 +1481,13 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                 onCheckedChange={(checked) => setCuentaForm({ ...cuentaForm, activo: checked })}
               />
               <Label htmlFor="cuenta-activo" className="text-xs">
-                Activa
+                {t('accounts.activeSwitch')}
               </Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setIsCuentaDialogOpen(false)}>
-              Cancelar
+              {t('common:cancel')}
             </Button>
             <Button
               size="sm"
@@ -1508,7 +1495,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
               disabled={isSaving || !cuentaForm.codigo.trim() || !cuentaForm.nombre.trim()}
             >
               {isSaving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              {editingCuenta ? "Guardar" : "Crear"}
+              {editingCuenta ? t('common:save') : t('common:create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1518,19 +1505,18 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
       <AlertDialog open={deleteCuentaDialogOpen} onOpenChange={setDeleteCuentaDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base">Eliminar cuenta contable</AlertDialogTitle>
+            <AlertDialogTitle className="text-base">{t('accounts.deleteAccount')}</AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
-              Se eliminara permanentemente la cuenta "{cuentaToDelete?.codigo} - {cuentaToDelete?.nombre}".
-              Esta accion no se puede deshacer.
+              {t('accounts.deleteConfirm', { code: cuentaToDelete?.codigo, name: cuentaToDelete?.nombre })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="h-8 text-sm">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="h-8 text-sm">{t('common:cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteCuenta}
               className="h-8 text-sm bg-red-600 hover:bg-red-700"
             >
-              Eliminar
+              {t('common:delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1542,8 +1528,8 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           <DialogHeader>
             <DialogTitle className="text-base">
               {editingAsiento
-                ? `Editar Asiento #${editingAsiento.numero}`
-                : "Nuevo Asiento Contable"}
+                ? t('entries.editEntryNumber', { number: editingAsiento.numero })
+                : t('entries.newEntryDialog')}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-3">
@@ -1556,7 +1542,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
             {/* Top fields */}
             <div className="grid grid-cols-3 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs">Fecha *</Label>
+                <Label className="text-xs">{t('entries.dateLabel')}</Label>
                 <Input
                   type="date"
                   className="h-8 text-sm"
@@ -1565,7 +1551,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs">Tipo</Label>
+                <Label className="text-xs">{t('entries.typeLabel')}</Label>
                 <Select
                   value={asientoForm.tipo}
                   onValueChange={(v) => setAsientoForm({ ...asientoForm, tipo: v })}
@@ -1574,39 +1560,39 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="manual">{t('entries.typeManual')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs">Ref. Documento</Label>
+                <Label className="text-xs">{t('entries.referenceLabel')}</Label>
                 <Input
                   className="h-8 text-sm"
                   value={asientoForm.documentoRef}
                   onChange={(e) =>
                     setAsientoForm({ ...asientoForm, documentoRef: e.target.value })
                   }
-                  placeholder="Opcional"
+                  placeholder={t('entries.referencePlaceholder')}
                 />
               </div>
             </div>
 
             <div className="grid gap-1.5">
-              <Label className="text-xs">Descripcion *</Label>
+              <Label className="text-xs">{t('entries.descriptionLabel')}</Label>
               <Input
                 className="h-8 text-sm"
                 value={asientoForm.descripcion}
                 onChange={(e) =>
                   setAsientoForm({ ...asientoForm, descripcion: e.target.value })
                 }
-                placeholder="Concepto del asiento"
+                placeholder={t('entries.descriptionPlaceholder')}
               />
             </div>
 
             {/* Lines section */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium">Lineas del Asiento</Label>
+                <Label className="text-xs font-medium">{t('entries.lines')}</Label>
                 <Button
                   type="button"
                   variant="outline"
@@ -1615,7 +1601,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                   onClick={handleAddLinea}
                 >
                   <Plus className="mr-1 h-3 w-3" />
-                  Anadir Linea
+                  {t('entries.addLine')}
                 </Button>
               </div>
 
@@ -1626,13 +1612,13 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                     className="grid grid-cols-12 gap-2 items-end p-2 border rounded bg-muted/30"
                   >
                     <div className="col-span-4">
-                      <Label className="text-[10px] text-muted-foreground">Cuenta</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t('entries.account')}</Label>
                       <Select
                         value={linea.cuentaId}
                         onValueChange={(v) => handleLineaChange(index, "cuentaId", v)}
                       >
                         <SelectTrigger className="h-7 text-xs">
-                          <SelectValue placeholder="Seleccionar cuenta..." />
+                          <SelectValue placeholder={t('entries.selectAccount')} />
                         </SelectTrigger>
                         <SelectContent>
                           {cuentas
@@ -1646,7 +1632,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                       </Select>
                     </div>
                     <div className="col-span-2">
-                      <Label className="text-[10px] text-muted-foreground">Debe</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t('entries.debitAmount')}</Label>
                       <Input
                         className="h-7 text-xs tabular-nums"
                         type="number"
@@ -1657,7 +1643,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                       />
                     </div>
                     <div className="col-span-2">
-                      <Label className="text-[10px] text-muted-foreground">Haber</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t('entries.creditAmount')}</Label>
                       <Input
                         className="h-7 text-xs tabular-nums"
                         type="number"
@@ -1668,12 +1654,12 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                       />
                     </div>
                     <div className="col-span-3">
-                      <Label className="text-[10px] text-muted-foreground">Concepto</Label>
+                      <Label className="text-[10px] text-muted-foreground">{t('entries.concept')}</Label>
                       <Input
                         className="h-7 text-xs"
                         value={linea.concepto}
                         onChange={(e) => handleLineaChange(index, "concepto", e.target.value)}
-                        placeholder="Opcional"
+                        placeholder={t('entries.conceptPlaceholder')}
                       />
                     </div>
                     <div className="col-span-1 text-right">
@@ -1701,13 +1687,13 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
                 }`}
               >
                 <span>
-                  Debe: <span className="tabular-nums">{formatCurrency(totalDebe)}</span>
+                  {t('entries.totalDebit')} <span className="tabular-nums">{formatCurrency(totalDebe)}</span>
                 </span>
                 <span>
-                  Haber: <span className="tabular-nums">{formatCurrency(totalHaber)}</span>
+                  {t('entries.totalCredit')} <span className="tabular-nums">{formatCurrency(totalHaber)}</span>
                 </span>
                 <span>
-                  Diferencia: <span className="tabular-nums">{formatCurrency(diferencia)}</span>
+                  {t('entries.difference')} <span className="tabular-nums">{formatCurrency(diferencia)}</span>
                 </span>
               </div>
             </div>
@@ -1715,7 +1701,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
 
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setIsAsientoDialogOpen(false)}>
-              Cancelar
+              {t('common:cancel')}
             </Button>
             <Button
               size="sm"
@@ -1728,7 +1714,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
               }
             >
               {isSaving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              {editingAsiento ? "Guardar" : "Crear Asiento"}
+              {editingAsiento ? t('common:save') : t('entries.createEntry')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1738,20 +1724,18 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
       <AlertDialog open={deleteAsientoDialogOpen} onOpenChange={setDeleteAsientoDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base">Eliminar asiento contable</AlertDialogTitle>
+            <AlertDialogTitle className="text-base">{t('entries.deleteEntry')}</AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
-              Se eliminara permanentemente el asiento #{asientoToDelete?.numero} "
-              {asientoToDelete?.descripcion}".
-              Esta accion no se puede deshacer.
+              {t('entries.deleteConfirm', { number: asientoToDelete?.numero, description: asientoToDelete?.descripcion })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="h-8 text-sm">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="h-8 text-sm">{t('common:cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteAsiento}
               className="h-8 text-sm bg-red-600 hover:bg-red-700"
             >
-              Eliminar
+              {t('common:delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1763,20 +1747,20 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-2">
               <Receipt className="h-4 w-4" />
-              Generar Asiento desde Factura
+              {t('generate.fromInvoiceTitle')}
             </DialogTitle>
           </DialogHeader>
           <div className="py-2">
             {facturas.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                 <Receipt className="h-8 w-8 mb-2 opacity-50" />
-                <p className="text-sm">No hay facturas pendientes de contabilizar</p>
-                <p className="text-xs">Todas las facturas ya tienen asiento asociado</p>
+                <p className="text-sm">{t('generate.noInvoicesPending')}</p>
+                <p className="text-xs">{t('generate.allInvoicesAccounted')}</p>
               </div>
             ) : (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground mb-3">
-                  Selecciona una factura para generar su asiento contable automaticamente.
+                  {t('generate.selectInvoiceHint')}
                 </p>
                 {facturas.map((factura) => (
                   <div
@@ -1810,7 +1794,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setIsFacturaDialogOpen(false)}>
-              Cerrar
+              {t('common:close')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1822,20 +1806,20 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              Generar Asiento desde Gasto
+              {t('generate.fromExpenseTitle')}
             </DialogTitle>
           </DialogHeader>
           <div className="py-2">
             {gastos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                 <FileText className="h-8 w-8 mb-2 opacity-50" />
-                <p className="text-sm">No hay gastos pendientes de contabilizar</p>
-                <p className="text-xs">Todos los gastos ya tienen asiento asociado</p>
+                <p className="text-sm">{t('generate.noExpensesPending')}</p>
+                <p className="text-xs">{t('generate.allExpensesAccounted')}</p>
               </div>
             ) : (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground mb-3">
-                  Selecciona un gasto para generar su asiento contable automaticamente.
+                  {t('generate.selectExpenseHint')}
                 </p>
                 {gastos.map((gasto) => (
                   <div
@@ -1865,7 +1849,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setIsGastoDialogOpen(false)}>
-              Cerrar
+              {t('common:close')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useTranslation } from "react-i18next"
+import { translateError } from "@/lib/formatting"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -114,6 +116,7 @@ const emptyImpuestoForm = {
 }
 
 export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onHelp?: () => void; buzonEnabled?: boolean; onBuzonToggle?: (v: boolean) => void }) {
+  const { t, i18n } = useTranslation(['configuracion', 'common'])
   const [empresaData, setEmpresaData] = useState<EmpresaData>({
     nombre: "",
     nif: "",
@@ -356,7 +359,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
           await loadImpuestos()
           setImpuestoDialogOpen(false)
         } else {
-          setImpuestoError(result?.error || 'Error al actualizar el impuesto')
+          setImpuestoError(result?.error ? translateError(result.error) : t('taxes.updateError'))
         }
       } else {
         const result = await window.electronAPI?.impuestos.create(data)
@@ -364,7 +367,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
           await loadImpuestos()
           setImpuestoDialogOpen(false)
         } else {
-          setImpuestoError(result?.error || 'Error al crear el impuesto')
+          setImpuestoError(result?.error ? translateError(result.error) : t('taxes.createError'))
         }
       }
     } catch (err) {
@@ -419,7 +422,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
       } else {
         setDbStatus({
           connected: false,
-          message: "API de Electron no disponible",
+          message: t('data.electronNotAvailable'),
         })
       }
     } catch (error) {
@@ -438,7 +441,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
       for (const [key, value] of Object.entries(empresaData)) {
         await window.electronAPI?.config.set(`empresa.${key}`, value)
       }
-      setEmpresaSuccess('Datos de empresa guardados correctamente')
+      setEmpresaSuccess(t('company.empresaSaved'))
       setTimeout(() => setEmpresaSuccess(null), 3000)
     } catch (error) {
       console.error('Error saving empresa:', error)
@@ -454,7 +457,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
       for (const [key, value] of Object.entries(facturacionData)) {
         await window.electronAPI?.config.set(`facturacion.${key}`, value)
       }
-      setFacturacionSuccess('Configuración de facturación guardada correctamente')
+      setFacturacionSuccess(t('invoicing.facturacionSaved'))
       setTimeout(() => setFacturacionSuccess(null), 3000)
     } catch (error) {
       console.error('Error saving facturacion:', error)
@@ -484,11 +487,11 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 2 * 1024 * 1024) {
-      alert('El logo no puede superar 2MB')
+      alert(t('invoicing.logoMaxSize'))
       return
     }
     if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
-      alert('Formato no soportado. Usa PNG o JPG.')
+      alert(t('invoicing.logoFormat'))
       return
     }
 
@@ -557,7 +560,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
       await window.electronAPI?.config.set('facturacion.mostrarWeb', String(templateConfig.mostrarWeb))
       await window.electronAPI?.config.set('facturacion.mostrarNotas', String(templateConfig.mostrarNotas))
       await window.electronAPI?.config.set('facturacion.mostrarFormaPago', String(templateConfig.mostrarFormaPago))
-      setTemplateSuccess('Plantilla guardada correctamente')
+      setTemplateSuccess(t('invoicing.templateSaved'))
       setTimeout(() => setTemplateSuccess(null), 3000)
     } catch (error) {
       console.error('Error saving template:', error)
@@ -593,10 +596,10 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
     try {
       const result = await window.electronAPI?.backup.export()
       if (result?.success && result.data) {
-        setExportSuccess(`Backup exportado correctamente: ${result.data.path} (${formatBytes(result.data.size)})`)
+        setExportSuccess(t('data.exportSuccess', { path: result.data.path, size: formatBytes(result.data.size) }))
       } else {
-        if (result?.error !== 'Operación cancelada') {
-          setExportError(result?.error || 'Error al exportar')
+        if (result?.error !== t('common:operationCancelled')) {
+          setExportError(result?.error ? translateError(result.error) : t('data.exportError'))
         }
       }
     } catch (error) {
@@ -618,8 +621,8 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
         // Recargar información de rutas
         await loadDataPathInfo()
       } else {
-        if (result?.error !== 'Operación cancelada') {
-          setMigrateError(result?.error || 'Error al migrar')
+        if (result?.error !== t('common:operationCancelled')) {
+          setMigrateError(result?.error ? translateError(result.error) : t('data.migrateError'))
         }
       }
     } catch (error) {
@@ -641,7 +644,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
         // Recargar información de rutas
         await loadDataPathInfo()
       } else {
-        setMigrateError(result?.error || 'Error al restaurar')
+        setMigrateError(result?.error ? translateError(result.error) : t('data.restoreError'))
       }
     } catch (error) {
       setMigrateError(String(error))
@@ -693,12 +696,12 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
       }
 
       if (result?.success) {
-        setEmailSuccess('Configuración de email guardada correctamente')
+        setEmailSuccess(t('emailConfig.saved'))
         if (emailConfig.pass) setEmailHasPassword(true)
         setEmailConfig(prev => ({ ...prev, pass: '' }))
         setTimeout(() => setEmailSuccess(null), 3000)
       } else {
-        setEmailError(result?.error || 'Error al guardar')
+        setEmailError(result?.error ? translateError(result.error) : t('emailConfig.saveError'))
       }
     } catch (error) {
       setEmailError(String(error))
@@ -714,10 +717,10 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
     try {
       const result = await window.electronAPI?.email.test()
       if (result?.success) {
-        setEmailSuccess('Conexión SMTP verificada correctamente')
+        setEmailSuccess(t('emailConfig.smtpVerified'))
         setTimeout(() => setEmailSuccess(null), 3000)
       } else {
-        setEmailError(result?.error || 'Error al verificar la conexión')
+        setEmailError(result?.error ? translateError(result.error) : t('emailConfig.smtpVerifyError'))
       }
     } catch (error) {
       setEmailError(String(error))
@@ -728,7 +731,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
   const handleSetupPasskey = async () => {
     if (!passkeyPassword) {
-      setPasskeyError("Ingresa tu contraseña actual")
+      setPasskeyError(t('security.enterPassword'))
       return
     }
 
@@ -737,21 +740,21 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
     try {
       if (!window.electronAPI?.auth) {
-        throw new Error("API no disponible")
+        throw new Error(t('security.apiNotAvailable'))
       }
 
       const result = await window.electronAPI.auth.setupPasskey(passkeyPassword)
 
       if (result.success) {
         setPasskeyEnabled(true)
-        setPasskeySuccess("Passkey configurado correctamente")
+        setPasskeySuccess(t('security.passkeyConfigured'))
         setShowPasskeyDialog(false)
         setPasskeyPassword("")
       } else {
-        setPasskeyError(result.error || "Error al configurar passkey")
+        setPasskeyError(result.error ? translateError(result.error) : t('security.passkeySetupError'))
       }
     } catch (error) {
-      setPasskeyError("Error al configurar passkey")
+      setPasskeyError(t('security.passkeySetupError'))
     } finally {
       setPasskeyLoading(false)
     }
@@ -763,19 +766,19 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
     try {
       if (!window.electronAPI?.auth) {
-        throw new Error("API no disponible")
+        throw new Error(t('security.apiNotAvailable'))
       }
 
       const result = await window.electronAPI.auth.disablePasskey()
 
       if (result.success) {
         setPasskeyEnabled(false)
-        setPasskeySuccess("Passkey deshabilitado")
+        setPasskeySuccess(t('security.passkeyDisabledMsg'))
       } else {
-        setPasskeyError(result.error || "Error al deshabilitar passkey")
+        setPasskeyError(result.error ? translateError(result.error) : t('security.passkeyDisableError'))
       }
     } catch (error) {
-      setPasskeyError("Error al deshabilitar passkey")
+      setPasskeyError(t('security.passkeyDisableError'))
     } finally {
       setPasskeyLoading(false)
     }
@@ -787,13 +790,13 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
       <div className="flex items-center justify-between border-b pb-3">
         <div className="flex items-center gap-2">
           <div>
-            <h1 className="text-xl font-semibold">Configuración</h1>
+            <h1 className="text-xl font-semibold">{t('title')}</h1>
             <p className="text-sm text-muted-foreground">
-              Ajustes del sistema y datos de empresa
+              {t('subtitle2')}
             </p>
           </div>
           {onHelp && (
-            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title={t('common:viewHelp')}>
               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           )}
@@ -804,35 +807,60 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
         <TabsList className="h-8">
           <TabsTrigger value="empresa" className="text-xs h-7 px-3">
             <Building2 className="mr-1.5 h-3.5 w-3.5" />
-            Empresa
+            {t('sections.company')}
           </TabsTrigger>
           <TabsTrigger value="facturacion" className="text-xs h-7 px-3">
             <FileText className="mr-1.5 h-3.5 w-3.5" />
-            Facturación
+            {t('sections.invoicing')}
           </TabsTrigger>
           <TabsTrigger value="impuestos" className="text-xs h-7 px-3">
             <Percent className="mr-1.5 h-3.5 w-3.5" />
-            Impuestos
+            {t('sections.taxes')}
           </TabsTrigger>
           <TabsTrigger value="seguridad" className="text-xs h-7 px-3">
             <Shield className="mr-1.5 h-3.5 w-3.5" />
-            Seguridad
+            {t('sections.security')}
           </TabsTrigger>
           <TabsTrigger value="email" className="text-xs h-7 px-3">
             <Mail className="mr-1.5 h-3.5 w-3.5" />
-            Email
+            {t('sections.email')}
           </TabsTrigger>
           <TabsTrigger value="sistema" className="text-xs h-7 px-3">
             <Database className="mr-1.5 h-3.5 w-3.5" />
-            Sistema
+            {t('sections.system')}
           </TabsTrigger>
         </TabsList>
 
         {/* Empresa Tab */}
-        <TabsContent value="empresa">
+        <TabsContent value="empresa" className="space-y-4">
+          {/* Language Selector */}
+          <Card>
+            <CardHeader className="py-3 px-4 border-b">
+              <CardTitle className="text-sm font-medium">{t('language.title')}</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm">{t('language.label')}</p>
+                  <p className="text-xs text-muted-foreground">{t('language.description')}</p>
+                </div>
+                <Select value={i18n.language} onValueChange={(lang) => i18n.changeLanguage(lang)}>
+                  <SelectTrigger className="h-8 w-48 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="es">Español</SelectItem>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="fr">Français</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Datos de la Empresa</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('sections.company')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {empresaSuccess && (
@@ -843,7 +871,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               )}
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Nombre / Razón Social</Label>
+                  <Label className="text-xs">{t('company.nameLabel')}</Label>
                   <Input
                     className="h-8 text-sm"
                     value={empresaData.nombre}
@@ -852,7 +880,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">NIF/CIF</Label>
+                  <Label className="text-xs">{t('company.nifLabel')}</Label>
                   <Input
                     className="h-8 text-sm font-mono"
                     value={empresaData.nif}
@@ -863,7 +891,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               </div>
 
               <div className="grid gap-1.5">
-                <Label className="text-xs">Dirección</Label>
+                <Label className="text-xs">{t('company.address')}</Label>
                 <Input
                   className="h-8 text-sm"
                   value={empresaData.direccion}
@@ -874,7 +902,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
               <div className="grid gap-3 md:grid-cols-4">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Código Postal</Label>
+                  <Label className="text-xs">{t('company.postalCode')}</Label>
                   <Input
                     className="h-8 text-sm"
                     value={empresaData.codigoPostal}
@@ -883,7 +911,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Ciudad</Label>
+                  <Label className="text-xs">{t('company.city')}</Label>
                   <Input
                     className="h-8 text-sm"
                     value={empresaData.ciudad}
@@ -892,7 +920,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Provincia</Label>
+                  <Label className="text-xs">{t('company.province')}</Label>
                   <Input
                     className="h-8 text-sm"
                     value={empresaData.provincia}
@@ -901,7 +929,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Teléfono</Label>
+                  <Label className="text-xs">{t('company.phone')}</Label>
                   <Input
                     className="h-8 text-sm"
                     value={empresaData.telefono}
@@ -913,7 +941,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Email</Label>
+                  <Label className="text-xs">{t('company.email')}</Label>
                   <Input
                     className="h-8 text-sm"
                     type="email"
@@ -923,7 +951,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Sitio Web</Label>
+                  <Label className="text-xs">{t('company.website')}</Label>
                   <Input
                     className="h-8 text-sm"
                     value={empresaData.web}
@@ -936,7 +964,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               <div className="flex justify-end pt-2">
                 <Button size="sm" onClick={handleSaveEmpresa} disabled={empresaSaving}>
                   {empresaSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
-                  Guardar
+                  {t('common:save')}
                 </Button>
               </div>
             </CardContent>
@@ -947,7 +975,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
         <TabsContent value="facturacion" className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Configuración de Facturación</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('invoicing.configTitle')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {facturacionSuccess && (
@@ -958,7 +986,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               )}
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Serie de Facturación</Label>
+                  <Label className="text-xs">{t('invoicing.serie')}</Label>
                   <Input
                     className="h-8 text-sm font-mono"
                     value={facturacionData.serieFactura}
@@ -967,7 +995,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Próximo Número</Label>
+                  <Label className="text-xs">{t('invoicing.nextNumber')}</Label>
                   <Input
                     className="h-8 text-sm font-mono"
                     value={facturacionData.proximoNumero}
@@ -979,7 +1007,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">IVA por Defecto (%)</Label>
+                  <Label className="text-xs">{t('invoicing.ivaDefault')}</Label>
                   <Input
                     className="h-8 text-sm"
                     type="number"
@@ -989,7 +1017,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Días hasta Vencimiento</Label>
+                  <Label className="text-xs">{t('invoicing.dueDays')}</Label>
                   <Input
                     className="h-8 text-sm"
                     type="number"
@@ -1001,7 +1029,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               </div>
 
               <div className="grid gap-1.5">
-                <Label className="text-xs">Texto Pie de Factura</Label>
+                <Label className="text-xs">{t('invoicing.footerText')}</Label>
                 <Input
                   className="h-8 text-sm"
                   value={facturacionData.piePagina}
@@ -1011,7 +1039,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               </div>
 
               <div className="rounded border p-3 bg-muted/30">
-                <p className="text-xs text-muted-foreground mb-1">Vista previa del número:</p>
+                <p className="text-xs text-muted-foreground mb-1">{t('invoicing.numberPreview')}</p>
                 <p className="text-lg font-mono font-semibold">
                   {facturacionData.serieFactura}{new Date().getFullYear()}-{facturacionData.proximoNumero.padStart(4, "0")}
                 </p>
@@ -1020,7 +1048,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               <div className="flex justify-end pt-2">
                 <Button size="sm" onClick={handleSaveFacturacion} disabled={facturacionSaving}>
                   {facturacionSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
-                  Guardar
+                  {t('common:save')}
                 </Button>
               </div>
             </CardContent>
@@ -1031,7 +1059,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Palette className="h-4 w-4" />
-                Plantilla de Factura
+                {t('invoicing.templateTitle')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1044,26 +1072,26 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
               {/* Template selector - 2x2 grid */}
               <div>
-                <Label className="text-xs mb-2 block">Diseño</Label>
+                <Label className="text-xs mb-2 block">{t('invoicing.design')}</Label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {([
-                    { id: 'clasica', name: 'Clásica', desc: 'Tabla a rayas, diseño tradicional' },
-                    { id: 'moderna', name: 'Moderna', desc: 'Barra superior, cajas de color' },
-                    { id: 'minimalista', name: 'Minimalista', desc: 'Tipografía limpia, sin fondos' },
-                    { id: 'ejecutiva', name: 'Ejecutiva', desc: 'Sidebar lateral, estilo corporativo' },
-                  ] as const).map((t) => (
+                    { id: 'clasica', name: t('invoicing.classic'), desc: t('invoicing.classicDesc') },
+                    { id: 'moderna', name: t('invoicing.modern'), desc: t('invoicing.modernDesc') },
+                    { id: 'minimalista', name: t('invoicing.minimalist'), desc: t('invoicing.minimalistDesc') },
+                    { id: 'ejecutiva', name: t('invoicing.executive'), desc: t('invoicing.executiveDesc') },
+                  ] as const).map((tmpl) => (
                     <button
-                      key={t.id}
-                      onClick={() => setTemplateConfig(prev => ({ ...prev, plantilla: t.id }))}
+                      key={tmpl.id}
+                      onClick={() => setTemplateConfig(prev => ({ ...prev, plantilla: tmpl.id }))}
                       className={`relative p-3 rounded border-2 text-left transition-all ${
-                        templateConfig.plantilla === t.id
+                        templateConfig.plantilla === tmpl.id
                           ? 'border-blue-500 bg-blue-50/50'
                           : 'border-muted hover:border-muted-foreground/30'
                       }`}
                     >
                       {/* Mini schematic preview */}
                       <div className="mb-2 h-16 rounded bg-muted/50 border overflow-hidden p-1.5">
-                        {t.id === 'clasica' && (
+                        {tmpl.id === 'clasica' && (
                           <div className="h-full flex flex-col gap-0.5">
                             <div className="flex justify-between">
                               <div className="w-8 h-1.5 rounded-sm" style={{ backgroundColor: templateConfig.colorAccento }} />
@@ -1078,7 +1106,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                             </div>
                           </div>
                         )}
-                        {t.id === 'moderna' && (
+                        {tmpl.id === 'moderna' && (
                           <div className="h-full flex flex-col gap-0.5">
                             <div className="w-full h-1.5 rounded-sm" style={{ backgroundColor: templateConfig.colorAccento }} />
                             <div className="flex justify-between mt-0.5">
@@ -1093,7 +1121,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                             </div>
                           </div>
                         )}
-                        {t.id === 'minimalista' && (
+                        {tmpl.id === 'minimalista' && (
                           <div className="h-full flex flex-col gap-1">
                             <div className="flex justify-between">
                               <div className="w-8 h-1 bg-muted-foreground/30 rounded-sm" />
@@ -1108,7 +1136,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                             </div>
                           </div>
                         )}
-                        {t.id === 'ejecutiva' && (
+                        {tmpl.id === 'ejecutiva' && (
                           <div className="h-full flex gap-1">
                             <div className="w-2 h-full rounded-sm" style={{ backgroundColor: templateConfig.colorAccento }} />
                             <div className="flex-1 flex flex-col gap-0.5">
@@ -1127,8 +1155,8 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                           </div>
                         )}
                       </div>
-                      <p className="text-xs font-medium">{t.name}</p>
-                      <p className="text-[10px] text-muted-foreground leading-tight">{t.desc}</p>
+                      <p className="text-xs font-medium">{tmpl.name}</p>
+                      <p className="text-[10px] text-muted-foreground leading-tight">{tmpl.desc}</p>
                     </button>
                   ))}
                 </div>
@@ -1136,7 +1164,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
               {/* Color de acento */}
               <div>
-                <Label className="text-xs mb-2 block">Color de acento</Label>
+                <Label className="text-xs mb-2 block">{t('invoicing.accentColor')}</Label>
                 <div className="flex items-center gap-3">
                   <div className="flex gap-1.5">
                     {['#374151', '#1e40af', '#047857', '#b91c1c', '#7c3aed', '#c2410c'].map((color) => (
@@ -1173,7 +1201,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
               {/* Logo */}
               <div>
-                <Label className="text-xs mb-2 block">Logo de empresa</Label>
+                <Label className="text-xs mb-2 block">{t('invoicing.companyLogo')}</Label>
                 <div className="flex items-center gap-3">
                   {logoBase64 ? (
                     <div className="relative">
@@ -1207,9 +1235,9 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                       ) : (
                         <Upload className="h-3 w-3 mr-1" />
                       )}
-                      Subir logo
+                      {t('invoicing.uploadLogo')}
                     </Button>
-                    <p className="text-[10px] text-muted-foreground mt-1">PNG o JPG, max 2MB</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{t('invoicing.logoLimit')}</p>
                     <input
                       ref={logoInputRef}
                       type="file"
@@ -1223,14 +1251,14 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
               {/* Visibility toggles */}
               <div>
-                <Label className="text-xs mb-2 block">Elementos visibles</Label>
+                <Label className="text-xs mb-2 block">{t('invoicing.visibleElements')}</Label>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2">
                   {([
-                    { key: 'mostrarTelefono', label: 'Teléfono empresa' },
-                    { key: 'mostrarEmail', label: 'Email empresa' },
-                    { key: 'mostrarWeb', label: 'Web empresa' },
-                    { key: 'mostrarNotas', label: 'Sección notas' },
-                    { key: 'mostrarFormaPago', label: 'Forma de pago' },
+                    { key: 'mostrarTelefono', label: t('invoicing.showPhone') },
+                    { key: 'mostrarEmail', label: t('invoicing.showEmail') },
+                    { key: 'mostrarWeb', label: t('invoicing.showWeb') },
+                    { key: 'mostrarNotas', label: t('invoicing.showNotes') },
+                    { key: 'mostrarFormaPago', label: t('invoicing.showPayment') },
                   ] as const).map(({ key, label }) => (
                     <div key={key} className="flex items-center gap-2">
                       <Switch
@@ -1248,12 +1276,12 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
               {/* Preview */}
               <div>
-                <Label className="text-xs mb-2 block">Vista previa</Label>
+                <Label className="text-xs mb-2 block">{t('invoicing.preview')}</Label>
                 {previewPdf ? (
                   <iframe
                     src={previewPdf}
                     className="w-full h-[500px] border rounded"
-                    title="Vista previa de factura"
+                    title={t('invoicing.preview')}
                   />
                 ) : (
                   <div className="w-full h-[500px] border rounded flex items-center justify-center bg-muted/30">
@@ -1265,7 +1293,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               <div className="flex justify-end pt-2">
                 <Button size="sm" onClick={handleSaveTemplate} disabled={templateSaving}>
                   {templateSaving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
-                  Guardar plantilla
+                  {t('invoicing.saveTemplate')}
                 </Button>
               </div>
             </CardContent>
@@ -1277,10 +1305,10 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">Gestión de Impuestos</CardTitle>
+                <CardTitle className="text-sm font-medium">{t('taxes.managementTitle')}</CardTitle>
                 <Button size="sm" onClick={() => handleOpenImpuestoDialog()}>
                   <Plus className="mr-1.5 h-3.5 w-3.5" />
-                  Nuevo
+                  {t('taxes.new')}
                 </Button>
               </div>
             </CardHeader>
@@ -1293,19 +1321,19 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="h-8 text-xs">Nombre</TableHead>
-                      <TableHead className="h-8 text-xs">Tipo</TableHead>
-                      <TableHead className="h-8 text-xs text-center">Porcentaje</TableHead>
-                      <TableHead className="h-8 text-xs text-center">Por Defecto</TableHead>
-                      <TableHead className="h-8 text-xs text-center">Estado</TableHead>
-                      <TableHead className="h-8 text-xs text-center w-20">Acciones</TableHead>
+                      <TableHead className="h-8 text-xs">{t('taxes.name')}</TableHead>
+                      <TableHead className="h-8 text-xs">{t('taxes.type')}</TableHead>
+                      <TableHead className="h-8 text-xs text-center">{t('taxes.percentage')}</TableHead>
+                      <TableHead className="h-8 text-xs text-center">{t('taxes.default')}</TableHead>
+                      <TableHead className="h-8 text-xs text-center">{t('common:status')}</TableHead>
+                      <TableHead className="h-8 text-xs text-center w-20">{t('common:actions')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {impuestos.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="h-24 text-center">
-                          <p className="text-sm text-muted-foreground">No hay impuestos configurados</p>
+                          <p className="text-sm text-muted-foreground">{t('taxes.noTaxes')}</p>
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -1338,7 +1366,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                                 ? "bg-green-50 text-green-700"
                                 : "bg-slate-100 text-slate-500"
                             }`}>
-                              {impuesto.activo ? "Activo" : "Inactivo"}
+                              {impuesto.activo ? t('common:active') : t('common:inactive')}
                             </span>
                           </TableCell>
                           <TableCell className="py-2">
@@ -1371,11 +1399,11 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               )}
 
               <div className="border-t p-3 bg-muted/30">
-                <p className="text-xs font-medium mb-1">Tipos de impuesto comunes en España</p>
+                <p className="text-xs font-medium mb-1">{t('taxes.commonTypes')}</p>
                 <div className="text-[11px] text-muted-foreground space-y-0.5">
-                  <p><strong>IVA General (21%):</strong> Tipo general para la mayoría de bienes y servicios</p>
-                  <p><strong>IVA Reducido (10%):</strong> Alimentos, transporte, hostelería</p>
-                  <p><strong>IVA Super Reducido (4%):</strong> Productos de primera necesidad</p>
+                  <p><strong>IVA General (21%):</strong> {t('taxes.ivaGeneralDesc')}</p>
+                  <p><strong>IVA Reducido (10%):</strong> {t('taxes.ivaReducedDesc')}</p>
+                  <p><strong>IVA Super Reducido (4%):</strong> {t('taxes.ivaSuperReducedDesc')}</p>
                 </div>
               </div>
             </CardContent>
@@ -1389,7 +1417,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <ScanFace className="h-4 w-4" />
-                Autenticación Biométrica
+                {t('security.biometric')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -1413,13 +1441,13 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                     <Fingerprint className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Passkey</p>
+                    <p className="text-sm font-medium">{t('security.passkeyLabel')}</p>
                     <p className="text-xs text-muted-foreground">
                       {passkeySupported
                         ? passkeyEnabled
-                          ? 'Habilitado - Usa biometría para desbloquear'
-                          : 'Disponible - Configúralo para acceso rápido'
-                        : 'No disponible en este sistema'}
+                          ? t('security.passkeyEnabledDesc')
+                          : t('security.passkeyAvailableDesc')
+                        : t('security.passkeyNotAvailable')}
                     </p>
                   </div>
                 </div>
@@ -1427,7 +1455,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   <span className={`text-[10px] px-2 py-0.5 rounded ${
                     passkeyEnabled ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-500"
                   }`}>
-                    {passkeyEnabled ? 'Activo' : 'Inactivo'}
+                    {passkeyEnabled ? t('common:active') : t('common:inactive')}
                   </span>
                   {passkeySupported && (
                     passkeyEnabled ? (
@@ -1438,7 +1466,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                         onClick={handleDisablePasskey}
                         disabled={passkeyLoading}
                       >
-                        {passkeyLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Deshabilitar"}
+                        {passkeyLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : t('security.disable')}
                       </Button>
                     ) : (
                       <Button
@@ -1447,7 +1475,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                         className="h-7 text-xs"
                         onClick={() => setShowPasskeyDialog(true)}
                       >
-                        Configurar
+                        {t('security.configure')}
                       </Button>
                     )
                   )}
@@ -1461,7 +1489,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Lock className="h-4 w-4" />
-                Encriptación
+                {t('security.encryption')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1469,23 +1497,23 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                 <div className="flex items-center justify-between py-1.5 border-b">
                   <div className="flex items-center gap-2 text-xs">
                     <Shield className="h-3.5 w-3.5 text-green-500" />
-                    <span>Algoritmo</span>
+                    <span>{t('security.algorithm')}</span>
                   </div>
                   <span className="text-xs font-mono">AES-256-GCM</span>
                 </div>
                 <div className="flex items-center justify-between py-1.5 border-b">
                   <div className="flex items-center gap-2 text-xs">
                     <KeyRound className="h-3.5 w-3.5 text-green-500" />
-                    <span>Derivación de clave</span>
+                    <span>{t('security.keyDerivation')}</span>
                   </div>
                   <span className="text-xs font-mono">PBKDF2</span>
                 </div>
                 <div className="flex items-center justify-between py-1.5">
                   <div className="flex items-center gap-2 text-xs">
                     <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                    <span>Estado</span>
+                    <span>{t('security.statusLabel')}</span>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-green-50 text-green-700">Protegido</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-green-50 text-green-700">{t('security.protected')}</span>
                 </div>
               </div>
             </CardContent>
@@ -1498,7 +1526,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Mail className="h-4 w-4" />
-                Configuración SMTP
+                {t('emailConfig.smtpConfig')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1518,7 +1546,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="grid gap-1.5 md:col-span-2">
-                  <Label className="text-xs">Servidor SMTP</Label>
+                  <Label className="text-xs">{t('emailConfig.host')}</Label>
                   <Input
                     className="h-8 text-sm"
                     value={emailConfig.host}
@@ -1527,7 +1555,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Puerto</Label>
+                  <Label className="text-xs">{t('emailConfig.port')}</Label>
                   <Input
                     className="h-8 text-sm"
                     type="number"
@@ -1544,12 +1572,12 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   checked={emailConfig.secure}
                   onCheckedChange={(checked) => setEmailConfig({ ...emailConfig, secure: checked })}
                 />
-                <Label htmlFor="email-secure" className="text-xs">SSL/TLS (activar para puerto 465)</Label>
+                <Label htmlFor="email-secure" className="text-xs">{t('emailConfig.sslHelp')}</Label>
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Usuario</Label>
+                  <Label className="text-xs">{t('emailConfig.user')}</Label>
                   <Input
                     className="h-8 text-sm"
                     value={emailConfig.user}
@@ -1558,20 +1586,20 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Contraseña</Label>
+                  <Label className="text-xs">{t('emailConfig.pass')}</Label>
                   <Input
                     className="h-8 text-sm"
                     type="password"
                     value={emailConfig.pass}
                     onChange={(e) => setEmailConfig({ ...emailConfig, pass: e.target.value })}
-                    placeholder={emailHasPassword ? "Dejar vacío para mantener actual" : "Contraseña SMTP"}
+                    placeholder={emailHasPassword ? t('emailConfig.keepCurrent') : t('emailConfig.smtpPassword')}
                   />
                 </div>
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Nombre del remitente</Label>
+                  <Label className="text-xs">{t('emailConfig.fromName')}</Label>
                   <Input
                     className="h-8 text-sm"
                     value={emailConfig.fromName}
@@ -1580,7 +1608,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Email del remitente</Label>
+                  <Label className="text-xs">{t('emailConfig.fromEmail')}</Label>
                   <Input
                     className="h-8 text-sm"
                     type="email"
@@ -1603,7 +1631,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   ) : (
                     <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  Probar conexión
+                  {t('emailConfig.testConnection')}
                 </Button>
                 <Button size="sm" onClick={handleSaveEmailConfig} disabled={emailSaving || emailTesting}>
                   {emailSaving ? (
@@ -1611,7 +1639,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   ) : (
                     <Save className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  Guardar
+                  {t('common:save')}
                 </Button>
               </div>
 
@@ -1622,11 +1650,11 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                     <FileText className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Firma de CryptoGest en emails</p>
+                    <p className="text-sm font-medium">{t('emailConfig.branding')}</p>
                     <p className="text-xs text-muted-foreground">
                       {emailHasLicense
-                        ? 'Puedes ocultar la firma "Enviado gracias a CryptoGest" en tus emails'
-                        : 'Adquiere una licencia para poder ocultar la firma en tus emails'}
+                        ? t('emailConfig.brandingLicensed')
+                        : t('emailConfig.brandingUnlicensed')}
                     </p>
                   </div>
                 </div>
@@ -1637,11 +1665,9 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                 />
               </div>
 
-              <p className="text-[11px] text-muted-foreground bg-blue-50/50 p-2 rounded">
-                <strong>Gmail:</strong> Usa una "contraseña de aplicación" en lugar de tu contraseña normal.
-                Ve a tu cuenta de Google {">"} Seguridad {">"} Contraseñas de aplicaciones para generarla.
-                Servidor: <code className="bg-blue-100 px-1 rounded">smtp.gmail.com</code>, puerto: <code className="bg-blue-100 px-1 rounded">587</code>.
-              </p>
+              <p className="text-[11px] text-muted-foreground bg-blue-50/50 p-2 rounded"
+                dangerouslySetInnerHTML={{ __html: t('emailConfig.gmailTip') + ` ${t('emailConfig.gmailServer')} <code class="bg-blue-100 px-1 rounded">smtp.gmail.com</code>, ${t('emailConfig.gmailPort')} <code class="bg-blue-100 px-1 rounded">587</code>.` }}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1653,7 +1679,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Archive className="h-4 w-4" />
-                Copia de Seguridad
+                {t('data.backup')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -1677,9 +1703,9 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                     <Download className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Exportar Datos</p>
+                    <p className="text-sm font-medium">{t('data.exportData')}</p>
                     <p className="text-xs text-muted-foreground">
-                      Genera un archivo ZIP con toda la información
+                      {t('data.exportDesc')}
                     </p>
                   </div>
                 </div>
@@ -1695,26 +1721,25 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   ) : (
                     <Download className="h-3 w-3 mr-1" />
                   )}
-                  Exportar
+                  {t('data.export')}
                 </Button>
               </div>
 
               {dataPathInfo && (
                 <div className="text-xs text-muted-foreground space-y-1 p-2 bg-muted/30 rounded">
                   <div className="flex justify-between">
-                    <span>Base de datos:</span>
+                    <span>{t('data.databaseLabel')}</span>
                     <span className="font-mono">{formatBytes(dataPathInfo.dbSize)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Adjuntos:</span>
-                    <span className="font-mono">{dataPathInfo.attachmentsCount} archivos ({formatBytes(dataPathInfo.attachmentsSize)})</span>
+                    <span>{t('data.attachmentsLabel')}</span>
+                    <span className="font-mono">{t('data.attachmentsFiles', { count: dataPathInfo.attachmentsCount, size: formatBytes(dataPathInfo.attachmentsSize) })}</span>
                   </div>
                 </div>
               )}
 
               <p className="text-[11px] text-muted-foreground bg-blue-50/50 p-2 rounded">
-                <strong>Consejo:</strong> Exporta tu copia de seguridad a un USB o almacenamiento externo para mayor seguridad.
-                Podrás importarla desde la pantalla de inicio de sesión en cualquier dispositivo.
+                <strong>{t('data.backupTipLabel')}</strong> {t('data.backupTip')}
               </p>
             </CardContent>
           </Card>
@@ -1724,7 +1749,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <FolderOutput className="h-4 w-4" />
-                Ubicación de Datos
+                {t('data.dataLocation')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -1750,7 +1775,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                       <ExternalLink className="h-3 w-3" />
                     </div>
                     <span className="text-xs font-medium">
-                      {dataPathInfo.isUsingCustomPath ? 'Usando ruta personalizada' : 'Usando ruta por defecto'}
+                      {dataPathInfo.isUsingCustomPath ? t('data.customPath') : t('data.defaultPath')}
                     </span>
                   </div>
                   <p className="text-[10px] font-mono text-muted-foreground break-all">
@@ -1766,9 +1791,9 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                     <FolderOutput className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Cambiar ubicación</p>
+                    <p className="text-sm font-medium">{t('data.changeLocation')}</p>
                     <p className="text-xs text-muted-foreground">
-                      Mueve los datos a otra carpeta (USB, disco externo)
+                      {t('data.changeDesc')}
                     </p>
                   </div>
                 </div>
@@ -1784,7 +1809,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   ) : (
                     <FolderOutput className="h-3 w-3 mr-1" />
                   )}
-                  Cambiar
+                  {t('data.change')}
                 </Button>
               </div>
 
@@ -1796,9 +1821,9 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                       <RotateCcw className="h-4 w-4" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Restaurar ubicación por defecto</p>
+                      <p className="text-sm font-medium">{t('data.restoreDefault')}</p>
                       <p className="text-xs text-muted-foreground">
-                        Volver a usar la carpeta del sistema
+                        {t('data.restoreDefaultDesc')}
                       </p>
                     </div>
                   </div>
@@ -1814,15 +1839,14 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                     ) : (
                       <RotateCcw className="h-3 w-3 mr-1" />
                     )}
-                    Restaurar
+                    {t('data.restore')}
                   </Button>
                 </div>
               )}
 
               <p className="text-[11px] text-muted-foreground bg-purple-50/50 p-2 rounded">
-                <strong>Portabilidad:</strong> Cambia la ubicación de tus datos a un USB o disco externo.
-                La aplicación leerá y escribirá directamente desde esa ubicación.
-                Se creará una carpeta <code className="bg-purple-100 px-1 rounded">CryptoGest-Data</code>.
+                <strong>{t('data.portabilityLabel')}</strong> {t('data.portabilityTip')}
+                {' '}{t('data.portabilityFolder')} <code className="bg-purple-100 px-1 rounded">CryptoGest-Data</code>.
               </p>
             </CardContent>
           </Card>
@@ -1831,7 +1855,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Database className="h-4 w-4" />
-                Base de Datos
+                {t('data.dbTitle')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -1845,7 +1869,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   <div>
                     <p className="text-sm font-medium">SQLite Local</p>
                     <p className="text-xs text-muted-foreground">
-                      {dbStatus?.message || "Sin verificar"}
+                      {dbStatus?.message || t('data.notVerified')}
                     </p>
                   </div>
                 </div>
@@ -1854,7 +1878,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                     <span className={`text-[10px] px-2 py-0.5 rounded ${
                       dbStatus.connected ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
                     }`}>
-                      {dbStatus.connected ? "Conectado" : "Error"}
+                      {dbStatus.connected ? t('data.connected') : t('data.connectionError')}
                     </span>
                   )}
                   <Button
@@ -1865,23 +1889,23 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                     disabled={isTesting}
                   >
                     {isTesting ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-                    Probar
+                    {t('data.test')}
                   </Button>
                 </div>
               </div>
 
               <div className="text-xs text-muted-foreground space-y-1 p-2 bg-muted/30 rounded">
                 <div className="flex justify-between">
-                  <span>Motor:</span>
+                  <span>{t('data.engine')}</span>
                   <span className="font-mono">SQLite 3</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>ORM:</span>
+                  <span>{t('data.orm')}</span>
                   <span className="font-mono">Prisma</span>
                 </div>
                 {dataPathInfo && (
                   <div className="flex justify-between">
-                    <span>Ubicación:</span>
+                    <span>{t('data.location')}</span>
                     <span className="font-mono text-[10px] truncate max-w-[200px]" title={dataPathInfo.dbPath}>
                       {dataPathInfo.dbPath.split('/').slice(-2).join('/')}
                     </span>
@@ -1895,12 +1919,12 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <FlaskConical className="h-4 w-4" />
-                Funciones Beta
+                {t('betaFeatures.title')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-xs text-muted-foreground">
-                Activa funciones experimentales. Pueden contener errores o cambiar sin previo aviso.
+                {t('betaFeatures.warningDesc')}
               </p>
               <div className="flex items-center justify-between p-3 border rounded">
                 <div className="flex items-center gap-3">
@@ -1908,9 +1932,9 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                     <Mail className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Buzón de Correo</p>
+                    <p className="text-sm font-medium">{t('betaFeatures.buzon')}</p>
                     <p className="text-xs text-muted-foreground">
-                      Cliente de email integrado con soporte IMAP/SMTP
+                      {t('betaFeatures.buzonDescription')}
                     </p>
                   </div>
                 </div>
@@ -1924,24 +1948,24 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Información de la Aplicación</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('data.appInfo')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xs space-y-2">
                 <div className="flex justify-between py-1 border-b">
-                  <span className="text-muted-foreground">Versión</span>
+                  <span className="text-muted-foreground">{t('data.version')}</span>
                   <span className="font-mono">1.0.0</span>
                 </div>
                 <div className="flex justify-between py-1 border-b">
-                  <span className="text-muted-foreground">Framework</span>
+                  <span className="text-muted-foreground">{t('data.framework')}</span>
                   <span>Electron + React</span>
                 </div>
                 <div className="flex justify-between py-1 border-b">
-                  <span className="text-muted-foreground">UI</span>
+                  <span className="text-muted-foreground">{t('data.ui')}</span>
                   <span>ShadCN + Tailwind</span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span className="text-muted-foreground">Plataforma</span>
+                  <span className="text-muted-foreground">{t('data.platform')}</span>
                   <span>{navigator.platform}</span>
                 </div>
               </div>
@@ -1956,12 +1980,12 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-2">
               <ScanFace className="h-4 w-4" />
-              Configurar Passkey
+              {t('security.setupPasskey')}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-3">
             <div className="grid gap-1.5">
-              <Label className="text-xs">Contraseña Actual</Label>
+              <Label className="text-xs">{t('security.currentPasswordLabel')}</Label>
               <div className="relative">
                 <Lock className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
@@ -1969,7 +1993,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   value={passkeyPassword}
                   onChange={(e) => setPasskeyPassword(e.target.value)}
                   className="h-8 text-sm pl-8 pr-8"
-                  placeholder="Tu contraseña"
+                  placeholder={t('security.yourPassword')}
                 />
                 <button
                   type="button"
@@ -1989,7 +2013,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
             )}
 
             <p className="text-[11px] text-muted-foreground bg-muted/50 p-2 rounded">
-              Tu contraseña se almacenará en el llavero del sistema para usar Touch ID, Face ID o Windows Hello.
+              {t('security.passkeyInfo')}
             </p>
           </div>
           <DialogFooter>
@@ -1998,11 +2022,11 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               setPasskeyPassword("")
               setPasskeyError(null)
             }}>
-              Cancelar
+              {t('common:cancel')}
             </Button>
             <Button size="sm" onClick={handleSetupPasskey} disabled={passkeyLoading}>
               {passkeyLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Fingerprint className="mr-1.5 h-3.5 w-3.5" />}
-              Activar
+              {t('security.activate')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2013,7 +2037,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-base">
-              {editingImpuesto ? "Editar Impuesto" : "Nuevo Impuesto"}
+              {editingImpuesto ? t('taxes.editTax') : t('taxes.newTaxDialog')}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-3">
@@ -2023,7 +2047,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               </div>
             )}
             <div className="grid gap-1.5">
-              <Label className="text-xs">Nombre *</Label>
+              <Label className="text-xs">{t('taxes.nameRequired')}</Label>
               <Input
                 className="h-8 text-sm"
                 value={impuestoForm.nombre}
@@ -2033,7 +2057,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs">Porcentaje *</Label>
+                <Label className="text-xs">{t('taxes.percentageRequired')}</Label>
                 <Input
                   className="h-8 text-sm"
                   type="number"
@@ -2044,7 +2068,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs">Tipo</Label>
+                <Label className="text-xs">{t('taxes.type')}</Label>
                 <Select
                   value={impuestoForm.tipo}
                   onValueChange={(value) => setImpuestoForm({ ...impuestoForm, tipo: value })}
@@ -2055,8 +2079,8 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   <SelectContent>
                     <SelectItem value="IVA">IVA</SelectItem>
                     <SelectItem value="IRPF">IRPF</SelectItem>
-                    <SelectItem value="RE">Recargo Equivalencia</SelectItem>
-                    <SelectItem value="Otro">Otro</SelectItem>
+                    <SelectItem value="RE">{t('taxes.equivalenceSurcharge')}</SelectItem>
+                    <SelectItem value="Otro">{t('taxes.other')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2068,7 +2092,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   checked={impuestoForm.activo}
                   onCheckedChange={(checked) => setImpuestoForm({ ...impuestoForm, activo: checked })}
                 />
-                <Label htmlFor="impuesto-activo" className="text-xs">Activo</Label>
+                <Label htmlFor="impuesto-activo" className="text-xs">{t('common:active')}</Label>
               </div>
               <div className="flex items-center gap-2">
                 <Switch
@@ -2076,13 +2100,13 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   checked={impuestoForm.porDefecto}
                   onCheckedChange={(checked) => setImpuestoForm({ ...impuestoForm, porDefecto: checked })}
                 />
-                <Label htmlFor="impuesto-defecto" className="text-xs">Por defecto</Label>
+                <Label htmlFor="impuesto-defecto" className="text-xs">{t('taxes.default')}</Label>
               </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setImpuestoDialogOpen(false)}>
-              Cancelar
+              {t('common:cancel')}
             </Button>
             <Button
               size="sm"
@@ -2090,7 +2114,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               disabled={impuestoSaving || !impuestoForm.nombre.trim() || !impuestoForm.porcentaje}
             >
               {impuestoSaving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              {editingImpuesto ? "Guardar" : "Crear"}
+              {editingImpuesto ? t('common:save') : t('common:create')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2100,19 +2124,18 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
       <AlertDialog open={impuestoDeleteDialog} onOpenChange={setImpuestoDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base">Eliminar impuesto</AlertDialogTitle>
+            <AlertDialogTitle className="text-base">{t('taxes.deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
-              Se eliminará permanentemente "{impuestoToDelete?.nombre}".
-              Asegúrate de que no esté siendo utilizado.
+              {t('taxes.deleteDesc', { name: impuestoToDelete?.nombre })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="h-8 text-sm">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="h-8 text-sm">{t('common:cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteImpuesto}
               className="h-8 text-sm bg-red-600 hover:bg-red-700"
             >
-              Eliminar
+              {t('common:delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

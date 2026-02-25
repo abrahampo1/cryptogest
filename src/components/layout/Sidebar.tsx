@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -32,33 +33,34 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  { id: "dashboard" as Page, label: "Panel de Control", icon: LayoutDashboard },
-  { id: "clientes" as Page, label: "Clientes", icon: Users },
-  { id: "productos" as Page, label: "Productos y Servicios", icon: Package },
-  { id: "facturas" as Page, label: "Facturación", icon: FileText },
-  { id: "gastos" as Page, label: "Gastos", icon: Receipt },
-  { id: "ejercicios" as Page, label: "Ejercicios Fiscales", icon: Calendar },
-  { id: "contabilidad" as Page, label: "Contabilidad", icon: BookOpen },
-  { id: "modelos" as Page, label: "Modelos Fiscales", icon: FileBarChart },
+  { id: "dashboard" as Page, labelKey: "dashboard", icon: LayoutDashboard },
+  { id: "clientes" as Page, labelKey: "clientes", icon: Users },
+  { id: "productos" as Page, labelKey: "productos", icon: Package },
+  { id: "facturas" as Page, labelKey: "facturas", icon: FileText },
+  { id: "gastos" as Page, labelKey: "gastos", icon: Receipt },
+  { id: "ejercicios" as Page, labelKey: "ejercicios", icon: Calendar },
+  { id: "contabilidad" as Page, labelKey: "contabilidad", icon: BookOpen },
+  { id: "modelos" as Page, labelKey: "modelos", icon: FileBarChart },
 ]
 
 const betaItems = [
-  { id: "buzon" as Page, label: "Buzón de Correo", icon: Mail, beta: true },
+  { id: "buzon" as Page, labelKey: "buzon", icon: Mail, beta: true },
 ]
 
 const cloudItems = [
-  { id: "cloud" as Page, label: "Copias y Licencia", icon: Cloud },
+  { id: "cloud" as Page, labelKey: "cloudBackup", icon: Cloud },
 ]
 
 const configItems = [
-  { id: "configuracion" as Page, label: "Configuración", icon: Settings },
+  { id: "configuracion" as Page, labelKey: "configuracion", icon: Settings },
 ]
 
 const helpItems = [
-  { id: "manual" as Page, label: "Manual de Uso", icon: HelpCircle },
+  { id: "manual" as Page, labelKey: "manual", icon: HelpCircle },
 ]
 
 export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, empresaNombre, buzonEnabled }: SidebarProps) {
+  const { t } = useTranslation(['sidebar', 'common'])
   const [isLocking, setIsLocking] = useState(false)
 
   const handleLock = async () => {
@@ -83,7 +85,7 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
       <nav className="flex-1 py-2">
         <div className="px-3 py-1">
           <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
-            Módulos
+            {t('modules')}
           </span>
         </div>
         {menuItems.map((item) => {
@@ -101,7 +103,7 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
               onClick={() => onPageChange(item.id)}
             >
               <Icon className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">{item.label}</span>
+              <span className="truncate">{t(item.labelKey)}</span>
               {isActive && <ChevronRight className="ml-auto h-3 w-3" />}
             </button>
           )
@@ -112,7 +114,7 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
             <div className="my-2 border-t border-slate-700" />
             <div className="px-3 py-1">
               <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
-                Beta
+                {t('beta')}
               </span>
             </div>
             {betaItems.map((item) => {
@@ -130,7 +132,7 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
                   onClick={() => onPageChange(item.id)}
                 >
                   <Icon className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{item.label}</span>
+                  <span className="truncate">{t(item.labelKey)}</span>
                   <span className="text-[9px] bg-amber-500/20 text-amber-400 rounded px-1 py-0.5 leading-none">Beta</span>
                   {isActive && <ChevronRight className="ml-auto h-3 w-3" />}
                 </button>
@@ -143,7 +145,7 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
 
         <div className="px-3 py-1">
           <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
-            Nube
+            {t('cloud')}
           </span>
         </div>
         {cloudItems.map((item) => {
@@ -161,7 +163,7 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
               onClick={() => onPageChange(item.id)}
             >
               <Icon className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">{item.label}</span>
+              <span className="truncate">{t(item.labelKey)}</span>
               {isActive && <ChevronRight className="ml-auto h-3 w-3" />}
             </button>
           )
@@ -171,7 +173,7 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
 
         <div className="px-3 py-1">
           <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
-            Sistema
+            {t('system')}
           </span>
         </div>
         {configItems.map((item) => {
@@ -189,7 +191,7 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
               onClick={() => onPageChange(item.id)}
             >
               <Icon className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">{item.label}</span>
+              <span className="truncate">{t(item.labelKey)}</span>
               {isActive && <ChevronRight className="ml-auto h-3 w-3" />}
             </button>
           )
@@ -199,7 +201,7 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
 
         <div className="px-3 py-1">
           <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
-            Ayuda
+            {t('help')}
           </span>
         </div>
         {helpItems.map((item) => {
@@ -217,7 +219,7 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
               onClick={() => onPageChange(item.id)}
             >
               <Icon className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">{item.label}</span>
+              <span className="truncate">{t(item.labelKey)}</span>
               {isActive && <ChevronRight className="ml-auto h-3 w-3" />}
             </button>
           )
@@ -239,7 +241,7 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
             ) : (
               <Lock className="h-3 w-3" />
             )}
-            Bloquear Sistema
+            {t('lockSystem')}
           </Button>
         </div>
       )}
@@ -252,8 +254,8 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
         >
           <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
           <div className="min-w-0 flex-1">
-            <span className="text-[10px] text-slate-500 block leading-tight">Empresa activa</span>
-            <span className="text-[11px] text-slate-300 truncate block leading-tight">{empresaNombre || 'Sin empresa'}</span>
+            <span className="text-[10px] text-slate-500 block leading-tight">{t('activeCompany')}</span>
+            <span className="text-[11px] text-slate-300 truncate block leading-tight">{empresaNombre || t('common:noCompany')}</span>
           </div>
           <ChevronRight className="h-3 w-3 text-slate-600 shrink-0" />
         </button>

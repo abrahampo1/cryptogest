@@ -8,7 +8,17 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(node -e:*)",
+      "Bash(git status:*)",
+      "Bash(wc -l \"/Users/abraham/Repos Personales/cryptogest/src/pages\"/*.tsx)",
+      "Bash(wc -l src/pages/*.tsx)",
+      "Bash(grep -r \"toast\\\\|alert\\\\|mensaje\" src/pages/*.tsx)",
+      "Bash(sort:*)",
+      "Bash(head:*)",
+      "Bash(cd \"/Users/abraham/Repos Personales/cryptogest\" && npx electron-rebuild 2>&1 || node node_modules/electron/install.js 2>&1)",
+      "Bash(node node_modules/electron/install.js)",
+      "Bash(npm run dev)"
     ]
   }
 }

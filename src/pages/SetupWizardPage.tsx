@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
+import { useTranslation } from "react-i18next"
+import { translateError } from "@/lib/formatting"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -39,6 +41,7 @@ interface VolumeInfo {
 }
 
 export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
+  const { t } = useTranslation(['auth', 'common'])
   const [step, setStep] = useState<WizardStep>("bienvenida")
 
   // Empresa
@@ -86,7 +89,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
   const handleEmpresaNext = () => {
     setError(null)
     if (!empresaNombre.trim()) {
-      setError("El nombre de la empresa es obligatorio")
+      setError(t('setupWizard.companyNameRequired'))
       return
     }
     setStep("ubicacion")
@@ -119,20 +122,20 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
 
     if (inputMode === "pin") {
       if (pin.length < 4 || pin.length > 8) {
-        setError("El PIN debe tener entre 4 y 8 dígitos")
+        setError(t('pinLengthError'))
         return
       }
       if (!/^\d+$/.test(pin)) {
-        setError("El PIN solo debe contener números")
+        setError(t('pinOnlyNumbers'))
         return
       }
     } else {
       if (password.length < 6) {
-        setError("La contraseña debe tener al menos 6 caracteres")
+        setError(t('passwordMinLength'))
         return
       }
       if (password !== confirmPassword) {
-        setError("Las contraseñas no coinciden")
+        setError(t('passwordsDoNotMatch'))
         return
       }
     }
@@ -152,7 +155,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
         ...(selectedPath ? { customDataPath: selectedPath } : {}),
       })
       if (!createResult?.success || !createResult.data) {
-        throw new Error(createResult?.error || "Error al crear la empresa")
+        throw new Error(createResult?.error ? translateError(createResult.error) : "Error al crear la empresa")
       }
 
       const empresaId = createResult.data.id
@@ -163,7 +166,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
 
       const selectResult = await window.electronAPI?.empresa.select(empresaId)
       if (!selectResult?.success) {
-        throw new Error(selectResult?.error || "Error al seleccionar la empresa")
+        throw new Error(selectResult?.error ? translateError(selectResult.error) : "Error al seleccionar la empresa")
       }
 
       // Paso 3: Configurando seguridad
@@ -172,7 +175,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
 
       const authResult = await window.electronAPI?.auth.setup(finalPassword)
       if (!authResult?.success) {
-        throw new Error(authResult?.error || "Error al configurar la seguridad")
+        throw new Error(authResult?.error ? translateError(authResult.error) : "Error al configurar la seguridad")
       }
 
       // Paso 4: Guardando datos de empresa
@@ -219,11 +222,10 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
               <Sparkles className="h-8 w-8 text-primary" />
             </div>
             <h2 className="text-xl font-semibold text-white mb-3">
-              Bienvenido a CryptoGest
+              {t('setupWizard.welcomeTitle')}
             </h2>
             <p className="text-sm text-slate-400 leading-relaxed max-w-sm mx-auto">
-              Gestión contable segura y privada. Tus datos financieros protegidos
-              con encriptación AES-256, sin servidores externos.
+              {t('setupWizard.welcomeDescription')}
             </p>
           </div>
 
@@ -233,8 +235,8 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                 <Building2 className="h-4 w-4 text-slate-300" />
               </div>
               <div>
-                <p className="text-xs font-medium text-slate-200">Configura tu empresa</p>
-                <p className="text-[11px] text-slate-500">Nombre y datos fiscales básicos</p>
+                <p className="text-xs font-medium text-slate-200">{t('setupWizard.configureCompany')}</p>
+                <p className="text-[11px] text-slate-500">{t('setupWizard.configureCompanyDesc')}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-900/50 border border-slate-800/50">
@@ -242,8 +244,8 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                 <Lock className="h-4 w-4 text-slate-300" />
               </div>
               <div>
-                <p className="text-xs font-medium text-slate-200">Protege tus datos</p>
-                <p className="text-[11px] text-slate-500">Contraseña maestra o PIN de acceso</p>
+                <p className="text-xs font-medium text-slate-200">{t('setupWizard.protectData')}</p>
+                <p className="text-[11px] text-slate-500">{t('setupWizard.protectDataDesc')}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-900/50 border border-slate-800/50">
@@ -251,8 +253,8 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                 <Database className="h-4 w-4 text-slate-300" />
               </div>
               <div>
-                <p className="text-xs font-medium text-slate-200">Base de datos encriptada</p>
-                <p className="text-[11px] text-slate-500">Se crea automáticamente</p>
+                <p className="text-xs font-medium text-slate-200">{t('setupWizard.encryptedDb')}</p>
+                <p className="text-[11px] text-slate-500">{t('setupWizard.encryptedDbDesc')}</p>
               </div>
             </div>
           </div>
@@ -261,7 +263,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
             className="w-full max-w-xs h-11 bg-white text-slate-900 hover:bg-slate-200 font-medium"
             onClick={() => setStep("empresa")}
           >
-            Comenzar configuración
+            {t('setupWizard.startSetup')}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
@@ -278,17 +280,17 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
           <div className="flex items-center gap-2 mb-8">
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-primary" />
-              <span className="text-xs text-primary font-medium">Empresa</span>
+              <span className="text-xs text-primary font-medium">{t('setupWizard.stepCompany')}</span>
             </div>
             <div className="flex-1 h-px bg-slate-800" />
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-slate-700" />
-              <span className="text-xs text-slate-600">Ubicación</span>
+              <span className="text-xs text-slate-600">{t('setupWizard.stepLocation')}</span>
             </div>
             <div className="flex-1 h-px bg-slate-800" />
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-slate-700" />
-              <span className="text-xs text-slate-600">Seguridad</span>
+              <span className="text-xs text-slate-600">{t('setupWizard.stepSecurity')}</span>
             </div>
           </div>
 
@@ -298,16 +300,16 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
           </div>
 
           <div className="mb-6">
-            <h2 className="text-lg font-semibold text-white mb-1">Datos de tu empresa</h2>
+            <h2 className="text-lg font-semibold text-white mb-1">{t('setupWizard.companyData')}</h2>
             <p className="text-sm text-slate-500">
-              Introduce el nombre de tu empresa o negocio. Podrás completar el resto más adelante.
+              {t('setupWizard.companyDataDesc')}
             </p>
           </div>
 
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="nombre" className="text-xs text-slate-400 font-normal">
-                Nombre de la empresa *
+                {t('setupWizard.companyNameLabel')}
               </Label>
               <Input
                 id="nombre"
@@ -315,15 +317,15 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                 onChange={(e) => setEmpresaNombre(e.target.value)}
                 onKeyDown={handleKeyPress}
                 className="h-10 bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-slate-700 focus-visible:ring-offset-slate-950"
-                placeholder="Ej: Mi Empresa S.L."
+                placeholder={t('setupWizard.companyNamePlaceholder')}
                 autoFocus
               />
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="nif" className="text-xs text-slate-400 font-normal">
-                NIF / CIF
-                <span className="text-slate-600 ml-1">(opcional)</span>
+                {t('setupWizard.nifLabel')}
+                <span className="text-slate-600 ml-1">{t('setupWizard.nifOptional')}</span>
               </Label>
               <Input
                 id="nif"
@@ -331,7 +333,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                 onChange={(e) => setEmpresaNif(e.target.value)}
                 onKeyDown={handleKeyPress}
                 className="h-10 bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-slate-700 focus-visible:ring-offset-slate-950"
-                placeholder="Ej: B12345678"
+                placeholder={t('setupWizard.nifPlaceholder')}
               />
             </div>
 
@@ -349,21 +351,21 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                 onClick={() => { setStep("bienvenida"); setError(null) }}
               >
                 <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-                Atrás
+                {t('common:back')}
               </Button>
               <Button
                 className="flex-1 h-10 bg-white text-slate-900 hover:bg-slate-200 font-medium"
                 onClick={handleEmpresaNext}
                 disabled={!empresaNombre.trim()}
               >
-                Siguiente
+                {t('common:next')}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
           </div>
 
           <p className="mt-6 text-[11px] text-slate-700 text-center">
-            Puedes gestionar múltiples empresas desde el selector de empresas.
+            {t('setupWizard.multiCompanyNote')}
           </p>
         </div>
       </div>
@@ -379,17 +381,17 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
           <div className="flex items-center gap-2 mb-8">
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-emerald-500" />
-              <span className="text-xs text-emerald-500 font-medium">Empresa</span>
+              <span className="text-xs text-emerald-500 font-medium">{t('setupWizard.stepCompany')}</span>
             </div>
             <div className="flex-1 h-px bg-slate-800" />
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-primary" />
-              <span className="text-xs text-primary font-medium">Ubicación</span>
+              <span className="text-xs text-primary font-medium">{t('setupWizard.stepLocation')}</span>
             </div>
             <div className="flex-1 h-px bg-slate-800" />
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-slate-700" />
-              <span className="text-xs text-slate-600">Seguridad</span>
+              <span className="text-xs text-slate-600">{t('setupWizard.stepSecurity')}</span>
             </div>
           </div>
 
@@ -405,9 +407,9 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
           </div>
 
           <div className="mb-6">
-            <h2 className="text-lg font-semibold text-white mb-1">Ubicación de datos</h2>
+            <h2 className="text-lg font-semibold text-white mb-1">{t('setupWizard.dataLocation')}</h2>
             <p className="text-sm text-slate-500">
-              Elige dónde se guardarán la base de datos y los adjuntos de esta empresa.
+              {t('setupWizard.dataLocationDesc')}
             </p>
           </div>
 
@@ -427,11 +429,11 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-white">Carpeta por defecto</span>
+                    <span className="text-sm font-medium text-white">{t('setupWizard.defaultFolder')}</span>
                     {locationMode === "default" && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5 truncate font-mono">
-                    {defaultPath || "Cargando..."}
+                    {defaultPath || t('common:loading')}
                   </p>
                 </div>
               </div>
@@ -441,7 +443,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
             {loadingVolumes ? (
               <div className="flex items-center gap-2.5 p-3.5 rounded-lg border border-slate-800 bg-slate-900/50">
                 <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-                <span className="text-sm text-slate-500">Detectando discos externos...</span>
+                <span className="text-sm text-slate-500">{t('setupWizard.detectingDisks')}</span>
               </div>
             ) : (
               volumes.map((vol) => (
@@ -487,11 +489,11 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-white">Elegir carpeta...</span>
+                    <span className="text-sm font-medium text-white">{t('setupWizard.chooseFolder')}</span>
                     {locationMode === "custom" && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5 truncate font-mono">
-                    {locationMode === "custom" && customDataPath ? customDataPath : "Abre el selector de carpetas"}
+                    {locationMode === "custom" && customDataPath ? customDataPath : t('setupWizard.openFolderSelector')}
                   </p>
                 </div>
               </div>
@@ -505,19 +507,19 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
               onClick={() => { setStep("empresa"); setError(null) }}
             >
               <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-              Atrás
+              {t('common:back')}
             </Button>
             <Button
               className="flex-1 h-10 bg-white text-slate-900 hover:bg-slate-200 font-medium"
               onClick={() => setStep("seguridad")}
             >
-              Siguiente
+              {t('common:next')}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
 
           <p className="mt-6 text-[11px] text-slate-700 text-center">
-            Puedes cambiar la ubicación más adelante desde Configuración.
+            {t('setupWizard.changeLocationNote')}
           </p>
         </div>
       </div>
@@ -533,17 +535,17 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
           <div className="flex items-center gap-2 mb-8">
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-emerald-500" />
-              <span className="text-xs text-emerald-500 font-medium">Empresa</span>
+              <span className="text-xs text-emerald-500 font-medium">{t('setupWizard.stepCompany')}</span>
             </div>
             <div className="flex-1 h-px bg-slate-800" />
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-emerald-500" />
-              <span className="text-xs text-emerald-500 font-medium">Ubicación</span>
+              <span className="text-xs text-emerald-500 font-medium">{t('setupWizard.stepLocation')}</span>
             </div>
             <div className="flex-1 h-px bg-slate-800" />
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-primary" />
-              <span className="text-xs text-primary font-medium">Seguridad</span>
+              <span className="text-xs text-primary font-medium">{t('setupWizard.stepSecurity')}</span>
             </div>
           </div>
 
@@ -559,9 +561,9 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
           </div>
 
           <div className="mb-6">
-            <h2 className="text-lg font-semibold text-white mb-1">Protege tus datos</h2>
+            <h2 className="text-lg font-semibold text-white mb-1">{t('setupWizard.protectYourData')}</h2>
             <p className="text-sm text-slate-500">
-              Establece una contraseña maestra o PIN para encriptar tu base de datos.
+              {t('setupWizard.protectYourDataDesc')}
             </p>
           </div>
 
@@ -575,7 +577,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
               }`}
               onClick={() => setInputMode("password")}
             >
-              Contraseña
+              {t('password')}
             </button>
             <button
               className={`flex-1 text-xs font-medium py-1.5 rounded transition-colors ${
@@ -585,7 +587,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
               }`}
               onClick={() => setInputMode("pin")}
             >
-              PIN
+              {t('pin')}
             </button>
           </div>
 
@@ -594,7 +596,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
               <>
                 <div className="space-y-1.5">
                   <Label htmlFor="password" className="text-xs text-slate-400 font-normal">
-                    Contraseña maestra
+                    {t('masterPassword')}
                   </Label>
                   <div className="relative">
                     <Input
@@ -604,7 +606,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                       onChange={(e) => setPassword(e.target.value)}
                       onKeyDown={handleKeyPress}
                       className="h-10 bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 pr-10 focus-visible:ring-slate-700 focus-visible:ring-offset-slate-950"
-                      placeholder="Mínimo 6 caracteres"
+                      placeholder={t('setupWizard.minChars')}
                       autoFocus
                     />
                     <button
@@ -619,7 +621,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
 
                 <div className="space-y-1.5">
                   <Label htmlFor="confirmPassword" className="text-xs text-slate-400 font-normal">
-                    Confirmar contraseña
+                    {t('confirmPassword')}
                   </Label>
                   <Input
                     id="confirmPassword"
@@ -628,14 +630,14 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     onKeyDown={handleKeyPress}
                     className="h-10 bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-slate-700 focus-visible:ring-offset-slate-950"
-                    placeholder="Repite la contraseña"
+                    placeholder={t('repeatPassword')}
                   />
                 </div>
               </>
             ) : (
               <div className="space-y-3">
                 <Label className="text-xs text-slate-400 font-normal block text-center">
-                  Establece un PIN numérico
+                  {t('setNumericPin')}
                 </Label>
                 <div className="flex justify-center">
                   <InputOTP
@@ -680,7 +682,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                     )}
                   />
                 </div>
-                <p className="text-[11px] text-slate-600 text-center">Mínimo 4 dígitos</p>
+                <p className="text-[11px] text-slate-600 text-center">{t('minDigits')}</p>
               </div>
             )}
 
@@ -698,7 +700,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                 onClick={() => { setStep("ubicacion"); setError(null) }}
               >
                 <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-                Atrás
+                {t('common:back')}
               </Button>
               <Button
                 className="flex-1 h-10 bg-white text-slate-900 hover:bg-slate-200 font-medium"
@@ -710,12 +712,12 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
                 }
               >
                 <Lock className="mr-2 h-3.5 w-3.5" />
-                Configurar seguridad
+                {t('setupWizard.configureSecurity')}
               </Button>
             </div>
 
             <p className="mt-4 text-[11px] text-slate-700 text-center leading-relaxed">
-              Esta contraseña no se puede recuperar. Asegúrate de guardarla en un lugar seguro.
+              {t('setupWizard.passwordRecoveryNote')}
             </p>
           </div>
         </div>
@@ -726,12 +728,12 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
   // ── Procesando ──
   if (step === "procesando") {
     const steps = [
-      { icon: Building2, label: "Preparando configuración..." },
-      { icon: Building2, label: "Creando empresa..." },
-      { icon: Database, label: "Configurando base de datos..." },
-      { icon: Shield, label: "Configurando seguridad y encriptación..." },
-      { icon: Database, label: "Guardando configuración..." },
-      { icon: CheckCircle2, label: "Finalizando..." },
+      { icon: Building2, label: t('setupWizard.preparingConfig') },
+      { icon: Building2, label: t('setupWizard.creatingCompany') },
+      { icon: Database, label: t('setupWizard.configuringDb') },
+      { icon: Shield, label: t('setupWizard.configuringSecurityEncryption') },
+      { icon: Database, label: t('setupWizard.savingConfig') },
+      { icon: CheckCircle2, label: t('setupWizard.finalizing') },
     ]
 
     return (
@@ -742,8 +744,8 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
               <img src="./assets/logo.png" alt="CryptoGest" className="h-8 w-8" />
               <span className="text-lg font-semibold text-white tracking-tight">CryptoGest</span>
             </div>
-            <h2 className="text-lg font-semibold text-white">Preparando tu empresa</h2>
-            <p className="mt-1 text-sm text-slate-500">Esto solo tardará unos segundos...</p>
+            <h2 className="text-lg font-semibold text-white">{t('preparingCompany')}</h2>
+            <p className="mt-1 text-sm text-slate-500">{t('onlyFewSeconds')}</p>
           </div>
 
           <div className="space-y-2.5">
@@ -813,32 +815,31 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
           <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-emerald-900/30 border border-emerald-800/40 mx-auto mb-5">
             <CheckCircle2 className="h-8 w-8 text-emerald-500" />
           </div>
-          <h2 className="text-xl font-semibold text-white mb-2">Todo listo</h2>
+          <h2 className="text-xl font-semibold text-white mb-2">{t('allReady')}</h2>
           <p className="text-sm text-slate-400 mb-1">
-            <strong className="text-slate-300">{empresaNombre}</strong> se ha configurado
-            correctamente.
+            {t('companyConfigured', { name: empresaNombre })}
           </p>
           <p className="text-sm text-slate-500">
-            Tu base de datos está creada y protegida con encriptación AES-256.
+            {t('dbEncryptedReady')}
           </p>
         </div>
 
         <div className="space-y-3 text-left mb-8 px-2">
           <div className="flex items-center gap-3 text-xs text-slate-400">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-            Empresa creada y configurada
+            {t('setupWizard.companyCreatedConfigured')}
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-400">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-            Base de datos encriptada y lista
+            {t('dbEncryptedAndReady')}
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-400">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-            Contraseña maestra configurada
+            {t('masterPasswordConfigured')}
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-400">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-            Empieza añadiendo clientes, productos y facturas
+            {t('startAddingData')}
           </div>
         </div>
 
@@ -847,7 +848,7 @@ export function SetupWizardPage({ onComplete }: SetupWizardPageProps) {
           onClick={onComplete}
         >
           <Rocket className="mr-2 h-4 w-4" />
-          Comenzar a usar CryptoGest
+          {t('setupWizard.beginUsing')}
         </Button>
       </div>
     </div>

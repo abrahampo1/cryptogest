@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
+import { useTranslation } from "react-i18next"
+import { translateError } from "@/lib/formatting"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -27,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { formatDate } from "@/lib/formatting"
 
 interface EmpresaInfo {
   id: string
@@ -52,6 +55,7 @@ interface VolumeInfo {
 }
 
 export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCreated }: EmpresaSelectorPageProps) {
+  const { t } = useTranslation(['auth', 'common'])
   const [isCreating, setIsCreating] = useState(false)
   const [newName, setNewName] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -135,7 +139,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
         resetCreation()
         onCreated()
       } else {
-        setError(result?.error || "Error al crear empresa")
+        setError(result?.error ? translateError(result.error) : t('empresaSelector.errorCreating'))
       }
     } catch (err) {
       setError(String(err))
@@ -163,7 +167,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
       if (result?.success) {
         onCreated()
       } else {
-        setError(result?.error || "Error al eliminar empresa")
+        setError(result?.error ? translateError(result.error) : t('empresaSelector.errorDeleting'))
       }
     } catch (err) {
       setError(String(err))
@@ -182,7 +186,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
             <img src="./assets/logo.png" alt="CryptoGest" className="h-10 w-10" />
             <h1 className="text-2xl font-bold text-white">CryptoGest</h1>
           </div>
-          <p className="text-sm text-slate-400">Selecciona una empresa para continuar</p>
+          <p className="text-sm text-slate-400">{t('empresaSelector.selectCompany')}</p>
         </div>
 
         {/* Error */}
@@ -233,7 +237,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                   <>
                     <p className="text-sm font-medium text-white truncate">{empresa.nombre}</p>
                     <p className="text-[10px] text-slate-500">
-                      Creada el {new Date(empresa.creadaEn).toLocaleDateString("es-ES")}
+                      {t('empresaSelector.createdOn', { date: formatDate(empresa.creadaEn) })}
                     </p>
                   </>
                 )}
@@ -270,8 +274,8 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
           {empresas.length === 0 && !isCreating && (
             <div className="text-center py-12 text-slate-500">
               <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">No hay empresas configuradas</p>
-              <p className="text-xs mt-1">Crea tu primera empresa para comenzar</p>
+              <p className="text-sm">{t('empresaSelector.noCompanies')}</p>
+              <p className="text-xs mt-1">{t('empresaSelector.createFirstCompany')}</p>
             </div>
           )}
         </div>
@@ -283,7 +287,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
               <>
                 <Input
                   className="h-9 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
-                  placeholder="Nombre de la empresa..."
+                  placeholder={t('empresaSelector.companyNamePlaceholder')}
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => {
@@ -299,13 +303,13 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                     disabled={!newName.trim()}
                     className="flex-1"
                   >
-                    Siguiente
+                    {t('common:next')}
                     <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
                   </Button>
                   <Button size="sm" variant="outline" onClick={resetCreation}
                     className="border-slate-600 text-slate-300 hover:bg-slate-800"
                   >
-                    Cancelar
+                    {t('common:cancel')}
                   </Button>
                 </div>
               </>
@@ -314,11 +318,11 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                 {/* Step indicator */}
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs text-slate-400">
-                    Ubicación para <span className="text-slate-200 font-medium">{newName}</span>
+                    {t('empresaSelector.locationFor')} <span className="text-slate-200 font-medium">{newName}</span>
                   </span>
                 </div>
 
-                {/* Opción: Por defecto */}
+                {/* Opcion: Por defecto */}
                 <button
                   className={`w-full text-left p-2.5 rounded-md border transition-colors ${
                     locationMode === "default"
@@ -330,7 +334,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                   <div className="flex items-center gap-2.5">
                     <Database className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <span className="text-xs font-medium text-white">Carpeta por defecto</span>
+                      <span className="text-xs font-medium text-white">{t('empresaSelector.defaultFolder')}</span>
                       <p className="text-[10px] text-slate-500 truncate font-mono">{defaultPath || "..."}</p>
                     </div>
                     {locationMode === "default" && <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />}
@@ -341,7 +345,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                 {loadingVolumes ? (
                   <div className="flex items-center gap-2 p-2.5 rounded-md border border-slate-700 bg-slate-800/30">
                     <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
-                    <span className="text-xs text-slate-500">Detectando discos...</span>
+                    <span className="text-xs text-slate-500">{t('empresaSelector.detectingDisks')}</span>
                   </div>
                 ) : (
                   volumes.map((vol) => (
@@ -380,9 +384,9 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                   <div className="flex items-center gap-2.5">
                     <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <span className="text-xs font-medium text-white">Elegir carpeta...</span>
+                      <span className="text-xs font-medium text-white">{t('empresaSelector.chooseFolder')}</span>
                       <p className="text-[10px] text-slate-500 truncate font-mono">
-                        {locationMode === "custom" && customDataPath ? customDataPath : "Abre el selector"}
+                        {locationMode === "custom" && customDataPath ? customDataPath : t('empresaSelector.openSelector')}
                       </p>
                     </div>
                     {locationMode === "custom" && <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />}
@@ -397,7 +401,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                     className="border-slate-600 text-slate-300 hover:bg-slate-800"
                   >
                     <ArrowLeft className="h-3.5 w-3.5 mr-1" />
-                    Atrás
+                    {t('common:back')}
                   </Button>
                   <Button
                     size="sm"
@@ -406,12 +410,12 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                     className="flex-1"
                   >
                     {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
-                    Crear empresa
+                    {t('empresaSelector.createCompany')}
                   </Button>
                   <Button size="sm" variant="outline" onClick={resetCreation}
                     className="border-slate-600 text-slate-300 hover:bg-slate-800"
                   >
-                    Cancelar
+                    {t('common:cancel')}
                   </Button>
                 </div>
               </>
@@ -424,7 +428,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
             onClick={() => setIsCreating(true)}
           >
             <Plus className="h-4 w-4 mr-2" />
-            Crear nueva empresa
+            {t('empresaSelector.createNewCompany')}
           </Button>
         )}
 
@@ -432,25 +436,22 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
         <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Eliminar empresa</AlertDialogTitle>
+              <AlertDialogTitle>{t('empresaSelector.deleteCompany')}</AlertDialogTitle>
               <AlertDialogDescription>
                 {deleteTarget && (
-                  <>
-                    Se eliminará la empresa <strong>{deleteTarget.nombre}</strong> y todos sus datos (base de datos, adjuntos, configuración).
-                    Esta acción no se puede deshacer.
-                  </>
+                  <span dangerouslySetInnerHTML={{ __html: t('empresaSelector.deleteCompanyConfirm', { name: deleteTarget.nombre }) }} />
                 )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogCancel disabled={isDeleting}>{t('common:cancel')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleDelete}
                 disabled={isDeleting}
                 className="bg-red-600 hover:bg-red-700"
               >
                 {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-                Eliminar
+                {t('common:delete')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

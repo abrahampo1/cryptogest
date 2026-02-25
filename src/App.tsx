@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Page } from '@/components/layout/Sidebar'
 import { DashboardPage } from '@/pages/DashboardPage'
@@ -21,6 +22,7 @@ import { Loader2 } from 'lucide-react'
 type AppPhase = 'loading' | 'setup-wizard' | 'empresa-selector' | 'auth' | 'authenticated'
 
 function App() {
+  const { t } = useTranslation('common')
   const [phase, setPhase] = useState<AppPhase>('loading')
   const [empresas, setEmpresas] = useState<EmpresaInfo[]>([])
   const [ultimaEmpresaId, setUltimaEmpresaId] = useState<string | null>(null)
@@ -179,7 +181,7 @@ function App() {
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-3" />
-          <p className="text-sm text-slate-400">Cargando...</p>
+          <p className="text-sm text-slate-400">{t('loading')}</p>
         </div>
       </div>
     )

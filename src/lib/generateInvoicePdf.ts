@@ -1,5 +1,9 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import i18n from '@/i18n'
+import { formatCurrency, formatDate } from '@/lib/formatting'
+
+const t = i18n.t.bind(i18n)
 
 interface EmpresaConfig {
   nombre: string
@@ -65,34 +69,20 @@ function accentTint(hex: string, factor: number): [number, number, number] {
   ]
 }
 
-const formatCurrency = (amount: number): string =>
-  new Intl.NumberFormat('es-ES', {
-    style: 'currency',
-    currency: 'EUR',
-    minimumFractionDigits: 2,
-  }).format(amount)
-
-const formatDate = (date: Date | string): string =>
-  new Date(date).toLocaleDateString('es-ES', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
-
 const formaPagoLabels: Record<string, string> = {
-  transferencia: 'Transferencia',
-  efectivo: 'Efectivo',
-  tarjeta: 'Tarjeta',
-  bizum: 'Bizum',
+  transferencia: 'pdf:paymentTransfer',
+  efectivo: 'pdf:paymentCash',
+  tarjeta: 'pdf:paymentCard',
+  bizum: 'pdf:paymentBizum',
 }
 
 function getEmpresaContactLines(empresa: EmpresaConfig, template: TemplateConfig): string[] {
   const lines: string[] = []
-  if (empresa.nif) lines.push(`NIF: ${empresa.nif}`)
+  if (empresa.nif) lines.push(`${t('pdf:nif')}: ${empresa.nif}`)
   if (empresa.direccion) lines.push(empresa.direccion)
   const cityLine = [empresa.codigoPostal, empresa.ciudad, empresa.provincia].filter(Boolean).join(', ')
   if (cityLine) lines.push(cityLine)
-  if (template.mostrarTelefono && empresa.telefono) lines.push(`Tel: ${empresa.telefono}`)
+  if (template.mostrarTelefono && empresa.telefono) lines.push(`${t('pdf:phone')}: ${empresa.telefono}`)
   if (template.mostrarEmail && empresa.email) lines.push(empresa.email)
   if (template.mostrarWeb && empresa.web) lines.push(empresa.web)
   return lines
@@ -100,7 +90,7 @@ function getEmpresaContactLines(empresa: EmpresaConfig, template: TemplateConfig
 
 function getClienteLines(factura: Factura): string[] {
   const lines: string[] = []
-  if (factura.cliente?.nif) lines.push(`NIF: ${factura.cliente.nif}`)
+  if (factura.cliente?.nif) lines.push(`${t('pdf:nif')}: ${factura.cliente.nif}`)
   if (factura.cliente?.direccion) lines.push(factura.cliente.direccion)
   const cityLine = [factura.cliente?.codigoPostal, factura.cliente?.ciudad, factura.cliente?.provincia].filter(Boolean).join(', ')
   if (cityLine) lines.push(cityLine)
@@ -110,20 +100,21 @@ function getClienteLines(factura: Factura): string[] {
 
 function getFacturaDetails(factura: Factura, template: TemplateConfig): [string, string][] {
   const details: [string, string][] = [
-    ['N\u00ba:', factura.numero],
-    ['Fecha:', formatDate(factura.fecha)],
+    [t('pdf:invoiceNumber'), factura.numero],
+    [t('pdf:date'), formatDate(factura.fecha)],
   ]
   if (factura.fechaVencimiento) {
-    details.push(['Vencimiento:', formatDate(factura.fechaVencimiento)])
+    details.push([t('pdf:dueDate'), formatDate(factura.fechaVencimiento)])
   }
   if (template.mostrarFormaPago && factura.formaPago) {
-    details.push(['F. Pago:', formaPagoLabels[factura.formaPago] || factura.formaPago])
+    const labelKey = formaPagoLabels[factura.formaPago]
+    details.push([t('pdf:paymentMethodLabel'), labelKey ? t(labelKey) : factura.formaPago])
   }
   return details
 }
 
 function getTableData(factura: Factura) {
-  const headers = [['Descripci\u00f3n', 'Cant.', 'P. Unitario', 'Dto.', 'IVA', 'IRPF', 'Total']]
+  const headers = [[t('pdf:description'), t('pdf:qty'), t('pdf:unitPrice'), t('pdf:discount'), t('pdf:vat'), t('pdf:irpf'), t('pdf:total')]]
   const body = (factura.lineas || []).map((linea) => {
     const impuestoPct = linea.impuesto ? `${linea.impuesto.porcentaje}%` : '-'
     const retencionPct = linea.retencion ? `${linea.retencion.porcentaje}%` : '-'
@@ -181,19 +172,19 @@ function renderTotalsBlock(
   doc.setFontSize(8)
   doc.setFont(font, 'normal')
 
-  doc.text('Subtotal:', totalsX, y)
+  doc.text(t('pdf:subtotal'), totalsX, y)
   doc.text(formatCurrency(factura.subtotal), valuesX, y, { align: 'right' })
   y += 5
 
   ivaBreakdown.forEach((data, pct) => {
-    doc.text(`IVA ${pct}%:`, totalsX, y)
+    doc.text(`${t('pdf:vat')} ${pct}%:`, totalsX, y)
     doc.text(`+${formatCurrency(data.cuota)}`, valuesX, y, { align: 'right' })
     y += 4
   })
 
   irpfBreakdown.forEach((data, pct) => {
     doc.setTextColor(200, 100, 0)
-    doc.text(`IRPF ${pct}%:`, totalsX, y)
+    doc.text(`${t('pdf:irpf')} ${pct}%:`, totalsX, y)
     doc.text(`-${formatCurrency(data.cuota)}`, valuesX, y, { align: 'right' })
     doc.setTextColor(0, 0, 0)
     y += 4
@@ -207,7 +198,7 @@ function renderTotalsBlock(
 
   doc.setFontSize(11)
   doc.setFont(font, 'bold')
-  doc.text('TOTAL:', totalsX, y)
+  doc.text(t('pdf:totalLabel'), totalsX, y)
   doc.text(formatCurrency(factura.total), valuesX, y, { align: 'right' })
 
   return y + 10
@@ -232,7 +223,7 @@ function renderNotesBlock(
   doc.setFontSize(7.5)
   doc.setFont(font, 'bold')
   doc.setTextColor(100, 100, 100)
-  doc.text('NOTAS', margin, y)
+  doc.text(t('pdf:notes'), margin, y)
   doc.setTextColor(0, 0, 0)
   y += 4
 
@@ -311,19 +302,19 @@ function renderClasica(doc: jsPDF, data: InvoiceData, template: TemplateConfig) 
     addLogo(doc, template.logoBase64, margin, y, logoSize, logoSize)
     doc.setFontSize(16)
     doc.setFont('helvetica', 'bold')
-    doc.text(data.empresa.nombre || 'Mi Empresa', margin + logoSize + 3, y + 6)
+    doc.text(data.empresa.nombre || t('pdf:defaultCompany'), margin + logoSize + 3, y + 6)
     y += logoSize + 3
   } else {
     doc.setFontSize(16)
     doc.setFont('helvetica', 'bold')
-    doc.text(data.empresa.nombre || 'Mi Empresa', margin, y + 6)
+    doc.text(data.empresa.nombre || t('pdf:defaultCompany'), margin, y + 6)
     y += 12
   }
 
   // Invoice title
   doc.setFontSize(18)
   doc.setFont('helvetica', 'bold')
-  doc.text('FACTURA', pageWidth - margin, margin + 6, { align: 'right' })
+  doc.text(t('pdf:invoice'), pageWidth - margin, margin + 6, { align: 'right' })
 
   // Empresa details
   doc.setFontSize(8)
@@ -360,7 +351,7 @@ function renderClasica(doc: jsPDF, data: InvoiceData, template: TemplateConfig) 
   doc.setFontSize(8)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(100, 100, 100)
-  doc.text('CLIENTE', margin, y)
+  doc.text(t('pdf:client'), margin, y)
   doc.setTextColor(0, 0, 0)
   y += 4
 
@@ -423,12 +414,12 @@ function renderModerna(doc: jsPDF, data: InvoiceData, template: TemplateConfig) 
     addLogo(doc, template.logoBase64, margin, y, logoSize, logoSize)
     doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
-    doc.text(data.empresa.nombre || 'Mi Empresa', margin + logoSize + 3, y + 5)
+    doc.text(data.empresa.nombre || t('pdf:defaultCompany'), margin + logoSize + 3, y + 5)
     y += logoSize + 3
   } else {
     doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
-    doc.text(data.empresa.nombre || 'Mi Empresa', margin, y + 5)
+    doc.text(data.empresa.nombre || t('pdf:defaultCompany'), margin, y + 5)
     y += 10
   }
 
@@ -451,7 +442,7 @@ function renderModerna(doc: jsPDF, data: InvoiceData, template: TemplateConfig) 
   doc.setFontSize(10)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(255, 255, 255)
-  doc.text(`FACTURA ${data.factura.numero}`, boxX + boxW / 2, 14 + boxH / 2 + 1, { align: 'center' })
+  doc.text(t('pdf:invoiceWithNumber', { number: data.factura.numero }), boxX + boxW / 2, 14 + boxH / 2 + 1, { align: 'center' })
   doc.setTextColor(0, 0, 0)
 
   // Factura details below box
@@ -479,7 +470,7 @@ function renderModerna(doc: jsPDF, data: InvoiceData, template: TemplateConfig) 
   doc.setFontSize(7)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(100, 100, 100)
-  doc.text('FACTURAR A:', margin + 4, y)
+  doc.text(t('pdf:billTo'), margin + 4, y)
   doc.setTextColor(0, 0, 0)
   y += 4
 
@@ -544,19 +535,19 @@ function renderMinimalista(doc: jsPDF, data: InvoiceData, template: TemplateConf
     addLogo(doc, template.logoBase64, margin, y, logoSize, logoSize)
     doc.setFontSize(12)
     doc.setFont('courier', 'bold')
-    doc.text(data.empresa.nombre || 'Mi Empresa', margin + logoSize + 3, y + 5)
+    doc.text(data.empresa.nombre || t('pdf:defaultCompany'), margin + logoSize + 3, y + 5)
     y += logoSize + 3
   } else {
     doc.setFontSize(12)
     doc.setFont('courier', 'bold')
-    doc.text(data.empresa.nombre || 'Mi Empresa', margin, y + 4)
+    doc.text(data.empresa.nombre || t('pdf:defaultCompany'), margin, y + 4)
     y += 10
   }
 
   // "FACTURA" right-aligned, uppercase, spaced
   doc.setFontSize(11)
   doc.setFont('courier', 'normal')
-  doc.text('F A C T U R A', pageWidth - margin, margin + 9, { align: 'right' })
+  doc.text(t('pdf:invoiceSpaced'), pageWidth - margin, margin + 9, { align: 'right' })
 
   // Empresa details
   doc.setFontSize(7.5)
@@ -592,7 +583,7 @@ function renderMinimalista(doc: jsPDF, data: InvoiceData, template: TemplateConf
   doc.setFontSize(7)
   doc.setFont('courier', 'normal')
   doc.setTextColor(120, 120, 120)
-  doc.text('CLIENTE', margin, y)
+  doc.text(t('pdf:client'), margin, y)
   doc.setTextColor(0, 0, 0)
   y += 4
 
@@ -669,19 +660,19 @@ function renderEjecutiva(doc: jsPDF, data: InvoiceData, template: TemplateConfig
     addLogo(doc, template.logoBase64, contentLeft, y, logoSize, logoSize)
     doc.setFontSize(14)
     doc.setFont('times', 'bold')
-    doc.text(data.empresa.nombre || 'Mi Empresa', contentLeft + logoSize + 3, y + 5)
+    doc.text(data.empresa.nombre || t('pdf:defaultCompany'), contentLeft + logoSize + 3, y + 5)
     y += logoSize + 3
   } else {
     doc.setFontSize(14)
     doc.setFont('times', 'bold')
-    doc.text(data.empresa.nombre || 'Mi Empresa', contentLeft, y + 6)
+    doc.text(data.empresa.nombre || t('pdf:defaultCompany'), contentLeft, y + 6)
     y += 12
   }
 
   // FACTURA title
   doc.setFontSize(16)
   doc.setFont('times', 'bold')
-  doc.text('FACTURA', pageWidth - margin, margin + 8, { align: 'right' })
+  doc.text(t('pdf:invoice'), pageWidth - margin, margin + 8, { align: 'right' })
 
   // Empresa details
   doc.setFontSize(8)
@@ -723,7 +714,7 @@ function renderEjecutiva(doc: jsPDF, data: InvoiceData, template: TemplateConfig
   doc.setFontSize(7)
   doc.setFont('times', 'bold')
   doc.setTextColor(100, 100, 100)
-  doc.text('CLIENTE', contentLeft + 6, y)
+  doc.text(t('pdf:client'), contentLeft + 6, y)
   doc.setTextColor(0, 0, 0)
   y += 4
 
@@ -773,19 +764,19 @@ function renderEjecutiva(doc: jsPDF, data: InvoiceData, template: TemplateConfig
 
   doc.setFontSize(8)
   doc.setFont('times', 'normal')
-  doc.text('Subtotal:', totalsX, y)
+  doc.text(t('pdf:subtotal'), totalsX, y)
   doc.text(formatCurrency(data.factura.subtotal), valuesX, y, { align: 'right' })
   y += 5
 
   ivaBreakdown.forEach((taxData, pct) => {
-    doc.text(`IVA ${pct}%:`, totalsX, y)
+    doc.text(`${t('pdf:vat')} ${pct}%:`, totalsX, y)
     doc.text(`+${formatCurrency(taxData.cuota)}`, valuesX, y, { align: 'right' })
     y += 4
   })
 
   irpfBreakdown.forEach((taxData, pct) => {
     doc.setTextColor(200, 100, 0)
-    doc.text(`IRPF ${pct}%:`, totalsX, y)
+    doc.text(`${t('pdf:irpf')} ${pct}%:`, totalsX, y)
     doc.text(`-${formatCurrency(taxData.cuota)}`, valuesX, y, { align: 'right' })
     doc.setTextColor(0, 0, 0)
     y += 4
@@ -798,7 +789,7 @@ function renderEjecutiva(doc: jsPDF, data: InvoiceData, template: TemplateConfig
   doc.setFontSize(11)
   doc.setFont('times', 'bold')
   doc.setTextColor(255, 255, 255)
-  doc.text('TOTAL:', totalsX, y + 6)
+  doc.text(t('pdf:totalLabel'), totalsX, y + 6)
   doc.text(formatCurrency(data.factura.total), valuesX, y + 6, { align: 'right' })
   doc.setTextColor(0, 0, 0)
 

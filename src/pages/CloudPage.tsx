@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react"
+import { useTranslation } from "react-i18next"
+import { translateError } from "@/lib/formatting"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,6 +44,7 @@ import {
   HelpCircle,
   ShoppingCart,
 } from "lucide-react"
+import { formatDateTime } from "@/lib/formatting"
 
 // ============================================
 // Helpers
@@ -55,16 +58,6 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
 }
 
-function formatDate(date: string): string {
-  return new Date(date).toLocaleDateString("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
-
 // ============================================
 // Main Component
 // ============================================
@@ -76,6 +69,8 @@ interface CloudPageProps {
 }
 
 export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPageProps) {
+  const { t } = useTranslation(['cloud', 'common'])
+
   // Connection state
   const [isConnected, setIsConnected] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -144,7 +139,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
       setIsConnected(true)
       setUser(deepLinkResult.user)
       if (deepLinkResult.server) setServerUrl(deepLinkResult.server)
-      setSuccessMessage('Conectado automáticamente desde CryptoGest Cloud')
+      setSuccessMessage(t('connectedAutomatic'))
       loadBackups(1)
       loadPlan()
       onDeepLinkHandled?.()
@@ -256,12 +251,12 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
       if (result?.success && result.data) {
         setIsConnected(true)
         setUser(result.data.user)
-        setSuccessMessage("Conectado correctamente a CryptoGest Cloud")
+        setSuccessMessage(t('connectedSuccess'))
         setCodeDigits(["", "", "", "", "", ""])
         loadBackups(1)
         loadPlan()
       } else {
-        setErrorMessage(result?.error || "Codigo invalido o expirado")
+        setErrorMessage(result?.error ? translateError(result.error) : t('codeInvalidOrExpired'))
       }
     } catch (err) {
       setErrorMessage(String(err))
@@ -281,7 +276,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
       setUsage(null)
       // License is NOT cleared — it's perpetual and persisted locally
       setShowDisconnectConfirm(false)
-      setSuccessMessage("Desconectado de CryptoGest Cloud")
+      setSuccessMessage(t('disconnectedSuccess'))
     } catch (err) {
       setErrorMessage(String(err))
     }
@@ -322,12 +317,12 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
     try {
       const result = await window.electronAPI?.cloud.upload(uploadNotes || undefined)
       if (result?.success) {
-        setSuccessMessage("Backup subido correctamente a la nube")
+        setSuccessMessage(t('uploadSuccess'))
         setUploadNotes("")
         setShowNotesDialog(false)
         await Promise.all([loadBackups(1), loadPlan()])
       } else {
-        setErrorMessage(result?.error || "Error al subir el backup")
+        setErrorMessage(result?.error ? translateError(result.error) : t('uploadError'))
       }
     } catch (err) {
       setErrorMessage(String(err))
@@ -344,9 +339,9 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
     try {
       const result = await window.electronAPI?.cloud.download(backupId)
       if (result?.success && result.data) {
-        setSuccessMessage(`Backup descargado en: ${result.data.path}`)
-      } else if (result?.error !== "Operación cancelada") {
-        setErrorMessage(result?.error || "Error al descargar")
+        setSuccessMessage(t('downloadSuccess', { path: result.data.path }))
+      } else if (result?.error !== t('common:operationCancelled')) {
+        setErrorMessage(result?.error ? translateError(result.error) : t('downloadError'))
       }
     } catch (err) {
       setErrorMessage(String(err))
@@ -368,7 +363,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
         // Force page reload
         window.location.reload()
       } else {
-        setErrorMessage(result?.error || "Error al importar")
+        setErrorMessage(result?.error ? translateError(result.error) : t('importError'))
       }
     } catch (err) {
       setErrorMessage(String(err))
@@ -383,10 +378,10 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
     try {
       const result = await window.electronAPI?.cloud.delete(backupId)
       if (result?.success) {
-        setSuccessMessage("Backup eliminado de la nube")
+        setSuccessMessage(t('deleteSuccess'))
         await Promise.all([loadBackups(meta?.current_page || 1), loadPlan()])
       } else {
-        setErrorMessage(result?.error || "Error al eliminar")
+        setErrorMessage(result?.error ? translateError(result.error) : t('deleteError'))
       }
     } catch (err) {
       setErrorMessage(String(err))
@@ -407,7 +402,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
       if (result?.success) {
         setIsPollingLicense(true)
       } else {
-        setErrorMessage(result?.error || "Error al iniciar la compra")
+        setErrorMessage(result?.error ? translateError(result.error) : t('purchaseError'))
       }
     } catch (err) {
       setErrorMessage(String(err))
@@ -426,7 +421,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
         setPlan(result.data.plan)
         setUsage(result.data.usage)
         setIsPollingLicense(false)
-        setSuccessMessage("Licencia empresarial activada correctamente")
+        setSuccessMessage(t('licenseActivated'))
       }
     }, 4000)
     const timeout = setTimeout(() => setIsPollingLicense(false), 600000)
@@ -454,13 +449,13 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b pb-3">
           <div>
-            <h1 className="text-xl font-semibold">Cloud Backup</h1>
+            <h1 className="text-xl font-semibold">{t('title')}</h1>
             <p className="text-sm text-muted-foreground">
-              Guarda copias de seguridad en la nube con CryptoGest Cloud
+              {t('subtitleDisconnected')}
             </p>
           </div>
           {onHelp && (
-            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title={t('common:viewHelp')}>
               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           )}
@@ -483,14 +478,14 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                   <KeyRound className="h-4 w-4 text-emerald-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium">Licencia Empresarial activa</p>
+                  <p className="text-sm font-medium">{t('enterpriseLicenseActive')}</p>
                   <p className="text-xs text-muted-foreground">
-                    Adquirida el {license.purchased_at ? formatDate(license.purchased_at) : "—"} — Perpetua
+                    {license.purchased_at ? t('purchasedAtPerpetual', { date: formatDateTime(license.purchased_at) }) : "—"}
                   </p>
                 </div>
                 <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50">
                   <KeyRound className="mr-1 h-3 w-3" />
-                  Licenciado
+                  {t('licensed')}
                 </Badge>
               </div>
             </CardContent>
@@ -512,45 +507,45 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-lg font-semibold">Conecta tu cuenta</h2>
+              <h2 className="text-lg font-semibold">{t('connectAccount')}</h2>
               <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                Inicia sesion en CryptoGest Cloud desde el navegador. Tu cuenta se vinculara automaticamente con esta aplicacion, o introduce el codigo de vinculacion.
+                {t('connectAccountDescription')}
               </p>
             </div>
 
             <Button onClick={handleOpenCloud} size="lg" className="gap-2">
               <ExternalLink className="h-4 w-4" />
-              Iniciar sesion en CryptoGest Cloud
+              {t('loginCloud')}
             </Button>
 
             <p className="text-xs text-muted-foreground">
-              Se abrira {serverUrl} en tu navegador
+              {t('willOpenUrl', { url: serverUrl })}
             </p>
 
             {/* Divider */}
             <div className="flex items-center gap-3">
               <div className="flex-1 border-t" />
-              <span className="text-xs text-muted-foreground">o conecta con codigo</span>
+              <span className="text-xs text-muted-foreground">{t('orConnectWithCode')}</span>
               <div className="flex-1 border-t" />
             </div>
 
             {/* Code input */}
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground">
-                Genera un codigo en{" "}
+                {t('generateCodeIn')}{" "}
                 <button
                   onClick={() => window.electronAPI?.shell.openExternal(`${serverUrl}/dashboard/devices`)}
                   className="text-primary hover:underline"
                 >
-                  Dispositivos
+                  {t('devices')}
                 </button>
-                {" "}e introducelo aqui
+                {" "}{t('andEnterItHere')}
               </p>
               <div className="max-w-[264px] mx-auto">
                 <Input
                   value={deviceName}
                   onChange={(e) => setDeviceName(e.target.value)}
-                  placeholder="Nombre del dispositivo"
+                  placeholder={t('deviceName')}
                   className="h-8 text-sm text-center"
                   disabled={isVerifyingCode}
                 />
@@ -579,7 +574,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                 ) : (
                   <Cloud className="mr-1.5 h-3.5 w-3.5" />
                 )}
-                Conectar
+                {t('connect')}
               </Button>
             </div>
           </div>
@@ -598,13 +593,13 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
       <div className="flex items-center justify-between border-b pb-3">
         <div className="flex items-center gap-2">
           <div>
-            <h1 className="text-xl font-semibold">Cloud Backup</h1>
+            <h1 className="text-xl font-semibold">{t('title')}</h1>
             <p className="text-sm text-muted-foreground">
-              Gestiona tus copias de seguridad en la nube
+              {t('subtitle')}
             </p>
           </div>
           {onHelp && (
-            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title={t('common:viewHelp')}>
               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           )}
@@ -618,7 +613,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
           {license?.has_license && (
             <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50">
               <KeyRound className="mr-1 h-3 w-3" />
-              Licenciado
+              {t('licensed')}
             </Badge>
           )}
           <Button
@@ -628,7 +623,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
             className="text-xs"
           >
             <LogOut className="mr-1.5 h-3 w-3" />
-            Desconectar
+            {t('disconnect')}
           </Button>
         </div>
       </div>
@@ -650,8 +645,8 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
       {/* Tabs */}
       <Tabs defaultValue="backups">
         <TabsList>
-          <TabsTrigger value="backups">Backups</TabsTrigger>
-          <TabsTrigger value="plan">Plan y uso</TabsTrigger>
+          <TabsTrigger value="backups">{t('backups')}</TabsTrigger>
+          <TabsTrigger value="plan">{t('planAndUsage')}</TabsTrigger>
         </TabsList>
 
         {/* Tab: Backups */}
@@ -668,7 +663,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                 ) : (
                   <Upload className="mr-2 h-4 w-4" />
                 )}
-                Subir backup a la nube
+                {t('uploadBackupToCloud')}
               </Button>
               {isUploading && (
                 <div className="flex items-center gap-2 flex-1 max-w-xs">
@@ -707,10 +702,10 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                 <CardContent className="py-10 text-center">
                   <Cloud className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
                   <p className="text-sm text-muted-foreground">
-                    No hay backups en la nube
+                    {t('noBackups')}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Sube tu primer backup para empezar
+                    {t('noBackupsHint')}
                   </p>
                 </CardContent>
               </Card>
@@ -720,11 +715,11 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="h-9 text-xs">Archivo</TableHead>
-                        <TableHead className="h-9 text-xs">Tamaño</TableHead>
-                        <TableHead className="h-9 text-xs">Fecha</TableHead>
-                        <TableHead className="h-9 text-xs">Notas</TableHead>
-                        <TableHead className="h-9 text-xs text-right">Acciones</TableHead>
+                        <TableHead className="h-9 text-xs">{t('file')}</TableHead>
+                        <TableHead className="h-9 text-xs">{t('size')}</TableHead>
+                        <TableHead className="h-9 text-xs">{t('common:date')}</TableHead>
+                        <TableHead className="h-9 text-xs">{t('common:notes')}</TableHead>
+                        <TableHead className="h-9 text-xs text-right">{t('common:actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -740,7 +735,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                             {formatBytes(backup.size_bytes)}
                           </TableCell>
                           <TableCell className="py-2 text-muted-foreground">
-                            {formatDate(backup.uploaded_at || backup.created_at)}
+                            {formatDateTime(backup.uploaded_at || backup.created_at)}
                           </TableCell>
                           <TableCell className="py-2 text-muted-foreground">
                             <span className="truncate max-w-[150px] block">{backup.notes || "—"}</span>
@@ -751,7 +746,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0"
-                                title="Descargar"
+                                title={t('downloadBackup')}
                                 disabled={isDownloading || isUploading || isImporting}
                                 onClick={() => handleDownload(backup.id)}
                               >
@@ -765,7 +760,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0"
-                                title="Importar (restaurar datos)"
+                                title={t('importRestore')}
                                 disabled={isDownloading || isUploading || isImporting}
                                 onClick={() => setImportConfirmId(backup.id)}
                               >
@@ -775,7 +770,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                title="Eliminar"
+                                title={t('common:delete')}
                                 disabled={isDownloading || isUploading || isDeleting}
                                 onClick={() => setDeleteConfirmId(backup.id)}
                               >
@@ -793,7 +788,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                 {meta && meta.last_page > 1 && (
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-muted-foreground">
-                      {meta.total} backup{meta.total !== 1 ? "s" : ""} en total
+                      {t('totalBackups', { count: meta.total })}
                     </p>
                     <div className="flex items-center gap-2">
                       <Button
@@ -803,7 +798,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                         disabled={meta.current_page <= 1 || isLoadingBackups}
                         onClick={() => loadBackups(meta.current_page - 1)}
                       >
-                        Anterior
+                        {t('previous')}
                       </Button>
                       <span className="text-xs text-muted-foreground tabular-nums">
                         {meta.current_page} / {meta.last_page}
@@ -815,7 +810,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                         disabled={meta.current_page >= meta.last_page || isLoadingBackups}
                         onClick={() => loadBackups(meta.current_page + 1)}
                       >
-                        Siguiente
+                        {t('common:next')}
                       </Button>
                     </div>
                   </div>
@@ -837,22 +832,22 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                     <KeyRound className="h-4 w-4 text-emerald-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium">Licencia Empresarial activa</p>
+                    <p className="text-sm font-medium">{t('enterpriseLicenseActive')}</p>
                     <p className="text-xs text-muted-foreground">
-                      Adquirida el {license.purchased_at ? formatDate(license.purchased_at) : "—"}
+                      {license.purchased_at ? t('purchasedAt', { date: formatDateTime(license.purchased_at) }) : "—"}
                     </p>
                   </div>
-                  <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50">Perpetua</Badge>
+                  <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50">{t('perpetual')}</Badge>
                 </div>
               ) : isPollingLicense ? (
                 <div className="flex flex-col items-center gap-3 py-2">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   <div className="text-center">
-                    <p className="text-sm font-medium">Esperando confirmacion del pago...</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Completa el pago en tu navegador</p>
+                    <p className="text-sm font-medium">{t('waitingPayment')}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t('completePaymentInBrowser')}</p>
                   </div>
                   <Button variant="ghost" size="sm" className="text-xs" onClick={() => setIsPollingLicense(false)}>
-                    Cancelar espera
+                    {t('cancelWait')}
                   </Button>
                 </div>
               ) : (
@@ -862,9 +857,9 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                       <KeyRound className="h-4 w-4 text-blue-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Licencia Empresarial</p>
+                      <p className="text-sm font-medium">{t('enterpriseLicense')}</p>
                       <p className="text-xs text-muted-foreground">
-                        99 EUR + IVA — Pago unico, licencia perpetua
+                        {t('enterpriseLicensePrice')}
                       </p>
                     </div>
                   </div>
@@ -879,7 +874,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                     ) : (
                       <ShoppingCart className="mr-1.5 h-3.5 w-3.5" />
                     )}
-                    Comprar licencia
+                    {t('buyLicense')}
                   </Button>
                 </div>
               )}
@@ -890,7 +885,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
             {/* Plan card */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Plan actual</CardTitle>
+                <CardTitle className="text-sm font-medium">{t('currentPlan')}</CardTitle>
               </CardHeader>
               <CardContent>
                 {plan ? (
@@ -900,13 +895,13 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                     </div>
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between text-muted-foreground">
-                        <span>Almacenamiento máximo</span>
+                        <span>{t('maxStorage')}</span>
                         <span className="tabular-nums">{formatBytes(plan.max_storage_bytes)}</span>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
-                        <span>Backups máximos</span>
+                        <span>{t('maxBackups')}</span>
                         <span className="tabular-nums">
-                          {plan.max_backups === -1 ? "Ilimitados" : plan.max_backups}
+                          {plan.max_backups === -1 ? t('unlimitedPlural') : plan.max_backups}
                         </span>
                       </div>
                     </div>
@@ -916,7 +911,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                       rel="noopener noreferrer"
                       className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-2"
                     >
-                      Mejorar plan <ExternalLink className="h-3 w-3" />
+                      {t('upgradePlan')} <ExternalLink className="h-3 w-3" />
                     </a>
                   </div>
                 ) : (
@@ -928,7 +923,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
             {/* Usage card */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Uso actual</CardTitle>
+                <CardTitle className="text-sm font-medium">{t('currentUsage')}</CardTitle>
               </CardHeader>
               <CardContent>
                 {usage ? (
@@ -938,7 +933,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                       <div className="flex items-center justify-between text-sm">
                         <span className="flex items-center gap-1.5 text-muted-foreground">
                           <HardDrive className="h-3.5 w-3.5" />
-                          Almacenamiento
+                          {t('storage')}
                         </span>
                         <span className="tabular-nums text-xs">
                           {formatBytes(usage.storage_used_bytes)} / {formatBytes(usage.max_storage_bytes)}
@@ -967,7 +962,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
                       <div className="flex items-center justify-between text-sm">
                         <span className="flex items-center gap-1.5 text-muted-foreground">
                           <Database className="h-3.5 w-3.5" />
-                          Backups
+                          {t('backups')}
                         </span>
                         <span className="tabular-nums text-xs">
                           {usage.backup_count} / {usage.unlimited_backups ? "∞" : usage.max_backups}
@@ -995,9 +990,9 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
 
                     {/* Remaining */}
                     <div className="text-xs text-muted-foreground space-y-0.5">
-                      <p>Espacio restante: {formatBytes(usage.storage_remaining_bytes)}</p>
+                      <p>{t('remainingSpace', { space: formatBytes(usage.storage_remaining_bytes) })}</p>
                       {!usage.unlimited_backups && usage.backups_remaining !== null && (
-                        <p>Backups restantes: {usage.backups_remaining}</p>
+                        <p>{t('remainingBackups', { count: usage.backups_remaining })}</p>
                       )}
                     </div>
                   </div>
@@ -1019,24 +1014,24 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
       <Dialog open={showNotesDialog} onOpenChange={setShowNotesDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Subir backup a la nube</DialogTitle>
+            <DialogTitle>{t('uploadDialogTitle')}</DialogTitle>
             <DialogDescription>
-              Se creará una copia de seguridad de todos tus datos y se subirá a CryptoGest Cloud.
+              {t('uploadDialogDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="upload-notes">Notas (opcional)</Label>
+            <Label htmlFor="upload-notes">{t('uploadNotesLabel')}</Label>
             <Textarea
               id="upload-notes"
               value={uploadNotes}
               onChange={(e) => setUploadNotes(e.target.value)}
-              placeholder="Ej: Backup antes de actualizar..."
+              placeholder={t('uploadNotesPlaceholder')}
               rows={3}
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNotesDialog(false)} disabled={isUploading}>
-              Cancelar
+              {t('common:cancel')}
             </Button>
             <Button onClick={() => { setShowNotesDialog(false); handleUpload() }} disabled={isUploading}>
               {isUploading ? (
@@ -1044,7 +1039,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
               ) : (
                 <Upload className="mr-2 h-4 w-4" />
               )}
-              Subir backup
+              {t('uploadButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1054,15 +1049,13 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
       <AlertDialog open={importConfirmId !== null} onOpenChange={(open) => !open && setImportConfirmId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Importar backup desde la nube?</AlertDialogTitle>
+            <AlertDialogTitle>{t('importTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción reemplazará todos los datos actuales de tu empresa con los datos del backup.
-              Deberás volver a iniciar sesión después de la importación.
-              Esta acción no se puede deshacer.
+              {t('importDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isImporting}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={isImporting}>{t('common:cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => importConfirmId !== null && handleImport(importConfirmId)}
               disabled={isImporting}
@@ -1073,7 +1066,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
               ) : (
                 <ArrowDownToLine className="mr-2 h-4 w-4" />
               )}
-              Importar y reemplazar datos
+              {t('importButton')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1083,13 +1076,13 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
       <AlertDialog open={deleteConfirmId !== null} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar backup de la nube?</AlertDialogTitle>
+            <AlertDialogTitle>{t('deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción eliminará permanentemente el backup del servidor. No se puede deshacer.
+              {t('deleteDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>{t('common:cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteConfirmId !== null && handleDelete(deleteConfirmId)}
               disabled={isDeleting}
@@ -1100,7 +1093,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
               ) : (
                 <Trash2 className="mr-2 h-4 w-4" />
               )}
-              Eliminar
+              {t('common:delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1110,17 +1103,16 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
       <AlertDialog open={showDisconnectConfirm} onOpenChange={setShowDisconnectConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Desconectar de CryptoGest Cloud?</AlertDialogTitle>
+            <AlertDialogTitle>{t('disconnectTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminará la configuración de conexión. Tus backups en la nube no se verán afectados
-              y podrás volver a conectar en cualquier momento.
+              {t('disconnectDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>{t('common:cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDisconnect}>
               <LogOut className="mr-2 h-4 w-4" />
-              Desconectar
+              {t('disconnect')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useTranslation } from "react-i18next"
+import { translateError } from "@/lib/formatting"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -88,18 +90,18 @@ const folderIcon = (specialUse: string | null) => {
   }
 }
 
-const folderDisplayName = (folder: CarpetaEmail) => {
-  if (folder.specialUse === '\\Inbox') return 'Bandeja de entrada'
-  if (folder.specialUse === '\\Sent') return 'Enviados'
-  if (folder.specialUse === '\\Drafts') return 'Borradores'
-  if (folder.specialUse === '\\Trash') return 'Papelera'
-  if (folder.specialUse === '\\Junk') return 'Spam'
-  if (folder.specialUse === '\\Flagged') return 'Destacados'
-  if (folder.specialUse === '\\Archive') return 'Archivo'
+const folderDisplayName = (folder: CarpetaEmail, t: (key: string) => string) => {
+  if (folder.specialUse === '\\Inbox') return t('inbox')
+  if (folder.specialUse === '\\Sent') return t('sent')
+  if (folder.specialUse === '\\Drafts') return t('drafts')
+  if (folder.specialUse === '\\Trash') return t('trash')
+  if (folder.specialUse === '\\Junk') return t('spam')
+  if (folder.specialUse === '\\Flagged') return t('starred')
+  if (folder.specialUse === '\\Archive') return t('archive')
   return folder.nombre
 }
 
-function formatEmailDate(dateStr: string | null): string {
+function formatEmailDate(dateStr: string | null, t: (key: string) => string): string {
   if (!dateStr) return ''
   const date = new Date(dateStr)
   const now = new Date()
@@ -110,7 +112,7 @@ function formatEmailDate(dateStr: string | null): string {
   const yesterday = new Date(now)
   yesterday.setDate(yesterday.getDate() - 1)
   if (date.toDateString() === yesterday.toDateString()) {
-    return 'Ayer'
+    return t('yesterday')
   }
   if (date.getFullYear() === now.getFullYear()) {
     return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
@@ -138,6 +140,8 @@ function sanitizeHtml(html: string): string {
 // ============================================
 
 export function BuzonPage() {
+  const { t } = useTranslation(['buzon', 'common'])
+
   // State
   const [accounts, setAccounts] = useState<CuentaEmail[]>([])
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
@@ -339,7 +343,7 @@ export function BuzonPage() {
     } else if (mode === 'reply' && selectedMessage) {
       const replyTo = selectedMessage.from[0]?.address || ''
       const subj = selectedMessage.subject.startsWith('Re:') ? selectedMessage.subject : `Re: ${selectedMessage.subject}`
-      const quote = `\n\n--- Mensaje original ---\nDe: ${selectedMessage.from.map(f => `${f.name} <${f.address}>`).join(', ')}\nFecha: ${formatFullDate(selectedMessage.date)}\nAsunto: ${selectedMessage.subject}\n\n${selectedMessage.text}`
+      const quote = `\n\n${t('originalMessage')}\n${t('from')}: ${selectedMessage.from.map(f => `${f.name} <${f.address}>`).join(', ')}\n${t('date')}: ${formatFullDate(selectedMessage.date)}\n${t('subject')}: ${selectedMessage.subject}\n\n${selectedMessage.text}`
       setComposeData({
         to: replyTo, cc: '', subject: subj, body: quote,
         inReplyTo: selectedMessage.messageId,
@@ -347,7 +351,7 @@ export function BuzonPage() {
       })
     } else if (mode === 'forward' && selectedMessage) {
       const subj = selectedMessage.subject.startsWith('Fwd:') ? selectedMessage.subject : `Fwd: ${selectedMessage.subject}`
-      const quote = `\n\n--- Mensaje reenviado ---\nDe: ${selectedMessage.from.map(f => `${f.name} <${f.address}>`).join(', ')}\nFecha: ${formatFullDate(selectedMessage.date)}\nAsunto: ${selectedMessage.subject}\n\n${selectedMessage.text}`
+      const quote = `\n\n${t('forwardedMessage')}\n${t('from')}: ${selectedMessage.from.map(f => `${f.name} <${f.address}>`).join(', ')}\n${t('date')}: ${formatFullDate(selectedMessage.date)}\n${t('subject')}: ${selectedMessage.subject}\n\n${selectedMessage.text}`
       setComposeData({ to: '', cc: '', subject: subj, body: quote, inReplyTo: '', references: '' })
     }
     setComposeAttachments([])
@@ -425,7 +429,7 @@ export function BuzonPage() {
           accountId = res.data.id
           setEditingAccountId(accountId)
         } else {
-          setTestResult({ success: false, message: res?.error || 'Error al guardar cuenta' })
+          setTestResult({ success: false, message: res?.error ? translateError(res.error) : t('saveError') })
           return
         }
       } else {
@@ -437,9 +441,9 @@ export function BuzonPage() {
 
       const res = await window.electronAPI?.buzon.testConnection(accountId)
       if (res?.success) {
-        setTestResult({ success: true, message: 'Conexión IMAP y SMTP correcta' })
+        setTestResult({ success: true, message: t('connectionImapSmtpOk') })
       } else {
-        setTestResult({ success: false, message: res?.error || 'Error de conexión' })
+        setTestResult({ success: false, message: res?.error ? translateError(res.error) : t('connectionError') })
       }
     } finally {
       setTestingConnection(false)
@@ -530,12 +534,12 @@ export function BuzonPage() {
     return (
       <div className="flex flex-col items-center justify-center h-full">
         <Mail className="h-16 w-16 text-slate-300" />
-        <h2 className="text-lg font-semibold text-slate-700">Buzón de Correo</h2>
+        <h2 className="text-lg font-semibold text-slate-700">{t('title')}</h2>
         <p className="text-sm text-slate-500 text-center max-w-md">
-          Añade una cuenta de correo electrónico para empezar a gestionar tu email directamente desde CryptoGest.
+          {t('noAccountsDescription')}
         </p>
         <Button size="sm" onClick={openNewAccount}>
-          <Plus className="h-4 w-4 mr-1" /> Añadir cuenta
+          <Plus className="h-4 w-4 mr-1" /> {t('addAccount')}
         </Button>
 
         {/* Account Dialog */}
@@ -550,6 +554,7 @@ export function BuzonPage() {
           testResult={testResult}
           onSave={handleSaveAccount}
           onTest={handleTestConnection}
+          t={t}
         />
       </div>
     )
@@ -561,18 +566,18 @@ export function BuzonPage() {
       <div className="flex items-center justify-between border-b px-4 py-2 bg-white shrink-0">
         <div className="flex items-center gap-2">
           <Mail className="h-5 w-5 text-slate-600" />
-          <h1 className="text-base font-semibold text-slate-800">Buzón de Correo</h1>
+          <h1 className="text-base font-semibold text-slate-800">{t('title')}</h1>
           {selectedAccount && (
             <Badge variant="secondary" className="text-xs">{selectedAccount.email}</Badge>
           )}
         </div>
         <div className="flex items-center gap-1">
           <Button variant="outline" size="sm" onClick={() => openCompose('new')} className="text-xs h-7">
-            <Plus className="h-3.5 w-3.5 mr-1" /> Redactar
+            <Plus className="h-3.5 w-3.5 mr-1" /> {t('compose')}
           </Button>
           <Button variant="outline" size="sm" onClick={handleSync} disabled={syncingMessages || !selectedAccountId} className="text-xs h-7">
             <RefreshCw className={cn("h-3.5 w-3.5 mr-1", syncingMessages && "animate-spin")} />
-            {syncingMessages ? 'Sincronizando...' : 'Sincronizar'}
+            {syncingMessages ? t('syncing') : t('sync')}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setShowAccountManager(true)} className="text-xs h-7">
             <Settings className="h-3.5 w-3.5" />
@@ -607,9 +612,9 @@ export function BuzonPage() {
               </div>
             ) : folders.length === 0 ? (
               <div className="px-3 py-4 text-center">
-                <p className="text-xs text-slate-400 mb-2">Sin carpetas</p>
+                <p className="text-xs text-slate-400 mb-2">{t('noFolders')}</p>
                 <Button variant="outline" size="sm" className="text-xs h-7" onClick={handleSync} disabled={syncingMessages}>
-                  <RefreshCw className="h-3 w-3 mr-1" /> Sincronizar
+                  <RefreshCw className="h-3 w-3 mr-1" /> {t('sync')}
                 </Button>
               </div>
             ) : (
@@ -627,7 +632,7 @@ export function BuzonPage() {
                     onClick={() => setSelectedFolderId(folder.id)}
                   >
                     <Icon className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate flex-1">{folderDisplayName(folder)}</span>
+                    <span className="truncate flex-1">{folderDisplayName(folder, t)}</span>
                     {unseen > 0 && (
                       <span className="text-[10px] font-semibold bg-primary text-white rounded-full px-1.5 min-w-[18px] text-center">
                         {unseen}
@@ -648,7 +653,7 @@ export function BuzonPage() {
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <Input
                 className="h-7 text-xs pl-7"
-                placeholder="Buscar correos..."
+                placeholder={t('searchEmails')}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
               />
@@ -664,7 +669,7 @@ export function BuzonPage() {
             ) : filteredMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Inbox className="h-8 w-8 mb-2" />
-                <p className="text-xs">Sin mensajes</p>
+                <p className="text-xs">{t('noMessagesShort')}</p>
               </div>
             ) : (
               filteredMessages.map(msg => {
@@ -682,13 +687,13 @@ export function BuzonPage() {
                   >
                     <div className="flex items-center gap-1 w-full">
                       <span className={cn("text-xs truncate flex-1", isUnread && "font-semibold text-slate-900")}>
-                        {msg.fromName || msg.fromAddress || '(sin remitente)'}
+                        {msg.fromName || msg.fromAddress || t('noSender')}
                       </span>
-                      <span className="text-[10px] text-slate-400 shrink-0">{formatEmailDate(msg.fecha)}</span>
+                      <span className="text-[10px] text-slate-400 shrink-0">{formatEmailDate(msg.fecha, t)}</span>
                     </div>
                     <div className="flex items-center gap-1 w-full mt-0.5">
                       <span className={cn("text-xs truncate flex-1", isUnread ? "text-slate-700" : "text-slate-500")}>
-                        {msg.subject || '(sin asunto)'}
+                        {msg.subject || t('noSubject')}
                       </span>
                       <div className="flex items-center gap-0.5 shrink-0">
                         {msg.hasAttachments === 1 && <Paperclip className="h-3 w-3 text-slate-400" />}
@@ -704,7 +709,7 @@ export function BuzonPage() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-3 py-1.5 border-t text-xs text-slate-500 bg-slate-50">
-              <span>Pág. {currentPage}/{totalPages}</span>
+              <span>{t('pageOf', { current: currentPage, total: totalPages })}</span>
               <div className="flex gap-1">
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0" disabled={currentPage <= 1} onClick={() => handlePageChange(currentPage - 1)}>
                   <ChevronLeft className="h-3 w-3" />
@@ -727,24 +732,24 @@ export function BuzonPage() {
             <>
               {/* Message header */}
               <div className="px-4 py-3 border-b shrink-0">
-                <h2 className="text-sm font-semibold text-slate-800 mb-2">{selectedMessage.subject || '(sin asunto)'}</h2>
+                <h2 className="text-sm font-semibold text-slate-800 mb-2">{selectedMessage.subject || t('noSubject')}</h2>
                 <div className="flex items-start justify-between gap-2">
                   <div className="text-xs text-slate-600 space-y-0.5">
                     <p>
-                      <span className="text-slate-400">De: </span>
+                      <span className="text-slate-400">{t('from')}: </span>
                       {selectedMessage.from.map((f, i) => (
                         <span key={i}>{f.name ? `${f.name} <${f.address}>` : f.address}{i < selectedMessage.from.length - 1 ? ', ' : ''}</span>
                       ))}
                     </p>
                     <p>
-                      <span className="text-slate-400">Para: </span>
-                      {selectedMessage.to.map((t, i) => (
-                        <span key={i}>{t.name ? `${t.name} <${t.address}>` : t.address}{i < selectedMessage.to.length - 1 ? ', ' : ''}</span>
+                      <span className="text-slate-400">{t('to')}: </span>
+                      {selectedMessage.to.map((addr, i) => (
+                        <span key={i}>{addr.name ? `${addr.name} <${addr.address}>` : addr.address}{i < selectedMessage.to.length - 1 ? ', ' : ''}</span>
                       ))}
                     </p>
                     {selectedMessage.cc.length > 0 && (
                       <p>
-                        <span className="text-slate-400">CC: </span>
+                        <span className="text-slate-400">{t('cc')}: </span>
                         {selectedMessage.cc.map((c, i) => (
                           <span key={i}>{c.name ? `${c.name} <${c.address}>` : c.address}{i < selectedMessage.cc.length - 1 ? ', ' : ''}</span>
                         ))}
@@ -782,7 +787,7 @@ export function BuzonPage() {
                 <div className="px-4 py-2 border-t shrink-0 bg-slate-50">
                   <p className="text-xs text-slate-500 mb-1">
                     <Paperclip className="h-3 w-3 inline mr-1" />
-                    {selectedMessage.attachments.length} adjunto{selectedMessage.attachments.length > 1 ? 's' : ''}
+                    {t('attachmentCount', { count: selectedMessage.attachments.length })}
                   </p>
                   <div className="flex flex-wrap gap-1">
                     {selectedMessage.attachments.map(att => (
@@ -805,17 +810,17 @@ export function BuzonPage() {
               {/* Action buttons */}
               <div className="px-4 py-2 border-t shrink-0 flex gap-1">
                 <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => openCompose('reply')}>
-                  <Reply className="h-3.5 w-3.5 mr-1" /> Responder
+                  <Reply className="h-3.5 w-3.5 mr-1" /> {t('reply')}
                 </Button>
                 <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => openCompose('forward')}>
-                  <Forward className="h-3.5 w-3.5 mr-1" /> Reenviar
+                  <Forward className="h-3.5 w-3.5 mr-1" /> {t('forward')}
                 </Button>
               </div>
             </>
           ) : (
             <div className="flex flex-col items-center justify-center flex-1 text-slate-400">
               <Mail className="h-12 w-12 mb-3" />
-              <p className="text-sm">Selecciona un correo para verlo</p>
+              <p className="text-sm">{t('selectMessage')}</p>
             </div>
           )}
         </div>
@@ -827,7 +832,7 @@ export function BuzonPage() {
       <Dialog open={showAccountManager} onOpenChange={setShowAccountManager}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-sm">Gestionar cuentas de correo</DialogTitle>
+            <DialogTitle className="text-sm">{t('manageAccounts')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 max-h-80 overflow-y-auto">
             {accounts.map(account => (
@@ -838,7 +843,7 @@ export function BuzonPage() {
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openEditAccount(account)}>
-                    Editar
+                    {t('common:edit')}
                   </Button>
                   <Button variant="ghost" size="sm" className="h-7 text-xs text-red-500" onClick={() => setDeleteAccountId(account.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
@@ -849,7 +854,7 @@ export function BuzonPage() {
           </div>
           <DialogFooter>
             <Button size="sm" className="text-xs" onClick={openNewAccount}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Añadir cuenta
+              <Plus className="h-3.5 w-3.5 mr-1" /> {t('addAccount')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -867,21 +872,22 @@ export function BuzonPage() {
         testResult={testResult}
         onSave={handleSaveAccount}
         onTest={handleTestConnection}
+        t={t}
       />
 
       {/* Delete Account Confirmation */}
       <AlertDialog open={!!deleteAccountId} onOpenChange={open => !open && setDeleteAccountId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-sm">Eliminar cuenta</AlertDialogTitle>
+            <AlertDialogTitle className="text-sm">{t('deleteAccount')}</AlertDialogTitle>
             <AlertDialogDescription className="text-xs">
-              Se eliminará la cuenta y todo el caché de correos asociado. Esta acción no se puede deshacer.
+              {t('deleteAccountDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="text-xs h-8">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel className="text-xs h-8">{t('common:cancel')}</AlertDialogCancel>
             <AlertDialogAction className="text-xs h-8 bg-red-600 hover:bg-red-700" onClick={handleDeleteAccount}>
-              Eliminar
+              {t('common:delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -892,24 +898,24 @@ export function BuzonPage() {
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="text-sm">
-              {composeData.inReplyTo ? 'Responder' : composeData.subject.startsWith('Fwd:') ? 'Reenviar' : 'Nuevo correo'}
+              {composeData.inReplyTo ? t('reply') : composeData.subject.startsWith('Fwd:') ? t('forward') : t('newEmail')}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-2 flex-1 overflow-y-auto">
             <div>
-              <Label className="text-xs">Para *</Label>
-              <Input className="h-8 text-xs" value={composeData.to} onChange={e => setComposeData(prev => ({ ...prev, to: e.target.value }))} placeholder="destinatario@ejemplo.com" />
+              <Label className="text-xs">{t('toRequired')}</Label>
+              <Input className="h-8 text-xs" value={composeData.to} onChange={e => setComposeData(prev => ({ ...prev, to: e.target.value }))} placeholder={t('recipientPlaceholder')} />
             </div>
             <div>
-              <Label className="text-xs">CC</Label>
-              <Input className="h-8 text-xs" value={composeData.cc} onChange={e => setComposeData(prev => ({ ...prev, cc: e.target.value }))} placeholder="copia@ejemplo.com" />
+              <Label className="text-xs">{t('cc')}</Label>
+              <Input className="h-8 text-xs" value={composeData.cc} onChange={e => setComposeData(prev => ({ ...prev, cc: e.target.value }))} placeholder={t('ccPlaceholder')} />
             </div>
             <div>
-              <Label className="text-xs">Asunto</Label>
+              <Label className="text-xs">{t('subject')}</Label>
               <Input className="h-8 text-xs" value={composeData.subject} onChange={e => setComposeData(prev => ({ ...prev, subject: e.target.value }))} />
             </div>
             <div>
-              <Label className="text-xs">Mensaje</Label>
+              <Label className="text-xs">{t('message')}</Label>
               <Textarea
                 className="text-xs min-h-[200px] resize-none"
                 value={composeData.body}
@@ -919,7 +925,7 @@ export function BuzonPage() {
             {/* Attachments */}
             {composeAttachments.length > 0 && (
               <div className="space-y-1">
-                <Label className="text-xs">Adjuntos</Label>
+                <Label className="text-xs">{t('attachments')}</Label>
                 {composeAttachments.map((att, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs bg-slate-50 rounded px-2 py-1">
                     <Paperclip className="h-3 w-3 text-slate-400" />
@@ -935,15 +941,15 @@ export function BuzonPage() {
           </div>
           <DialogFooter className="flex-row justify-between">
             <Button variant="outline" size="sm" className="text-xs h-8" onClick={handleAddComposeAttachment}>
-              <Paperclip className="h-3.5 w-3.5 mr-1" /> Adjuntar
+              <Paperclip className="h-3.5 w-3.5 mr-1" /> {t('attach')}
             </Button>
             <div className="flex gap-1">
               <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => setShowComposeDialog(false)}>
-                Cancelar
+                {t('common:cancel')}
               </Button>
               <Button size="sm" className="text-xs h-8" onClick={handleSendEmail} disabled={composeSending || !composeData.to.trim()}>
                 {composeSending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Send className="h-3.5 w-3.5 mr-1" />}
-                Enviar
+                {t('send')}
               </Button>
             </div>
           </DialogFooter>
@@ -958,7 +964,7 @@ export function BuzonPage() {
 // ============================================
 
 function AccountDialog({
-  open, onOpenChange, form, setForm, isEditing, saving, testing, testResult, onSave, onTest,
+  open, onOpenChange, form, setForm, isEditing, saving, testing, testResult, onSave, onTest, t,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -970,85 +976,86 @@ function AccountDialog({
   testResult: { success: boolean; message: string } | null
   onSave: () => void
   onTest: () => void
+  t: (key: string, options?: Record<string, unknown>) => string
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-sm">{isEditing ? 'Editar cuenta' : 'Añadir cuenta de correo'}</DialogTitle>
+          <DialogTitle className="text-sm">{isEditing ? t('editAccount') : t('addAccount')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-xs">Nombre de la cuenta *</Label>
-              <Input className="h-8 text-xs" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Mi correo" />
+              <Label className="text-xs">{t('accountNameRequired')}</Label>
+              <Input className="h-8 text-xs" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} />
             </div>
             <div>
-              <Label className="text-xs">Email *</Label>
+              <Label className="text-xs">{t('emailRequired')}</Label>
               <Input className="h-8 text-xs" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="user@example.com" />
             </div>
           </div>
 
           <div>
-            <Label className="text-xs">Nombre del remitente</Label>
-            <Input className="h-8 text-xs" value={form.fromName} onChange={e => setForm({ ...form, fromName: e.target.value })} placeholder="Tu nombre" />
+            <Label className="text-xs">{t('fromName')}</Label>
+            <Input className="h-8 text-xs" value={form.fromName} onChange={e => setForm({ ...form, fromName: e.target.value })} />
           </div>
 
           {/* IMAP */}
           <div className="border rounded p-2 space-y-2">
-            <p className="text-xs font-semibold text-slate-600">IMAP (recepción)</p>
+            <p className="text-xs font-semibold text-slate-600">{t('imapReception')}</p>
             <div className="grid grid-cols-3 gap-2">
               <div className="col-span-2">
-                <Label className="text-xs">Servidor *</Label>
+                <Label className="text-xs">{t('hostRequired')}</Label>
                 <Input className="h-8 text-xs" value={form.imapHost} onChange={e => setForm({ ...form, imapHost: e.target.value })} placeholder="imap.gmail.com" />
               </div>
               <div>
-                <Label className="text-xs">Puerto</Label>
+                <Label className="text-xs">{t('port')}</Label>
                 <Input className="h-8 text-xs" type="number" value={form.imapPort} onChange={e => setForm({ ...form, imapPort: parseInt(e.target.value) || 993 })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="text-xs">Usuario *</Label>
+                <Label className="text-xs">{t('userRequired')}</Label>
                 <Input className="h-8 text-xs" value={form.imapUser} onChange={e => setForm({ ...form, imapUser: e.target.value })} placeholder="user@example.com" />
               </div>
               <div>
-                <Label className="text-xs">Contraseña *</Label>
-                <Input className="h-8 text-xs" type="password" value={form.imapPass} onChange={e => setForm({ ...form, imapPass: e.target.value })} placeholder={isEditing ? '(sin cambios)' : ''} />
+                <Label className="text-xs">{t('passwordRequired')}</Label>
+                <Input className="h-8 text-xs" type="password" value={form.imapPass} onChange={e => setForm({ ...form, imapPass: e.target.value })} placeholder={isEditing ? t('noChanges') : ''} />
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={form.imapSecure} onCheckedChange={v => setForm({ ...form, imapSecure: v })} />
-              <Label className="text-xs">SSL/TLS</Label>
+              <Label className="text-xs">{t('secure')}</Label>
             </div>
           </div>
 
           {/* SMTP */}
           <div className="border rounded p-2 space-y-2">
-            <p className="text-xs font-semibold text-slate-600">SMTP (envío)</p>
+            <p className="text-xs font-semibold text-slate-600">{t('smtpSending')}</p>
             <div className="grid grid-cols-3 gap-2">
               <div className="col-span-2">
-                <Label className="text-xs">Servidor *</Label>
+                <Label className="text-xs">{t('hostRequired')}</Label>
                 <Input className="h-8 text-xs" value={form.smtpHost} onChange={e => setForm({ ...form, smtpHost: e.target.value })} placeholder="smtp.gmail.com" />
               </div>
               <div>
-                <Label className="text-xs">Puerto</Label>
+                <Label className="text-xs">{t('port')}</Label>
                 <Input className="h-8 text-xs" type="number" value={form.smtpPort} onChange={e => setForm({ ...form, smtpPort: parseInt(e.target.value) || 587 })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label className="text-xs">Usuario *</Label>
+                <Label className="text-xs">{t('userRequired')}</Label>
                 <Input className="h-8 text-xs" value={form.smtpUser} onChange={e => setForm({ ...form, smtpUser: e.target.value })} placeholder="user@example.com" />
               </div>
               <div>
-                <Label className="text-xs">Contraseña *</Label>
-                <Input className="h-8 text-xs" type="password" value={form.smtpPass} onChange={e => setForm({ ...form, smtpPass: e.target.value })} placeholder={isEditing ? '(sin cambios)' : ''} />
+                <Label className="text-xs">{t('passwordRequired')}</Label>
+                <Input className="h-8 text-xs" type="password" value={form.smtpPass} onChange={e => setForm({ ...form, smtpPass: e.target.value })} placeholder={isEditing ? t('noChanges') : ''} />
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={form.smtpSecure} onCheckedChange={v => setForm({ ...form, smtpSecure: v })} />
-              <Label className="text-xs">SSL/TLS</Label>
+              <Label className="text-xs">{t('secure')}</Label>
             </div>
           </div>
 
@@ -1063,11 +1070,11 @@ function AccountDialog({
         <DialogFooter>
           <Button variant="outline" size="sm" className="text-xs h-8" onClick={onTest} disabled={testing || !form.imapHost || !form.smtpHost}>
             {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-            Probar conexión
+            {t('testConnection')}
           </Button>
           <Button size="sm" className="text-xs h-8" onClick={onSave} disabled={saving || !form.nombre || !form.email || !form.imapHost || !form.smtpHost}>
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-            {isEditing ? 'Guardar cambios' : 'Añadir cuenta'}
+            {isEditing ? t('saveChanges') : t('addAccount')}
           </Button>
         </DialogFooter>
       </DialogContent>

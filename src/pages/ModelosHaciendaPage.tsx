@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
+import { translateError } from "@/lib/formatting"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,6 +29,7 @@ import {
   AlertCircle,
   HelpCircle,
 } from "lucide-react"
+import { formatCurrency } from "@/lib/formatting"
 
 interface EjercicioFiscal {
   id: number
@@ -69,16 +72,11 @@ interface Modelo390Data {
   resultado: number
 }
 
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat("es-ES", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 2,
-  }).format(amount)
-
-const trimestreLabels = ["1T", "2T", "3T", "4T"]
+const trimestreKeys = ["q1", "q2", "q3", "q4"] as const
 
 export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
+  const { t } = useTranslation(['modelos', 'common'])
+
   const [ejercicios, setEjercicios] = useState<EjercicioFiscal[]>([])
   const [selectedEjercicioId, setSelectedEjercicioId] = useState<string>("")
   const [isLoadingEjercicios, setIsLoadingEjercicios] = useState(true)
@@ -141,7 +139,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
       if (res?.success && res.data) {
         setModelo303Data(res.data)
       } else {
-        setError303(res?.error || "Error al calcular el Modelo 303")
+        setError303(res?.error ? translateError(res.error) : t('modelo303.errorCalculating'))
       }
     } catch (err) {
       console.error("Error calculando Modelo 303:", err)
@@ -167,7 +165,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
       if (res?.success && res.data) {
         setModelo111Data(res.data)
       } else {
-        setError111(res?.error || "Error al calcular el Modelo 111")
+        setError111(res?.error ? translateError(res.error) : t('modelo111.errorCalculating'))
       }
     } catch (err) {
       console.error("Error calculando Modelo 111:", err)
@@ -192,7 +190,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
       if (res?.success && res.data) {
         setModelo390Data(res.data)
       } else {
-        setError390(res?.error || "Error al calcular el Modelo 390")
+        setError390(res?.error ? translateError(res.error) : t('modelo390.errorCalculating'))
       }
     } catch (err) {
       console.error("Error calculando Modelo 390:", err)
@@ -220,13 +218,13 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
       <div className="flex items-center justify-between border-b pb-3">
         <div className="flex items-center gap-2">
           <div>
-            <h1 className="text-xl font-semibold">Modelos de Hacienda</h1>
+            <h1 className="text-xl font-semibold">{t('title')}</h1>
             <p className="text-sm text-muted-foreground">
-              Cálculo y consulta de modelos fiscales trimestrales y anuales
+              {t('subtitle')}
             </p>
           </div>
           {onHelp && (
-            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title="Ver ayuda">
+            <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title={t('common:viewHelp')}>
               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           )}
@@ -236,7 +234,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
       {/* Selector de Ejercicio Fiscal */}
       <div className="flex items-end gap-3">
         <div className="grid gap-1.5">
-          <Label className="text-xs">Ejercicio Fiscal</Label>
+          <Label className="text-xs">{t('fiscalYear')}</Label>
           <Select
             value={selectedEjercicioId}
             onValueChange={(value) => {
@@ -250,7 +248,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
             }}
           >
             <SelectTrigger className="h-8 w-44 text-sm">
-              <SelectValue placeholder="Seleccionar ejercicio" />
+              <SelectValue placeholder={t('selectExercise')} />
             </SelectTrigger>
             <SelectContent>
               {ejercicios.map((ej) => (
@@ -263,7 +261,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
         </div>
         {selectedEjercicio && (
           <span className="text-xs text-muted-foreground pb-1.5">
-            Estado: {selectedEjercicio.estado}
+            {t('statusLabel', { status: selectedEjercicio.estado })}
           </span>
         )}
       </div>
@@ -273,15 +271,15 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
         <TabsList className="h-8">
           <TabsTrigger value="modelo303" className="text-xs h-7 px-3">
             <FileText className="mr-1.5 h-3.5 w-3.5" />
-            Modelo 303
+            {t('modelo303.title')}
           </TabsTrigger>
           <TabsTrigger value="modelo111" className="text-xs h-7 px-3">
             <FileText className="mr-1.5 h-3.5 w-3.5" />
-            Modelo 111
+            {t('modelo111.title')}
           </TabsTrigger>
           <TabsTrigger value="modelo390" className="text-xs h-7 px-3">
             <FileText className="mr-1.5 h-3.5 w-3.5" />
-            Modelo 390
+            {t('modelo390.title')}
           </TabsTrigger>
         </TabsList>
 
@@ -290,13 +288,13 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">
-                Modelo 303 - IVA Trimestral
+                {t('modelo303.title')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-end gap-3">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Trimestre</Label>
+                  <Label className="text-xs">{t('quarter')}</Label>
                   <Select
                     value={trimestre303}
                     onValueChange={(value) => {
@@ -309,9 +307,9 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {trimestreLabels.map((label, idx) => (
+                      {trimestreKeys.map((key, idx) => (
                         <SelectItem key={idx + 1} value={String(idx + 1)}>
-                          {label}
+                          {t(key)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -327,7 +325,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                   ) : (
                     <Calculator className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  Calcular
+                  {t('calculate')}
                 </Button>
               </div>
 
@@ -346,25 +344,25 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  Modelo 303 - Autoliquidación IVA | {modelo303Data.periodo}
+                  {t('modelo303.resultTitle', { period: modelo303Data.periodo })}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* IVA Devengado */}
                 <div>
                   <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                    IVA Devengado (Repercutido)
+                    {t('modelo303.accruedSection')}
                   </h3>
                   <div className="border rounded">
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent">
-                          <TableHead className="h-9 text-xs">Tipo IVA</TableHead>
+                          <TableHead className="h-9 text-xs">{t('taxType')}</TableHead>
                           <TableHead className="h-9 text-xs text-right">
-                            Base Imponible
+                            {t('taxBase')}
                           </TableHead>
                           <TableHead className="h-9 text-xs text-right">
-                            Cuota
+                            {t('modelo303.quota')}
                           </TableHead>
                         </TableRow>
                       </TableHeader>
@@ -386,7 +384,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                         )}
                         <TableRow className="bg-muted/30 font-semibold">
                           <TableCell className="py-2 text-sm font-semibold">
-                            Total IVA Devengado
+                            {t('modelo303.totalAccrued')}
                           </TableCell>
                           <TableCell className="py-2 text-sm text-right tabular-nums font-semibold">
                             {formatCurrency(
@@ -410,18 +408,18 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                 {/* IVA Deducible */}
                 <div>
                   <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                    IVA Deducible (Soportado)
+                    {t('modelo303.deductibleSection')}
                   </h3>
                   <div className="border rounded">
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent">
-                          <TableHead className="h-9 text-xs">Tipo IVA</TableHead>
+                          <TableHead className="h-9 text-xs">{t('taxType')}</TableHead>
                           <TableHead className="h-9 text-xs text-right">
-                            Base Imponible
+                            {t('taxBase')}
                           </TableHead>
                           <TableHead className="h-9 text-xs text-right">
-                            Cuota
+                            {t('modelo303.quota')}
                           </TableHead>
                         </TableRow>
                       </TableHeader>
@@ -445,7 +443,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                             )}
                             <TableRow className="bg-muted/30 font-semibold">
                               <TableCell className="py-2 text-sm font-semibold">
-                                Total IVA Deducible
+                                {t('modelo303.totalDeductible')}
                               </TableCell>
                               <TableCell className="py-2 text-sm text-right tabular-nums font-semibold">
                                 {formatCurrency(
@@ -463,7 +461,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                         ) : (
                           <TableRow>
                             <TableCell colSpan={3} className="py-3 text-center text-xs text-muted-foreground">
-                              Sin IVA deducible en este período
+                              {t('modelo303.noDeductible')}
                             </TableCell>
                           </TableRow>
                         )}
@@ -477,12 +475,12 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                 {/* Resultado */}
                 <div>
                   <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                    Resultado de la liquidación
+                    {t('modelo303.settlementResult')}
                   </h3>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">
-                        IVA Devengado - IVA Deducible
+                        {t('modelo303.formula')}
                       </span>
                       <span className="tabular-nums">
                         {formatCurrency(modelo303Data.ivaDevengado)} -{" "}
@@ -500,7 +498,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                     >
                       <div>
                         <p className="text-sm font-semibold">
-                          Resultado de la liquidación
+                          {t('modelo303.settlementResult')}
                         </p>
                         <p
                           className={`text-xs ${
@@ -512,10 +510,10 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                           }`}
                         >
                           {modelo303Data.resultado > 0
-                            ? "A ingresar en Hacienda"
+                            ? t('modelo303.toDepositHacienda')
                             : modelo303Data.resultado < 0
-                            ? "A compensar en próximos trimestres"
-                            : "Sin resultado a ingresar ni a compensar"}
+                            ? t('modelo303.toCompensateNext')
+                            : t('modelo303.noResult')}
                         </p>
                       </div>
                       <span
@@ -538,15 +536,10 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                   <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                   <div className="text-xs text-blue-700 space-y-1">
                     <p className="font-medium">
-                      ¿Qué es el Modelo 303?
+                      {t('modelo303.infoTitle')}
                     </p>
                     <p>
-                      El Modelo 303 es la declaración trimestral del IVA. Recoge
-                      la diferencia entre el IVA repercutido (cobrado en tus
-                      facturas) y el IVA soportado (pagado en tus gastos). Si el
-                      resultado es positivo, debes ingresar esa cantidad en
-                      Hacienda. Si es negativo, puedes compensarlo en los
-                      siguientes trimestres.
+                      {t('modelo303.infoContent')}
                     </p>
                   </div>
                 </div>
@@ -560,13 +553,13 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">
-                Modelo 111 - Retenciones IRPF Trimestral
+                {t('modelo111.title')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-end gap-3">
                 <div className="grid gap-1.5">
-                  <Label className="text-xs">Trimestre</Label>
+                  <Label className="text-xs">{t('quarter')}</Label>
                   <Select
                     value={trimestre111}
                     onValueChange={(value) => {
@@ -579,9 +572,9 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {trimestreLabels.map((label, idx) => (
+                      {trimestreKeys.map((key, idx) => (
                         <SelectItem key={idx + 1} value={String(idx + 1)}>
-                          {label}
+                          {t(key)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -597,7 +590,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                   ) : (
                     <Calculator className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  Calcular
+                  {t('calculate')}
                 </Button>
               </div>
 
@@ -616,51 +609,49 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  Modelo 111 - Retenciones e ingresos a cuenta IRPF |{" "}
-                  {modelo111Data.periodo}
+                  {t('modelo111.resultTitle', { period: modelo111Data.periodo })}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Total Retenciones */}
                 <div>
                   <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                    Retenciones practicadas
+                    {t('modelo111.retentionsPracticed')}
                   </h3>
                   <p className="text-xs text-muted-foreground mb-3">
-                    Retenciones practicadas por rendimientos del trabajo y
-                    actividades profesionales
+                    {t('modelo111.retentionsDescription')}
                   </p>
 
                   {modelo111Data.totalRetenciones === 0 ? (
                     <div className="flex flex-col items-center justify-center py-6 rounded border bg-muted/30">
                       <FileText className="h-8 w-8 text-muted-foreground/50 mb-2" />
                       <p className="text-sm text-muted-foreground">
-                        No hay retenciones registradas en este período
+                        {t('modelo111.noRetentions')}
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-3">
                       <div className="grid grid-cols-3 gap-3">
                         <div className="rounded border p-3">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Nº Perceptores</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('modelo111.recipients')}</p>
                           <p className="text-lg font-semibold tabular-nums">{modelo111Data.numPerceptores}</p>
                         </div>
                         <div className="rounded border p-3">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Base Retenciones</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('modelo111.retentionBase')}</p>
                           <p className="text-lg font-semibold tabular-nums">{formatCurrency(modelo111Data.baseRetenciones)}</p>
                         </div>
                         <div className="rounded border p-3">
-                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Retenciones</p>
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('modelo111.retentions')}</p>
                           <p className="text-lg font-semibold tabular-nums">{formatCurrency(modelo111Data.totalRetenciones)}</p>
                         </div>
                       </div>
                       <div className="flex items-center justify-between rounded-lg border-2 border-amber-200 bg-amber-50 p-4">
                         <div>
                           <p className="text-sm font-semibold">
-                            Total retenciones a ingresar
+                            {t('modelo111.totalToDeposit')}
                           </p>
                           <p className="text-xs text-amber-600">
-                            A ingresar en Hacienda
+                            {t('toDepositHacienda')}
                           </p>
                         </div>
                         <span className="text-xl font-bold tabular-nums text-amber-700">
@@ -676,14 +667,10 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                   <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                   <div className="text-xs text-blue-700 space-y-1">
                     <p className="font-medium">
-                      ¿Qué es el Modelo 111?
+                      {t('modelo111.infoTitle')}
                     </p>
                     <p>
-                      El Modelo 111 es la declaración trimestral de retenciones
-                      e ingresos a cuenta del IRPF. Se utiliza para declarar las
-                      retenciones practicadas a trabajadores, profesionales y
-                      empresarios. Si has pagado facturas con retención de IRPF,
-                      debes declarar e ingresar esas cantidades trimestralmente.
+                      {t('modelo111.infoContent')}
                     </p>
                   </div>
                 </div>
@@ -697,7 +684,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">
-                Modelo 390 - Resumen Anual IVA
+                {t('modelo390.title')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -712,7 +699,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                   ) : (
                     <Calculator className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  Calcular resumen anual
+                  {t('calculateAnnualSummary')}
                 </Button>
               </div>
 
@@ -731,62 +718,61 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  Modelo 390 - Declaración Resumen Anual IVA |{" "}
-                  {modelo390Data.anio}
+                  {t('modelo390.resultTitle', { year: modelo390Data.anio })}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Tabla por Trimestres */}
                 <div>
                   <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                    Desglose por trimestres
+                    {t('modelo390.quarterSummary')}
                   </h3>
                   <div className="border rounded">
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent">
                           <TableHead className="h-9 text-xs">
-                            Trimestre
+                            {t('modelo390.quarterLabel')}
                           </TableHead>
                           <TableHead className="h-9 text-xs text-right">
-                            IVA Devengado
+                            {t('modelo390.accrued')}
                           </TableHead>
                           <TableHead className="h-9 text-xs text-right">
-                            IVA Deducible
+                            {t('modelo390.deductible')}
                           </TableHead>
                           <TableHead className="h-9 text-xs text-right">
-                            Resultado
+                            {t('modelo390.result')}
                           </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {modelo390Data.trimestres.map((t) => (
-                          <TableRow key={t.trimestre}>
+                        {modelo390Data.trimestres.map((tr) => (
+                          <TableRow key={tr.trimestre}>
                             <TableCell className="py-2 text-sm">
-                              {t.trimestre}T
+                              {t('quarterT', { quarter: tr.trimestre })}
                             </TableCell>
                             <TableCell className="py-2 text-sm text-right tabular-nums">
-                              {formatCurrency(t.devengado)}
+                              {formatCurrency(tr.devengado)}
                             </TableCell>
                             <TableCell className="py-2 text-sm text-right tabular-nums">
-                              {formatCurrency(t.deducible)}
+                              {formatCurrency(tr.deducible)}
                             </TableCell>
                             <TableCell
                               className={`py-2 text-sm text-right tabular-nums ${
-                                t.resultado > 0
+                                tr.resultado > 0
                                   ? "text-red-600"
-                                  : t.resultado < 0
+                                  : tr.resultado < 0
                                   ? "text-green-600"
                                   : ""
                               }`}
                             >
-                              {formatCurrency(t.resultado)}
+                              {formatCurrency(tr.resultado)}
                             </TableCell>
                           </TableRow>
                         ))}
                         <TableRow className="bg-muted/30 border-t-2 font-semibold">
                           <TableCell className="py-2 text-sm font-semibold">
-                            Total Anual
+                            {t('modelo390.totalAnnual')}
                           </TableCell>
                           <TableCell className="py-2 text-sm text-right tabular-nums font-semibold">
                             {formatCurrency(modelo390Data.totalDevengado)}
@@ -816,12 +802,12 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                 {/* Resumen Anual */}
                 <div>
                   <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                    Resumen anual
+                    {t('modelo390.annualSummary')}
                   </h3>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="rounded border p-3">
                       <p className="text-xs text-muted-foreground">
-                        Total IVA Devengado
+                        {t('modelo390.totalAccrued')}
                       </p>
                       <p className="text-lg font-semibold tabular-nums mt-1">
                         {formatCurrency(modelo390Data.totalDevengado)}
@@ -829,7 +815,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                     </div>
                     <div className="rounded border p-3">
                       <p className="text-xs text-muted-foreground">
-                        Total IVA Deducible
+                        {t('modelo390.totalDeductible')}
                       </p>
                       <p className="text-lg font-semibold tabular-nums mt-1">
                         {formatCurrency(modelo390Data.totalDeducible)}
@@ -845,7 +831,7 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                       }`}
                     >
                       <p className="text-xs text-muted-foreground">
-                        Resultado Anual
+                        {t('modelo390.annualResult')}
                       </p>
                       <p
                         className={`text-lg font-semibold tabular-nums mt-1 ${
@@ -868,10 +854,10 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                         }`}
                       >
                         {modelo390Data.resultado > 0
-                          ? "A ingresar"
+                          ? t('toDeposit')
                           : modelo390Data.resultado < 0
-                          ? "A compensar"
-                          : "Sin diferencia"}
+                          ? t('toCompensate')
+                          : t('noDifference')}
                       </p>
                     </div>
                   </div>
@@ -882,14 +868,10 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
                   <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                   <div className="text-xs text-blue-700 space-y-1">
                     <p className="font-medium">
-                      ¿Qué es el Modelo 390?
+                      {t('modelo390.infoTitle')}
                     </p>
                     <p>
-                      El Modelo 390 es la declaración resumen anual del IVA.
-                      Recoge el total de las operaciones realizadas durante todo
-                      el ejercicio fiscal, incluyendo los datos de las cuatro
-                      autoliquidaciones trimestrales del Modelo 303. Se presenta
-                      en enero del año siguiente al ejercicio declarado.
+                      {t('modelo390.infoContent')}
                     </p>
                   </div>
                 </div>
