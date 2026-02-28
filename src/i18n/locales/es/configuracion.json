@@ -238,6 +238,22 @@
     "description": "Selecciona el idioma de la interfaz. Los datos introducidos no se traducen.",
     "label": "Idioma"
   },
+  "updates": {
+    "title": "Actualizaciones",
+    "checkForUpdates": "Comprobar actualizaciones",
+    "checking": "Comprobando...",
+    "available": "Actualización disponible",
+    "notAvailable": "No hay actualizaciones",
+    "downloading": "Descargando...",
+    "downloaded": "Descarga completada",
+    "restartAndUpdate": "Reiniciar y actualizar",
+    "download": "Descargar",
+    "error": "Error al comprobar",
+    "currentVersion": "Versión actual",
+    "newVersion": "Nueva versión",
+    "upToDate": "Estás al día",
+    "checkError": "No se pudo comprobar actualizaciones"
+  },
   "betaFeatures": {
     "title": "Funciones Beta",
     "description": "Activa funciones experimentales que aún están en desarrollo",

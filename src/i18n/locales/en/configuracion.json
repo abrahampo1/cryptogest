@@ -238,6 +238,22 @@
     "description": "Select the interface language. Entered data is not translated.",
     "label": "Language"
   },
+  "updates": {
+    "title": "Updates",
+    "checkForUpdates": "Check for updates",
+    "checking": "Checking...",
+    "available": "Update available",
+    "notAvailable": "No updates available",
+    "downloading": "Downloading...",
+    "downloaded": "Download complete",
+    "restartAndUpdate": "Restart and update",
+    "download": "Download",
+    "error": "Error checking",
+    "currentVersion": "Current version",
+    "newVersion": "New version",
+    "upToDate": "You're up to date",
+    "checkError": "Could not check for updates"
+  },
   "betaFeatures": {
     "title": "Beta Features",
     "description": "Enable experimental features still in development",

@@ -238,6 +238,22 @@
     "description": "Sélectionnez la langue de l'interface. Les données saisies ne sont pas traduites.",
     "label": "Langue"
   },
+  "updates": {
+    "title": "Mises à jour",
+    "checkForUpdates": "Vérifier les mises à jour",
+    "checking": "Vérification...",
+    "available": "Mise à jour disponible",
+    "notAvailable": "Pas de mises à jour",
+    "downloading": "Téléchargement...",
+    "downloaded": "Téléchargement terminé",
+    "restartAndUpdate": "Redémarrer et mettre à jour",
+    "download": "Télécharger",
+    "error": "Erreur de vérification",
+    "currentVersion": "Version actuelle",
+    "newVersion": "Nouvelle version",
+    "upToDate": "Vous êtes à jour",
+    "checkError": "Impossible de vérifier les mises à jour"
+  },
   "betaFeatures": {
     "title": "Fonctionnalités Bêta",
     "description": "Activer les fonctionnalités expérimentales en cours de développement",

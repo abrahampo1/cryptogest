@@ -12,6 +12,7 @@ import nodemailer from 'nodemailer'
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { convert as htmlToText } from 'html-to-text'
+import { autoUpdater } from 'electron-updater'
 
 // Establecer nombre de la aplicación
 app.setName('CryptoGest')
@@ -466,6 +467,57 @@ const createWindow = () => {
 
 app.whenReady().then(() => {
   createWindow()
+
+  // --- Auto-updater configuration ---
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('checking-for-update', () => {
+    mainWindow?.webContents.send('updater:checking')
+  })
+  autoUpdater.on('update-available', (info) => {
+    mainWindow?.webContents.send('updater:available', { version: info.version, releaseDate: info.releaseDate })
+  })
+  autoUpdater.on('update-not-available', () => {
+    mainWindow?.webContents.send('updater:not-available')
+  })
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('updater:download-progress', { percent: progress.percent })
+  })
+  autoUpdater.on('update-downloaded', () => {
+    mainWindow?.webContents.send('updater:downloaded')
+  })
+  autoUpdater.on('error', (err) => {
+    mainWindow?.webContents.send('updater:error', err?.message || 'Unknown error')
+  })
+
+  // Check for updates on startup (silent — errors are expected in dev)
+  autoUpdater.checkForUpdates().catch(() => {})
+
+  // IPC handlers for updater
+  ipcMain.handle('updater:checkForUpdates', async () => {
+    try {
+      await autoUpdater.checkForUpdates()
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Error checking for updates' }
+    }
+  })
+  ipcMain.handle('updater:downloadUpdate', async () => {
+    try {
+      await autoUpdater.downloadUpdate()
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Error downloading update' }
+    }
+  })
+  ipcMain.handle('updater:quitAndInstall', () => {
+    autoUpdater.quitAndInstall()
+    return { success: true }
+  })
+  ipcMain.handle('updater:getVersion', () => {
+    return { success: true, data: app.getVersion() }
+  })
 
   // Check argv for Windows (first instance opened by deep link)
   const argUrl = process.argv.find(arg => arg.startsWith('cryptogest://'))

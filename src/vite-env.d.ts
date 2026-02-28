@@ -617,6 +617,19 @@ interface ElectronAPI {
     moveMessage: (cuentaId: number, carpetaId: number, uid: number, destPath: string) => Promise<ApiResponse<void>>
     sendEmail: (cuentaId: number, data: BuzonSendData) => Promise<ApiResponse<void>>
   }
+
+  updater: {
+    checkForUpdates: () => Promise<ApiResponse<void>>
+    downloadUpdate: () => Promise<ApiResponse<void>>
+    quitAndInstall: () => Promise<ApiResponse<void>>
+    getVersion: () => Promise<ApiResponse<string>>
+    onChecking: (callback: () => void) => () => void
+    onAvailable: (callback: (info: { version: string; releaseDate?: string }) => void) => () => void
+    onNotAvailable: (callback: () => void) => () => void
+    onDownloadProgress: (callback: (progress: { percent: number }) => void) => () => void
+    onDownloaded: (callback: () => void) => () => void
+    onError: (callback: (error: string) => void) => () => void
+  }
 }
 
 declare global {

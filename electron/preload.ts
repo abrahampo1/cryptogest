@@ -279,6 +279,38 @@ const electronAPI = {
     openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url) as Promise<ApiResponse<void>>,
   },
 
+  // Auto-updater
+  updater: {
+    checkForUpdates: () => ipcRenderer.invoke('updater:checkForUpdates') as Promise<ApiResponse<void>>,
+    downloadUpdate: () => ipcRenderer.invoke('updater:downloadUpdate') as Promise<ApiResponse<void>>,
+    quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall') as Promise<ApiResponse<void>>,
+    getVersion: () => ipcRenderer.invoke('updater:getVersion') as Promise<ApiResponse<string>>,
+    onChecking: (callback: () => void) => {
+      ipcRenderer.on('updater:checking', callback)
+      return () => { ipcRenderer.removeAllListeners('updater:checking') }
+    },
+    onAvailable: (callback: (info: { version: string; releaseDate?: string }) => void) => {
+      ipcRenderer.on('updater:available', (_, info) => callback(info))
+      return () => { ipcRenderer.removeAllListeners('updater:available') }
+    },
+    onNotAvailable: (callback: () => void) => {
+      ipcRenderer.on('updater:not-available', callback)
+      return () => { ipcRenderer.removeAllListeners('updater:not-available') }
+    },
+    onDownloadProgress: (callback: (progress: { percent: number }) => void) => {
+      ipcRenderer.on('updater:download-progress', (_, p) => callback(p))
+      return () => { ipcRenderer.removeAllListeners('updater:download-progress') }
+    },
+    onDownloaded: (callback: () => void) => {
+      ipcRenderer.on('updater:downloaded', callback)
+      return () => { ipcRenderer.removeAllListeners('updater:downloaded') }
+    },
+    onError: (callback: (error: string) => void) => {
+      ipcRenderer.on('updater:error', (_, err) => callback(err))
+      return () => { ipcRenderer.removeAllListeners('updater:error') }
+    },
+  },
+
   // Buzón de Correo
   buzon: {
     addAccount: (data: any) => ipcRenderer.invoke('buzon:addAccount', data) as Promise<ApiResponse<any>>,

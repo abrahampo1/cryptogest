@@ -227,6 +227,14 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
   const [emailSuccess, setEmailSuccess] = useState<string | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
 
+  // Updater state
+  type UpdateStatus = 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle')
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null)
+  const [updateProgress, setUpdateProgress] = useState(0)
+  const [updateError, setUpdateError] = useState<string | null>(null)
+  const [appVersion, setAppVersion] = useState<string>('...')
+
   useEffect(() => {
     checkSecurityStatus()
     loadImpuestos()
@@ -234,6 +242,39 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
     loadConfig()
     loadLogo()
     loadEmailConfig()
+
+    // Load app version
+    window.electronAPI?.updater.getVersion().then((res) => {
+      if (res?.success && res.data) setAppVersion(res.data)
+    })
+
+    // Subscribe to updater events
+    const cleanups: (() => void)[] = []
+    if (window.electronAPI?.updater) {
+      cleanups.push(window.electronAPI.updater.onChecking(() => {
+        setUpdateStatus('checking')
+        setUpdateError(null)
+      }))
+      cleanups.push(window.electronAPI.updater.onAvailable((info) => {
+        setUpdateStatus('available')
+        setUpdateVersion(info.version)
+      }))
+      cleanups.push(window.electronAPI.updater.onNotAvailable(() => {
+        setUpdateStatus('not-available')
+      }))
+      cleanups.push(window.electronAPI.updater.onDownloadProgress((p) => {
+        setUpdateStatus('downloading')
+        setUpdateProgress(p.percent)
+      }))
+      cleanups.push(window.electronAPI.updater.onDownloaded(() => {
+        setUpdateStatus('downloaded')
+      }))
+      cleanups.push(window.electronAPI.updater.onError((err) => {
+        setUpdateStatus('error')
+        setUpdateError(err)
+      }))
+    }
+    return () => { cleanups.forEach(fn => fn()) }
   }, [])
 
   const loadConfig = async () => {
@@ -1674,6 +1715,152 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
 
         {/* Sistema Tab */}
         <TabsContent value="sistema" className="space-y-4">
+          {/* Actualizaciones */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" />
+                {t('updates.title')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between p-3 border rounded">
+                <div className="flex items-center gap-3">
+                  <div className={`rounded-full p-2 ${
+                    updateStatus === 'available' || updateStatus === 'downloaded'
+                      ? 'bg-blue-50 text-blue-600'
+                      : updateStatus === 'error'
+                        ? 'bg-red-50 text-red-600'
+                        : updateStatus === 'not-available'
+                          ? 'bg-green-50 text-green-600'
+                          : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {updateStatus === 'error' ? (
+                      <AlertCircle className="h-4 w-4" />
+                    ) : updateStatus === 'not-available' ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : updateStatus === 'downloaded' ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">
+                      {updateStatus === 'checking' && t('updates.checking')}
+                      {updateStatus === 'available' && t('updates.available')}
+                      {updateStatus === 'not-available' && t('updates.upToDate')}
+                      {updateStatus === 'downloading' && t('updates.downloading')}
+                      {updateStatus === 'downloaded' && t('updates.downloaded')}
+                      {updateStatus === 'error' && t('updates.error')}
+                      {updateStatus === 'idle' && t('updates.title')}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('updates.currentVersion')}: {appVersion}
+                      {updateVersion && updateStatus === 'available' && (
+                        <> &middot; {t('updates.newVersion')}: <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">{updateVersion}</Badge></>
+                      )}
+                      {updateVersion && updateStatus === 'downloaded' && (
+                        <> &middot; {t('updates.newVersion')}: <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">{updateVersion}</Badge></>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {updateStatus === 'idle' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => window.electronAPI?.updater.checkForUpdates()}
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      {t('updates.checkForUpdates')}
+                    </Button>
+                  )}
+                  {updateStatus === 'checking' && (
+                    <Button variant="outline" size="sm" className="h-7 text-xs" disabled>
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      {t('updates.checking')}
+                    </Button>
+                  )}
+                  {updateStatus === 'available' && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => window.electronAPI?.updater.downloadUpdate()}
+                    >
+                      <Download className="h-3 w-3 mr-1" />
+                      {t('updates.download')}
+                    </Button>
+                  )}
+                  {updateStatus === 'downloaded' && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => window.electronAPI?.updater.quitAndInstall()}
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      {t('updates.restartAndUpdate')}
+                    </Button>
+                  )}
+                  {updateStatus === 'not-available' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setUpdateStatus('idle')
+                        window.electronAPI?.updater.checkForUpdates()
+                      }}
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      {t('updates.checkForUpdates')}
+                    </Button>
+                  )}
+                  {updateStatus === 'error' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setUpdateStatus('idle')
+                        setUpdateError(null)
+                        window.electronAPI?.updater.checkForUpdates()
+                      }}
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      {t('updates.checkForUpdates')}
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Download progress bar */}
+              {updateStatus === 'downloading' && (
+                <div className="space-y-1">
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.round(updateProgress)}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground text-right">{Math.round(updateProgress)}%</p>
+                </div>
+              )}
+
+              {/* Error message */}
+              {updateStatus === 'error' && updateError && (
+                <div className="flex items-center gap-2 bg-red-50 text-red-700 p-2 rounded text-xs">
+                  <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span className="break-all">{updateError}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Backup / Exportar */}
           <Card>
             <CardHeader className="pb-3">
@@ -1954,7 +2141,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               <div className="text-xs space-y-2">
                 <div className="flex justify-between py-1 border-b">
                   <span className="text-muted-foreground">{t('data.version')}</span>
-                  <span className="font-mono">1.0.0</span>
+                  <span className="font-mono">{appVersion}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b">
                   <span className="text-muted-foreground">{t('data.framework')}</span>
