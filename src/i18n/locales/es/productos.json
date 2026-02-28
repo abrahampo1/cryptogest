@@ -33,5 +33,28 @@
   "deleteProduct": "Eliminar Producto",
   "deleteConfirm": "¿Confirma la eliminación de \"{{name}}\"?",
   "errorUpdating": "Error al actualizar el producto",
-  "errorCreating": "Error al crear el producto"
+  "errorCreating": "Error al crear el producto",
+  "detail": {
+    "title": "Ficha del Producto",
+    "priceBreakdown": "Desglose de precios",
+    "statistics": "Estadísticas de venta",
+    "unitsSold": "Uds. vendidas",
+    "totalRevenue": "Ingresos totales",
+    "avgPrice": "Precio medio",
+    "invoiceCount": "Nº facturas",
+    "clientCount": "Nº clientes",
+    "lastSale": "Última venta",
+    "relatedInvoices": "Facturas",
+    "topClients": "Clientes",
+    "invoiceNumber": "Nº Factura",
+    "client": "Cliente",
+    "date": "Fecha",
+    "quantity": "Cantidad",
+    "amount": "Importe",
+    "status": "Estado",
+    "revenue": "Ingresos",
+    "noInvoices": "No hay facturas asociadas a este producto",
+    "noClients": "No hay clientes asociados a este producto",
+    "never": "Nunca"
+  }
 }

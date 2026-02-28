@@ -63,6 +63,7 @@
   "registerFirst": "Enregistrez votre première dépense",
   "expenseCountSummary_one": "{{count}} dépense",
   "expenseCountSummary_other": "{{count}} dépenses",
+  "suggestionHint": "Sélectionnez une dépense précédente ou saisissez-en une nouvelle",
   "descriptionPlaceholder": "Description de la dépense",
   "selectPlaceholder": "Sélectionner",
   "taxIncludedLabel": "{{name}} incluse",

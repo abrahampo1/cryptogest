@@ -63,6 +63,7 @@
   "registerFirst": "Register your first expense",
   "expenseCountSummary_one": "{{count}} expense",
   "expenseCountSummary_other": "{{count}} expenses",
+  "suggestionHint": "Select a previous expense or type a new one",
   "descriptionPlaceholder": "Expense description",
   "selectPlaceholder": "Select",
   "taxIncludedLabel": "{{name}} included",

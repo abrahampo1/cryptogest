@@ -33,5 +33,28 @@
   "deleteProduct": "Delete Product",
   "deleteConfirm": "Are you sure you want to delete \"{{name}}\"?",
   "errorUpdating": "Error updating the product",
-  "errorCreating": "Error creating the product"
+  "errorCreating": "Error creating the product",
+  "detail": {
+    "title": "Product Details",
+    "priceBreakdown": "Price breakdown",
+    "statistics": "Sales statistics",
+    "unitsSold": "Units sold",
+    "totalRevenue": "Total revenue",
+    "avgPrice": "Avg. price",
+    "invoiceCount": "Invoices",
+    "clientCount": "Clients",
+    "lastSale": "Last sale",
+    "relatedInvoices": "Invoices",
+    "topClients": "Clients",
+    "invoiceNumber": "Invoice No.",
+    "client": "Client",
+    "date": "Date",
+    "quantity": "Quantity",
+    "amount": "Amount",
+    "status": "Status",
+    "revenue": "Revenue",
+    "noInvoices": "No invoices associated with this product",
+    "noClients": "No clients associated with this product",
+    "never": "Never"
+  }
 }
