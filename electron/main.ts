@@ -8,11 +8,13 @@ import AdmZip from 'adm-zip'
 import { PrismaClient } from '@prisma/client'
 import * as crypto from './crypto'
 import * as cloud from './cloud'
+import * as cloudApi from './cloudApi'
 import nodemailer from 'nodemailer'
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { convert as htmlToText } from 'html-to-text'
 import { autoUpdater } from 'electron-updater'
+import { DBFFile } from 'dbffile'
 
 // Establecer nombre de la aplicación
 app.setName('CryptoGest')
@@ -21,6 +23,7 @@ app.setName('CryptoGest')
 let currentPassword: string | null = null
 let isAuthenticated = false
 let activeEmpresaId: string | null = null
+let isCloudMode = false  // true when active empresa is cloud type
 
 // Prisma client - se inicializa después de la autenticación
 let prisma: PrismaClient | null = null
@@ -391,7 +394,6 @@ function parseAndQueueDeepLink(url: string) {
 async function tryProcessDeepLink() {
   if (!pendingDeepLinkData) return
   if (!rendererReady) return // Wait until renderer has loaded
-  if (!isAuthenticated || !prisma) return // Wait until user has unlocked the app
 
   const data = pendingDeepLinkData
   pendingDeepLinkData = null // Clear before async work to prevent double-processing
@@ -400,22 +402,26 @@ async function tryProcessDeepLink() {
     console.log('[DeepLink] Confirming device link with server:', data.server)
     const response = await cloud.confirmDeviceLink(data.server, data.token)
 
-    // Save config to database
-    await prisma!.configuracion.upsert({
-      where: { clave: 'cloud_server_url' },
-      update: { valor: data.server },
-      create: { clave: 'cloud_server_url', valor: data.server },
-    })
-    await prisma!.configuracion.upsert({
-      where: { clave: 'cloud_token' },
-      update: { valor: response.api_token },
-      create: { clave: 'cloud_token', valor: response.api_token },
-    })
+    // Set cloud config in memory
     cloud.setCloudConfig(data.server, response.api_token)
+
+    // Save config to database only if authenticated (local empresa active)
+    if (isAuthenticated && prisma) {
+      await prisma.configuracion.upsert({
+        where: { clave: 'cloud_server_url' },
+        update: { valor: data.server },
+        create: { clave: 'cloud_server_url', valor: data.server },
+      })
+      await prisma.configuracion.upsert({
+        where: { clave: 'cloud_token' },
+        update: { valor: response.api_token },
+        create: { clave: 'cloud_token', valor: response.api_token },
+      })
+    }
 
     console.log('[DeepLink] Device linked successfully for user:', response.user.email)
 
-    // Notify the renderer that connection succeeded (past tense — it's a result notification)
+    // Notify the renderer that connection succeeded
     if (mainWindow) {
       mainWindow.webContents.send('deep-link:connected', {
         success: true,
@@ -543,16 +549,21 @@ app.on('before-quit', async () => {
     prisma = null
   }
 
-  // Encriptar la base de datos si hay contraseña configurada
-  if (currentPassword && crypto.isAuthConfigured()) {
+  // Encriptar la base de datos si hay contraseña configurada (local only)
+  if (!isCloudMode && currentPassword && crypto.isAuthConfigured()) {
     const result = crypto.encryptDatabase(currentPassword)
     if (!result.success) {
       console.error('Error al encriptar base de datos:', result.error)
     }
   }
 
+  if (isCloudMode) {
+    cloudApi.clearCloudApiConfig()
+  }
+
   currentPassword = null
   isAuthenticated = false
+  isCloudMode = false
 })
 
 // ============================================
@@ -575,8 +586,46 @@ ipcMain.handle('empresa:list', async () => {
   }
 })
 
-ipcMain.handle('empresa:create', async (_, data: { nombre: string; customDataPath?: string }) => {
+ipcMain.handle('empresa:create', async (_, data: { nombre: string; customDataPath?: string; tipo?: 'local' | 'cloud'; passphrase?: string; cloudToken?: string; serverUrl?: string }) => {
   try {
+    if (data.tipo === 'cloud') {
+      if (!data.passphrase || !data.cloudToken || !data.serverUrl) {
+        return { success: false, error: 'Missing cloud parameters' }
+      }
+      // Create cloud empresa
+      const salt = cloudApi.generateSalt()
+      const verificationHash = cloudApi.generateVerificationHash(data.passphrase, salt)
+      // nombre is stored encrypted on the server via the API
+
+      // Configure cloud API temporarily to create empresa
+      cloudApi.setCloudApiConfig(data.serverUrl, data.cloudToken, 0)
+      const key = cloudApi.deriveCloudKey(data.passphrase, salt)
+      cloudApi.setEncryptionKey(key)
+
+      // Verify cloud auth
+      const authCheck = await cloud.checkAuth()
+
+      // Create empresa on server
+      const serverEmpresa = await cloudApi.empresaCloud.create({
+        nombre_encrypted: data.nombre,
+        salt,
+        verification_hash: verificationHash,
+      })
+
+      // Save locally
+      const empresa = crypto.createCloudEmpresa(data.nombre, {
+        serverUrl: data.serverUrl,
+        token: data.cloudToken,
+        empresaId: serverEmpresa.id,
+        userId: authCheck.user.id,
+        role: 'owner',
+        salt,
+        verificationHash,
+      })
+
+      cloudApi.clearCloudApiConfig()
+      return { success: true, data: empresa }
+    }
     const empresa = crypto.createEmpresa(data.nombre, data.customDataPath)
     return { success: true, data: empresa }
   } catch (error) {
@@ -665,14 +714,20 @@ ipcMain.handle('empresa:selectDirectory', async () => {
 ipcMain.handle('empresa:select', async (_, id: string) => {
   try {
     // Si hay una empresa autenticada, bloquear primero
-    if (isAuthenticated && prisma) {
-      await prisma.$disconnect()
-      prisma = null
-      if (currentPassword && crypto.isAuthConfigured()) {
+    if (isAuthenticated) {
+      if (prisma) {
+        await prisma.$disconnect()
+        prisma = null
+      }
+      if (!isCloudMode && currentPassword && crypto.isAuthConfigured()) {
         crypto.encryptDatabase(currentPassword)
+      }
+      if (isCloudMode) {
+        cloudApi.clearCloudApiConfig()
       }
       currentPassword = null
       isAuthenticated = false
+      isCloudMode = false
     }
 
     // Buscar empresa
@@ -690,12 +745,31 @@ ipcMain.handle('empresa:select', async (_, id: string) => {
     config.ultimaEmpresaId = id
     crypto.saveEmpresasConfig(config)
 
-    // Obtener estado de auth para esta empresa
+    if (empresa.tipo === 'cloud') {
+      // Cloud empresa: auth is handled via passphrase, not local password
+      return {
+        success: true,
+        data: {
+          empresa,
+          isCloud: true,
+          authStatus: {
+            isConfigured: true,
+            hasEncryptedDb: false,
+            isAuthenticated: false,
+            passkeySupported: false,
+            passkeyEnabled: false,
+          }
+        }
+      }
+    }
+
+    // Local empresa: obtener estado de auth
     const integrity = crypto.checkAuthIntegrity()
     return {
       success: true,
       data: {
         empresa,
+        isCloud: false,
         authStatus: {
           isConfigured: integrity.isConfigured,
           hasEncryptedDb: integrity.hasEncryptedDb,
@@ -743,6 +817,84 @@ ipcMain.handle('empresa:delete', async (_, id: string) => {
 ipcMain.handle('empresa:getActive', async () => {
   try {
     return { success: true, data: crypto.getActiveEmpresa() }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('empresa:joinCloud', async (_, data: { code: string; cloudToken: string; serverUrl: string; passphrase: string }) => {
+  try {
+    cloud.setCloudConfig(data.serverUrl, data.cloudToken)
+    cloudApi.setCloudApiConfig(data.serverUrl, data.cloudToken, 0)
+    const serverEmpresa = await cloudApi.empresaCloud.join(data.code)
+    if (!cloudApi.verifyPassphrase(data.passphrase, serverEmpresa.salt, serverEmpresa.verification_hash)) {
+      cloudApi.clearCloudApiConfig()
+      return { success: false, error: 'passwordIncorrect' }
+    }
+    const authCheck = await cloud.checkAuth()
+    const empresa = crypto.createCloudEmpresa(
+      `Cloud Empresa #${serverEmpresa.id}`,
+      {
+        serverUrl: data.serverUrl,
+        token: data.cloudToken,
+        empresaId: serverEmpresa.id,
+        userId: authCheck.user.id,
+        role: serverEmpresa.role,
+        salt: serverEmpresa.salt,
+        verificationHash: serverEmpresa.verification_hash,
+      }
+    )
+    cloudApi.clearCloudApiConfig()
+    return { success: true, data: empresa }
+  } catch (error) {
+    cloudApi.clearCloudApiConfig()
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - Cloud Empresa Management
+// ============================================
+
+ipcMain.handle('cloudEmpresa:getUsers', async () => {
+  try {
+    const empresa = crypto.getActiveEmpresa()
+    if (!isCloudMode || !empresa?.cloudConfig) return { success: false, error: 'Not in cloud mode' }
+    const users = await cloudApi.empresaCloud.getUsers(empresa.cloudConfig.empresaId)
+    return { success: true, data: users }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('cloudEmpresa:inviteUser', async (_, role?: string) => {
+  try {
+    const empresa = crypto.getActiveEmpresa()
+    if (!isCloudMode || !empresa?.cloudConfig) return { success: false, error: 'Not in cloud mode' }
+    const invitation = await cloudApi.empresaCloud.inviteUser(empresa.cloudConfig.empresaId, role)
+    return { success: true, data: invitation }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('cloudEmpresa:removeUser', async (_, userId: number) => {
+  try {
+    const empresa = crypto.getActiveEmpresa()
+    if (!isCloudMode || !empresa?.cloudConfig) return { success: false, error: 'Not in cloud mode' }
+    await cloudApi.empresaCloud.removeUser(empresa.cloudConfig.empresaId, userId)
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('cloudEmpresa:updateUserRole', async (_, userId: number, role: string) => {
+  try {
+    const empresa = crypto.getActiveEmpresa()
+    if (!isCloudMode || !empresa?.cloudConfig) return { success: false, error: 'Not in cloud mode' }
+    await cloudApi.empresaCloud.updateUserRole(empresa.cloudConfig.empresaId, userId, role)
+    return { success: true }
   } catch (error) {
     return { success: false, error: String(error) }
   }
@@ -841,13 +993,72 @@ ipcMain.handle('auth:lock', async () => {
       prisma = null
     }
 
-    // Encriptar base de datos
-    if (currentPassword && crypto.isAuthConfigured()) {
+    // Encriptar base de datos (only for local empresas)
+    if (!isCloudMode && currentPassword && crypto.isAuthConfigured()) {
       crypto.encryptDatabase(currentPassword)
+    }
+
+    if (isCloudMode) {
+      cloudApi.clearCloudApiConfig()
     }
 
     currentPassword = null
     isAuthenticated = false
+    isCloudMode = false
+
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Cloud empresa passphrase authentication
+ipcMain.handle('auth:unlockCloud', async (_, passphrase: string) => {
+  try {
+    const activeEmpresa = crypto.getActiveEmpresa()
+    if (!activeEmpresa || activeEmpresa.tipo !== 'cloud' || !activeEmpresa.cloudConfig) {
+      return { success: false, error: 'Not a cloud empresa' }
+    }
+
+    const cc = activeEmpresa.cloudConfig
+
+    if (cc.verificationHash) {
+      // Verify passphrase locally using stored verificationHash (fast, no network needed)
+      if (!cloudApi.verifyPassphrase(passphrase, cc.salt, cc.verificationHash)) {
+        return { success: false, error: 'passwordIncorrect' }
+      }
+    } else {
+      // Backward compat: old config without verificationHash, verify via server
+      cloudApi.setCloudApiConfig(cc.serverUrl, cc.token, cc.empresaId)
+      try {
+        const empresas = await cloudApi.empresaCloud.list()
+        const serverEmpresa = empresas.find((e: any) => e.id === cc.empresaId)
+        if (!serverEmpresa) {
+          cloudApi.clearCloudApiConfig()
+          return { success: false, error: 'Empresa not found on server' }
+        }
+        if (!cloudApi.verifyPassphrase(passphrase, serverEmpresa.salt, serverEmpresa.verification_hash)) {
+          cloudApi.clearCloudApiConfig()
+          return { success: false, error: 'passwordIncorrect' }
+        }
+        // Backfill verificationHash locally for future logins
+        cc.verificationHash = serverEmpresa.verification_hash
+        crypto.updateEmpresaCloudConfig(activeEmpresa.id, cc)
+      } catch (err) {
+        cloudApi.clearCloudApiConfig()
+        return { success: false, error: String(err) }
+      }
+    }
+
+    // Configure cloud API
+    cloudApi.setCloudApiConfig(cc.serverUrl, cc.token, cc.empresaId)
+
+    // Derive key and set it
+    const key = cloudApi.deriveCloudKey(passphrase, cc.salt)
+    cloudApi.setEncryptionKey(key)
+
+    isAuthenticated = true
+    isCloudMode = true
 
     return { success: true }
   } catch (error) {
@@ -929,11 +1140,24 @@ ipcMain.handle('auth:disablePasskey', async () => {
 })
 
 // Middleware para verificar autenticación
-function requireAuth() {
+function requireAuth(): PrismaClient {
   if (!isAuthenticated || !prisma) {
     throw new Error('notAuthenticated')
   }
   return prisma
+}
+
+function requireAuthOrCloud(): { mode: 'local'; db: PrismaClient } | { mode: 'cloud' } {
+  if (!isAuthenticated) {
+    throw new Error('notAuthenticated')
+  }
+  if (isCloudMode) {
+    return { mode: 'cloud' }
+  }
+  if (!prisma) {
+    throw new Error('notAuthenticated')
+  }
+  return { mode: 'local', db: prisma }
 }
 
 // ============================================
@@ -956,8 +1180,12 @@ ipcMain.handle('db:test', async () => {
 
 ipcMain.handle('clientes:getAll', async () => {
   try {
-    const db = requireAuth()
-    const clientes = await db.cliente.findMany({
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const clientes = await cloudApi.clientes.getAll()
+      return { success: true, data: clientes }
+    }
+    const clientes = await ctx.db.cliente.findMany({
       include: {
         facturas: true
       },
@@ -971,10 +1199,19 @@ ipcMain.handle('clientes:getAll', async () => {
 
 ipcMain.handle('clientes:getById', async (_, id: number) => {
   try {
-    const db = requireAuth()
-    const cliente = await db.cliente.findUnique({
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const cliente = await cloudApi.clientes.getById(id)
+      return { success: true, data: cliente }
+    }
+    const cliente = await ctx.db.cliente.findUnique({
       where: { id },
-      include: { facturas: true }
+      include: {
+        facturas: {
+          include: { lineas: { include: { producto: true } } },
+          orderBy: { fecha: 'desc' }
+        }
+      }
     })
     return { success: true, data: cliente }
   } catch (error) {
@@ -996,8 +1233,12 @@ ipcMain.handle('clientes:create', async (_, data: {
   activo?: boolean
 }) => {
   try {
-    const db = requireAuth()
-    const cliente = await db.cliente.create({
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const cliente = await cloudApi.clientes.create(data)
+      return { success: true, data: cliente }
+    }
+    const cliente = await ctx.db.cliente.create({
       data,
       include: { facturas: true }
     })
@@ -1021,8 +1262,12 @@ ipcMain.handle('clientes:update', async (_, id: number, data: {
   activo?: boolean
 }) => {
   try {
-    const db = requireAuth()
-    const cliente = await db.cliente.update({
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const cliente = await cloudApi.clientes.update(id, data)
+      return { success: true, data: cliente }
+    }
+    const cliente = await ctx.db.cliente.update({
       where: { id },
       data,
       include: { facturas: true }
@@ -1035,8 +1280,12 @@ ipcMain.handle('clientes:update', async (_, id: number, data: {
 
 ipcMain.handle('clientes:delete', async (_, id: number) => {
   try {
-    const db = requireAuth()
-    await db.cliente.delete({ where: { id } })
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.clientes.delete(id)
+      return { success: true }
+    }
+    await ctx.db.cliente.delete({ where: { id } })
     return { success: true }
   } catch (error) {
     return { success: false, error: String(error) }
@@ -1049,7 +1298,12 @@ ipcMain.handle('clientes:delete', async (_, id: number) => {
 
 ipcMain.handle('facturas:getAll', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.facturas.getAll()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const facturas = await db.factura.findMany({
       include: {
         cliente: true,
@@ -1071,7 +1325,12 @@ ipcMain.handle('facturas:getAll', async () => {
 
 ipcMain.handle('facturas:getById', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.facturas.getById(id)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const factura = await db.factura.findUnique({
       where: { id },
       include: {
@@ -1114,7 +1373,12 @@ ipcMain.handle('facturas:create', async (_, data: {
   }>
 }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.facturas.create(data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const { lineas, ...facturaData } = data
 
     // Generate invoice number
@@ -1187,7 +1451,12 @@ ipcMain.handle('facturas:update', async (_, id: number, data: {
   }>
 }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.facturas.update(id, data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const { lineas, ...facturaData } = data
 
     // If lineas are provided, delete existing and create new ones
@@ -1222,7 +1491,12 @@ ipcMain.handle('facturas:update', async (_, id: number, data: {
 
 ipcMain.handle('facturas:delete', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.facturas.delete(id)
+      return { success: true }
+    }
+    const db = ctx.db
     // Primero eliminar las líneas de factura
     await db.lineaFactura.deleteMany({ where: { facturaId: id } })
     // Luego eliminar la factura
@@ -1235,7 +1509,12 @@ ipcMain.handle('facturas:delete', async (_, id: number) => {
 
 ipcMain.handle('facturas:getNextNumber', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.facturas.getNextNumber()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const year = new Date().getFullYear()
     const lastFactura = await db.factura.findFirst({
       where: {
@@ -1267,7 +1546,12 @@ ipcMain.handle('facturas:getNextNumber', async () => {
 
 ipcMain.handle('gastos:getAll', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.gastos.getAll()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const gastos = await db.gasto.findMany({
       include: { categoria: true, adjuntos: true, impuesto: true },
       orderBy: { fecha: 'desc' }
@@ -1280,7 +1564,12 @@ ipcMain.handle('gastos:getAll', async () => {
 
 ipcMain.handle('gastos:getById', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.gastos.getById(id)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const gasto = await db.gasto.findUnique({
       where: { id },
       include: { categoria: true, adjuntos: true, impuesto: true }
@@ -1303,7 +1592,12 @@ ipcMain.handle('gastos:create', async (_, data: {
   notas?: string
 }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.gastos.create(data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const gasto = await db.gasto.create({
       data,
       include: { categoria: true, adjuntos: true, impuesto: true }
@@ -1326,7 +1620,12 @@ ipcMain.handle('gastos:update', async (_, id: number, data: {
   notas?: string
 }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.gastos.update(id, data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const gasto = await db.gasto.update({
       where: { id },
       data,
@@ -1340,7 +1639,12 @@ ipcMain.handle('gastos:update', async (_, id: number, data: {
 
 ipcMain.handle('gastos:delete', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.gastos.delete(id)
+      return { success: true }
+    }
+    const db = ctx.db
     // Primero eliminar los archivos de adjuntos
     const adjuntos = await db.adjuntoGasto.findMany({ where: { gastoId: id } })
     for (const adj of adjuntos) {
@@ -1364,7 +1668,12 @@ ipcMain.handle('adjuntos:upload', async (_, gastoId: number, fileData: {
   tamano: number
 }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.adjuntos.upload(gastoId, fileData)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     if (!currentPassword) {
       return { success: false, error: 'notAuthenticated' }
     }
@@ -1409,7 +1718,12 @@ ipcMain.handle('adjuntos:upload', async (_, gastoId: number, fileData: {
 
 ipcMain.handle('adjuntos:download', async (_, adjuntoId: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.adjuntos.download(adjuntoId)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     if (!currentPassword) {
       return { success: false, error: 'notAuthenticated' }
     }
@@ -1441,7 +1755,12 @@ ipcMain.handle('adjuntos:download', async (_, adjuntoId: number) => {
 
 ipcMain.handle('adjuntos:delete', async (_, adjuntoId: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.adjuntos.delete(adjuntoId)
+      return { success: true }
+    }
+    const db = ctx.db
 
     // Obtener información del adjunto
     const adjunto = await db.adjuntoGasto.findUnique({ where: { id: adjuntoId } })
@@ -1466,7 +1785,12 @@ ipcMain.handle('adjuntos:delete', async (_, adjuntoId: number) => {
 
 ipcMain.handle('adjuntos:getByGastoId', async (_, gastoId: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.adjuntos.getByGastoId(gastoId)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const adjuntos = await db.adjuntoGasto.findMany({
       where: { gastoId },
       orderBy: { createdAt: 'desc' }
@@ -1483,7 +1807,12 @@ ipcMain.handle('adjuntos:getByGastoId', async (_, gastoId: number) => {
 
 ipcMain.handle('config:getAll', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.configuracion.getAll()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const configs = await db.configuracion.findMany()
     const configMap: Record<string, string> = {}
     configs.forEach((c: { clave: string; valor: string }) => {
@@ -1497,7 +1826,12 @@ ipcMain.handle('config:getAll', async () => {
 
 ipcMain.handle('config:get', async (_, clave: string) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.configuracion.get(clave)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const config = await db.configuracion.findUnique({
       where: { clave }
     })
@@ -1509,7 +1843,12 @@ ipcMain.handle('config:get', async (_, clave: string) => {
 
 ipcMain.handle('config:set', async (_, clave: string, valor: string) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.configuracion.set(clave, valor)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const config = await db.configuracion.upsert({
       where: { clave },
       update: { valor },
@@ -1523,7 +1862,12 @@ ipcMain.handle('config:set', async (_, clave: string, valor: string) => {
 
 ipcMain.handle('config:delete', async (_, clave: string) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.configuracion.delete(clave)
+      return { success: true }
+    }
+    const db = ctx.db
     await db.configuracion.delete({ where: { clave } })
     return { success: true }
   } catch (error) {
@@ -1537,7 +1881,12 @@ ipcMain.handle('config:delete', async (_, clave: string) => {
 
 ipcMain.handle('dashboard:getStats', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.dashboard.getStats()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const [
       clientesCount,
       facturasTotal,
@@ -1586,7 +1935,12 @@ ipcMain.handle('dashboard:getStats', async () => {
 
 ipcMain.handle('dashboard:getRecentActivity', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.dashboard.getRecentActivity()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const [facturas, gastos, clientes] = await Promise.all([
       db.factura.findMany({
         take: 5,
@@ -1634,7 +1988,12 @@ ipcMain.handle('dashboard:getRecentActivity', async () => {
 
 ipcMain.handle('dashboard:getPendingInvoices', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.dashboard.getPendingInvoices()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const facturas = await db.factura.findMany({
       where: { estado: { in: ['emitida', 'borrador'] } },
       include: { cliente: true },
@@ -1653,7 +2012,12 @@ ipcMain.handle('dashboard:getPendingInvoices', async () => {
 
 ipcMain.handle('productos:getAll', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.productos.getAll()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const productos = await db.producto.findMany({
       include: { impuesto: true, retencion: true },
       orderBy: { nombre: 'asc' }
@@ -1666,7 +2030,12 @@ ipcMain.handle('productos:getAll', async () => {
 
 ipcMain.handle('productos:getById', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.productos.getById(id)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const producto = await db.producto.findUnique({
       where: { id },
       include: { impuesto: true, retencion: true }
@@ -1679,7 +2048,12 @@ ipcMain.handle('productos:getById', async (_, id: number) => {
 
 ipcMain.handle('productos:create', async (_, data: any) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.productos.create(data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const producto = await db.producto.create({
       data,
       include: { impuesto: true, retencion: true }
@@ -1692,7 +2066,12 @@ ipcMain.handle('productos:create', async (_, data: any) => {
 
 ipcMain.handle('productos:update', async (_, id: number, data: any) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.productos.update(id, data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const producto = await db.producto.update({
       where: { id },
       data,
@@ -1706,7 +2085,12 @@ ipcMain.handle('productos:update', async (_, id: number, data: any) => {
 
 ipcMain.handle('productos:delete', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.productos.delete(id)
+      return { success: true }
+    }
+    const db = ctx.db
     await db.producto.delete({ where: { id } })
     return { success: true }
   } catch (error) {
@@ -1720,7 +2104,12 @@ ipcMain.handle('productos:delete', async (_, id: number) => {
 
 ipcMain.handle('impuestos:getAll', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.impuestos.getAll()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const impuestos = await db.impuesto.findMany({
       orderBy: { porcentaje: 'desc' }
     })
@@ -1732,7 +2121,12 @@ ipcMain.handle('impuestos:getAll', async () => {
 
 ipcMain.handle('impuestos:getById', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.impuestos.getById(id)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const impuesto = await db.impuesto.findUnique({ where: { id } })
     return { success: true, data: impuesto }
   } catch (error) {
@@ -1742,7 +2136,12 @@ ipcMain.handle('impuestos:getById', async (_, id: number) => {
 
 ipcMain.handle('impuestos:create', async (_, data: any) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.impuestos.create(data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const impuesto = await db.impuesto.create({ data })
     return { success: true, data: impuesto }
   } catch (error) {
@@ -1752,7 +2151,12 @@ ipcMain.handle('impuestos:create', async (_, data: any) => {
 
 ipcMain.handle('impuestos:update', async (_, id: number, data: any) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.impuestos.update(id, data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const impuesto = await db.impuesto.update({ where: { id }, data })
     return { success: true, data: impuesto }
   } catch (error) {
@@ -1762,7 +2166,12 @@ ipcMain.handle('impuestos:update', async (_, id: number, data: any) => {
 
 ipcMain.handle('impuestos:delete', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.impuestos.delete(id)
+      return { success: true }
+    }
+    const db = ctx.db
     await db.impuesto.delete({ where: { id } })
     return { success: true }
   } catch (error) {
@@ -1772,7 +2181,12 @@ ipcMain.handle('impuestos:delete', async (_, id: number) => {
 
 ipcMain.handle('impuestos:setDefault', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.impuestos.setDefault(id)
+      return { success: true }
+    }
+    const db = ctx.db
     await db.impuesto.updateMany({ data: { porDefecto: false } })
     await db.impuesto.update({ where: { id }, data: { porDefecto: true } })
     return { success: true }
@@ -1787,7 +2201,12 @@ ipcMain.handle('impuestos:setDefault', async (_, id: number) => {
 
 ipcMain.handle('categoriasGasto:getAll', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.categoriasGasto.getAll()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const categorias = await db.categoriaGasto.findMany({
       orderBy: { nombre: 'asc' }
     })
@@ -1799,7 +2218,12 @@ ipcMain.handle('categoriasGasto:getAll', async () => {
 
 ipcMain.handle('categoriasGasto:create', async (_, data: any) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.categoriasGasto.create(data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const categoria = await db.categoriaGasto.create({ data })
     return { success: true, data: categoria }
   } catch (error) {
@@ -1809,7 +2233,12 @@ ipcMain.handle('categoriasGasto:create', async (_, data: any) => {
 
 ipcMain.handle('categoriasGasto:update', async (_, id: number, data: any) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.categoriasGasto.update(id, data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const categoria = await db.categoriaGasto.update({ where: { id }, data })
     return { success: true, data: categoria }
   } catch (error) {
@@ -1819,7 +2248,12 @@ ipcMain.handle('categoriasGasto:update', async (_, id: number, data: any) => {
 
 ipcMain.handle('categoriasGasto:delete', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.categoriasGasto.delete(id)
+      return { success: true }
+    }
+    const db = ctx.db
     await db.categoriaGasto.delete({ where: { id } })
     return { success: true }
   } catch (error) {
@@ -1833,7 +2267,12 @@ ipcMain.handle('categoriasGasto:delete', async (_, id: number) => {
 
 ipcMain.handle('facturas:updateEstado', async (_, id: number, estado: string) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.facturas.updateEstado(id, estado)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const factura = await db.factura.update({
       where: { id },
       data: { estado },
@@ -1857,6 +2296,7 @@ const getAttachmentsPath = () => path.join(getDataPath(), 'attachments')
 // Exportar todos los datos a un archivo ZIP
 ipcMain.handle('backup:export', async () => {
   try {
+    if (isCloudMode) return { success: false, error: 'Not available for cloud empresas' }
     // Mostrar diálogo para seleccionar ubicación
     const result = await dialog.showSaveDialog(mainWindow!, {
       title: 'Exportar copia de seguridad',
@@ -1936,6 +2376,7 @@ ipcMain.handle('backup:export', async () => {
 // Importar datos desde un archivo ZIP (usado en pantalla de Auth)
 ipcMain.handle('backup:import', async () => {
   try {
+    if (isCloudMode) return { success: false, error: 'Not available for cloud empresas' }
     // Mostrar diálogo para seleccionar archivo
     const result = await dialog.showOpenDialog(mainWindow!, {
       title: 'Importar copia de seguridad',
@@ -2042,6 +2483,7 @@ ipcMain.handle('backup:import', async () => {
 // Obtener información de la ruta de datos actual
 ipcMain.handle('backup:getDataPath', async () => {
   try {
+    if (isCloudMode) return { success: false, error: 'Not available for cloud empresas' }
     const dataPath = getDataPath()
     const dbPath = getDbPath()
     const attachmentsPath = getAttachmentsPath()
@@ -2086,6 +2528,7 @@ ipcMain.handle('backup:getDataPath', async () => {
 // Migrar datos a una nueva ubicación y cambiar la ruta de datos
 ipcMain.handle('backup:migrate', async () => {
   try {
+    if (isCloudMode) return { success: false, error: 'Not available for cloud empresas' }
     // Mostrar diálogo para seleccionar carpeta destino
     const result = await dialog.showOpenDialog(mainWindow!, {
       title: 'Seleccionar nueva ubicación para los datos',
@@ -2165,6 +2608,7 @@ ipcMain.handle('backup:migrate', async () => {
 // Restaurar a la ruta de datos por defecto
 ipcMain.handle('backup:resetToDefault', async () => {
   try {
+    if (isCloudMode) return { success: false, error: 'Not available for cloud empresas' }
     // Desconectar Prisma si está conectado
     if (prisma) {
       await prisma.$queryRawUnsafe('PRAGMA wal_checkpoint(TRUNCATE)')
@@ -2695,10 +3139,12 @@ ipcMain.handle('cloud:confirmDeviceLink', async (_, data: { token: string; serve
 
 ipcMain.handle('cloud:verifyCode', async (_, data: { code: string; server: string; deviceName?: string }) => {
   try {
-    requireAuth()
     const response = await cloud.verifyDeviceCode(data.server, data.code, data.deviceName)
 
-    // Save config to database
+    // Set cloud config in memory (always)
+    cloud.setCloudConfig(data.server, response.api_token)
+
+    // Save config to database only if authenticated (local empresa active)
     if (isAuthenticated && prisma) {
       await prisma.configuracion.upsert({
         where: { clave: 'cloud_server_url' },
@@ -2710,7 +3156,6 @@ ipcMain.handle('cloud:verifyCode', async (_, data: { code: string; server: strin
         update: { valor: response.api_token },
         create: { clave: 'cloud_token', valor: response.api_token },
       })
-      cloud.setCloudConfig(data.server, response.api_token)
     }
 
     return { success: true, data: response }
@@ -2743,7 +3188,11 @@ ipcMain.handle('shell:openExternal', async (_, url: string) => {
 
 ipcMain.handle('logo:upload', async (_, fileData: { data: number[]; nombre: string; tipoMime: string }) => {
   try {
-    requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.logo.upload(fileData)
+      return { success: true, data: result }
+    }
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg']
     if (!validTypes.includes(fileData.tipoMime)) {
       return { success: false, error: 'unsupportedFormat' }
@@ -2759,7 +3208,11 @@ ipcMain.handle('logo:upload', async (_, fileData: { data: number[]; nombre: stri
 
 ipcMain.handle('logo:read', async () => {
   try {
-    requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.logo.read()
+      return { success: true, data: result }
+    }
     const logoPath = path.join(getDataPath(), 'logo.png')
     if (!fs.existsSync(logoPath)) {
       return { success: false, error: 'noLogoConfigured' }
@@ -2773,7 +3226,12 @@ ipcMain.handle('logo:read', async () => {
 
 ipcMain.handle('logo:delete', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.logo.delete()
+      return { success: true }
+    }
+    const db = ctx.db
     const logoPath = path.join(getDataPath(), 'logo.png')
     if (fs.existsSync(logoPath)) {
       fs.unlinkSync(logoPath)
@@ -2849,7 +3307,12 @@ const PGC_CUENTAS = [
 
 ipcMain.handle('cuentas:getAll', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.cuentas.getAll()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const cuentas = await db.cuentaContable.findMany({
       include: { cuentaPadre: true, subcuentas: true },
       orderBy: { codigo: 'asc' }
@@ -2862,7 +3325,12 @@ ipcMain.handle('cuentas:getAll', async () => {
 
 ipcMain.handle('cuentas:getById', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.cuentas.getById(id)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const cuenta = await db.cuentaContable.findUnique({
       where: { id },
       include: { cuentaPadre: true, subcuentas: true }
@@ -2875,7 +3343,12 @@ ipcMain.handle('cuentas:getById', async (_, id: number) => {
 
 ipcMain.handle('cuentas:create', async (_, data: any) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.cuentas.create(data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const cuenta = await db.cuentaContable.create({
       data: { ...data, esSistema: false },
       include: { cuentaPadre: true, subcuentas: true }
@@ -2888,7 +3361,12 @@ ipcMain.handle('cuentas:create', async (_, data: any) => {
 
 ipcMain.handle('cuentas:update', async (_, id: number, data: any) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.cuentas.update(id, data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const cuenta = await db.cuentaContable.update({
       where: { id },
       data,
@@ -2902,7 +3380,12 @@ ipcMain.handle('cuentas:update', async (_, id: number, data: any) => {
 
 ipcMain.handle('cuentas:delete', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.cuentas.delete(id)
+      return { success: true }
+    }
+    const db = ctx.db
     const cuenta = await db.cuentaContable.findUnique({ where: { id } })
     if (!cuenta) return { success: false, error: 'notFound' }
     if (cuenta.esSistema) return { success: false, error: 'cannotDeleteSystemAccount' }
@@ -2917,7 +3400,12 @@ ipcMain.handle('cuentas:delete', async (_, id: number) => {
 
 ipcMain.handle('cuentas:seedPGC', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.cuentas.seedPGC()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const existingCount = await db.cuentaContable.count()
     if (existingCount > 0) {
       return { success: true, data: { seeded: false, message: 'PGC ya inicializado' } }
@@ -2956,7 +3444,12 @@ ipcMain.handle('cuentas:seedPGC', async () => {
 
 ipcMain.handle('ejercicios:getAll', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.ejercicios.getAll()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const ejercicios = await db.ejercicioFiscal.findMany({
       orderBy: { anio: 'desc' }
     })
@@ -2968,7 +3461,12 @@ ipcMain.handle('ejercicios:getAll', async () => {
 
 ipcMain.handle('ejercicios:create', async (_, data: { anio: number }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.ejercicios.create(data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const ejercicio = await db.ejercicioFiscal.create({
       data: {
         anio: data.anio,
@@ -2985,7 +3483,12 @@ ipcMain.handle('ejercicios:create', async (_, data: { anio: number }) => {
 
 ipcMain.handle('ejercicios:getOrCreateCurrent', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.ejercicios.getOrCreateCurrent()
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const currentYear = new Date().getFullYear()
     let ejercicio = await db.ejercicioFiscal.findUnique({ where: { anio: currentYear } })
     if (!ejercicio) {
@@ -3006,7 +3509,12 @@ ipcMain.handle('ejercicios:getOrCreateCurrent', async () => {
 
 ipcMain.handle('ejercicios:update', async (_, id: number, data: { estado: string }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.ejercicios.update(id, data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const ejercicio = await db.ejercicioFiscal.update({
       where: { id },
       data: { estado: data.estado }
@@ -3019,7 +3527,12 @@ ipcMain.handle('ejercicios:update', async (_, id: number, data: { estado: string
 
 ipcMain.handle('ejercicios:delete', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.ejercicios.delete(id)
+      return { success: true }
+    }
+    const db = ctx.db
     // Verificar que no tenga asientos
     const asientosCount = await db.asiento.count({ where: { ejercicioId: id } })
     if (asientosCount > 0) {
@@ -3034,7 +3547,12 @@ ipcMain.handle('ejercicios:delete', async (_, id: number) => {
 
 ipcMain.handle('ejercicios:getStats', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.ejercicios.getStats(id)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const ejercicio = await db.ejercicioFiscal.findUnique({ where: { id } })
     if (!ejercicio) {
       return { success: false, error: 'notFound' }
@@ -3118,7 +3636,12 @@ ipcMain.handle('asientos:getAll', async (_, filters?: {
   fechaHasta?: string
 }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.asientos.getAll(filters)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const where: any = {}
     if (filters?.ejercicioId) where.ejercicioId = filters.ejercicioId
     if (filters?.tipo) where.tipo = filters.tipo
@@ -3145,7 +3668,12 @@ ipcMain.handle('asientos:getAll', async (_, filters?: {
 
 ipcMain.handle('asientos:getById', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.asientos.getById(id)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const asiento = await db.asiento.findUnique({
       where: { id },
       include: {
@@ -3172,7 +3700,12 @@ ipcMain.handle('asientos:create', async (_, data: {
   lineas: Array<{ cuentaId: number; debe: number; haber: number; concepto?: string }>
 }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.asientos.create(data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const { lineas, ...asientoData } = data
 
     // Validar partida doble
@@ -3214,7 +3747,12 @@ ipcMain.handle('asientos:update', async (_, id: number, data: {
   lineas?: Array<{ cuentaId: number; debe: number; haber: number; concepto?: string }>
 }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.asientos.update(id, data)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const { lineas, ...asientoData } = data
     const updateData: any = { ...asientoData }
     if (asientoData.fecha) updateData.fecha = new Date(asientoData.fecha)
@@ -3245,7 +3783,12 @@ ipcMain.handle('asientos:update', async (_, id: number, data: {
 
 ipcMain.handle('asientos:delete', async (_, id: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.asientos.delete(id)
+      return { success: true }
+    }
+    const db = ctx.db
     const asiento = await db.asiento.findUnique({ where: { id } })
     if (!asiento) return { success: false, error: 'notFound' }
     if (asiento.tipo === 'factura' || asiento.tipo === 'gasto') {
@@ -3270,7 +3813,12 @@ ipcMain.handle('contabilidad:libroMayor', async (_, params: {
   fechaHasta?: string
 }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.contabilidad.libroMayor(params)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const where: any = {
       cuentaId: params.cuentaId,
       asiento: { ejercicioId: params.ejercicioId }
@@ -3308,7 +3856,12 @@ ipcMain.handle('contabilidad:libroMayor', async (_, params: {
 
 ipcMain.handle('contabilidad:generarAsientoFactura', async (_, facturaId: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.contabilidad.generarAsientoFactura(facturaId)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const factura = await db.factura.findUnique({
       where: { id: facturaId },
       include: { lineas: { include: { impuesto: true, retencion: true } }, cliente: true }
@@ -3418,7 +3971,12 @@ ipcMain.handle('contabilidad:generarAsientoFactura', async (_, facturaId: number
 
 ipcMain.handle('contabilidad:generarAsientoGasto', async (_, gastoId: number) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.contabilidad.generarAsientoGasto(gastoId)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const gasto = await db.gasto.findUnique({
       where: { id: gastoId },
       include: { categoria: true, impuesto: true }
@@ -3546,7 +4104,12 @@ ipcMain.handle('contabilidad:generarAsientoGasto', async (_, gastoId: number) =>
 
 ipcMain.handle('modelos:modelo303', async (_, params: { ejercicioId: number; trimestre: number }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.modelos.modelo303(params)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const ejercicio = await db.ejercicioFiscal.findUnique({ where: { id: params.ejercicioId } })
     if (!ejercicio) return { success: false, error: 'notFound' }
 
@@ -3635,7 +4198,12 @@ ipcMain.handle('modelos:modelo303', async (_, params: { ejercicioId: number; tri
 
 ipcMain.handle('modelos:modelo111', async (_, params: { ejercicioId: number; trimestre: number }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.modelos.modelo111(params)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const ejercicio = await db.ejercicioFiscal.findUnique({ where: { id: params.ejercicioId } })
     if (!ejercicio) return { success: false, error: 'notFound' }
 
@@ -3690,7 +4258,12 @@ ipcMain.handle('modelos:modelo111', async (_, params: { ejercicioId: number; tri
 
 ipcMain.handle('modelos:modelo390', async (_, params: { ejercicioId: number }) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const result = await cloudApi.modelos.modelo390(params)
+      return { success: true, data: result }
+    }
+    const db = ctx.db
     const ejercicio = await db.ejercicioFiscal.findUnique({ where: { id: params.ejercicioId } })
     if (!ejercicio) return { success: false, error: 'notFound' }
 
@@ -4495,6 +5068,959 @@ ipcMain.handle('buzon:sendEmail', async (_, cuentaId: number, data: {
 
     await transporter.sendMail(mailOptions)
     return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - ClassicGes 6 Import
+// ============================================
+
+// Decode CP1252/Latin1 buffer to proper UTF-8 string
+function decodeDbfString(val: any): string {
+  if (val == null) return ''
+  if (Buffer.isBuffer(val)) {
+    return val.toString('latin1').trim()
+  }
+  return String(val).trim()
+}
+
+// Parse DBF date field (Date object or YYYYMMDD string) to JS Date
+function parseDbfDate(val: any): Date | null {
+  if (val instanceof Date) return val
+  if (!val) return null
+  const s = String(val).replace(/[^0-9]/g, '')
+  if (s.length === 8) {
+    const y = parseInt(s.substring(0, 4))
+    const m = parseInt(s.substring(4, 6)) - 1
+    const d = parseInt(s.substring(6, 8))
+    const date = new Date(y, m, d)
+    if (!isNaN(date.getTime())) return date
+  }
+  return null
+}
+
+// Safe number from DBF field
+function dbfNumber(val: any): number {
+  if (val == null) return 0
+  const n = parseFloat(String(val))
+  return isNaN(n) ? 0 : n
+}
+
+// Try to open a DBF file case-insensitively
+async function openDbfFile(dirPath: string, baseName: string): Promise<DBFFile | null> {
+  const candidates = [
+    baseName,
+    baseName.toLowerCase(),
+    baseName.toUpperCase(),
+    baseName.charAt(0).toUpperCase() + baseName.slice(1).toLowerCase(),
+  ]
+  for (const name of candidates) {
+    const fullPath = path.join(dirPath, name)
+    if (fs.existsSync(fullPath)) {
+      return await DBFFile.open(fullPath, { encoding: 'latin1' })
+    }
+  }
+  return null
+}
+
+// Select ClassicGes data folder
+ipcMain.handle('clasges:selectFolder', async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      title: 'Seleccionar carpeta de datos ClassicGes 6',
+      properties: ['openDirectory']
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, error: 'operationCancelled' }
+    }
+    return { success: true, data: { path: result.filePaths[0] } }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Scan ClassicGes data folder for DBF files
+ipcMain.handle('clasges:scan', async (_, dirPath: string) => {
+  try {
+    const files: Record<string, { found: boolean; count: number }> = {}
+    const dbfFiles: Record<string, string> = {
+      clientes: 'clientes.dbf',
+      productos: 'articulo.dbf',
+      facturas: 'factura.dbf',
+      lineasFactura: 'factural.dbf',
+      gastos: 'gastos.dbf',
+      categorias: 'tipgast.dbf',
+    }
+
+    for (const [key, fileName] of Object.entries(dbfFiles)) {
+      const dbf = await openDbfFile(dirPath, fileName)
+      if (dbf) {
+        files[key] = { found: true, count: dbf.recordCount }
+      } else {
+        files[key] = { found: false, count: 0 }
+      }
+    }
+
+    return { success: true, data: files }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Preview first N records from a ClassicGes DBF file
+ipcMain.handle('clasges:preview', async (_, dirPath: string, entity: string) => {
+  try {
+    const fileMap: Record<string, string> = {
+      clientes: 'clientes.dbf',
+      productos: 'articulo.dbf',
+      facturas: 'factura.dbf',
+      gastos: 'gastos.dbf',
+      categorias: 'tipgast.dbf',
+    }
+
+    const fileName = fileMap[entity]
+    if (!fileName) return { success: false, error: 'Unknown entity' }
+
+    const dbf = await openDbfFile(dirPath, fileName)
+    if (!dbf) return { success: false, error: `File ${fileName} not found` }
+
+    const records: any[] = []
+    let count = 0
+    for await (const record of dbf) {
+      if (count >= 10) break
+      // Decode string fields
+      const decoded: Record<string, any> = {}
+      for (const [k, v] of Object.entries(record)) {
+        decoded[k] = typeof v === 'string' ? decodeDbfString(v) : v
+      }
+      records.push(decoded)
+      count++
+    }
+
+    return { success: true, data: records }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Import data from ClassicGes 6
+ipcMain.handle('clasges:import', async (_, dirPath: string, entities: string[]) => {
+  try {
+    const db = requireAuth()
+    const results: Record<string, { imported: number; skipped: number; errors: string[] }> = {}
+
+    // Helper to send progress to renderer
+    const sendProgress = (entity: string, current: number, total: number, status: string) => {
+      mainWindow?.webContents.send('clasges:progress', { entity, current, total, status })
+    }
+
+    // 1. Import expense categories
+    if (entities.includes('categorias')) {
+      const catResult = { imported: 0, skipped: 0, errors: [] as string[] }
+      const dbf = await openDbfFile(dirPath, 'tipgast.dbf')
+      if (dbf) {
+        const allRecords: any[] = []
+        for await (const r of dbf) allRecords.push(r)
+        sendProgress('categorias', 0, allRecords.length, 'importing')
+
+        for (let i = 0; i < allRecords.length; i++) {
+          try {
+            const r = allRecords[i]
+            const nombre = decodeDbfString(r.NOMBRE || r.nombre)
+            if (!nombre) { catResult.skipped++; continue }
+
+            // Check for duplicates
+            const existing = await db.categoriaGasto.findFirst({ where: { nombre } })
+            if (existing) { catResult.skipped++; continue }
+
+            await db.categoriaGasto.create({ data: { nombre } })
+            catResult.imported++
+          } catch (e: any) {
+            if (e.code === 'P2002') catResult.skipped++
+            else catResult.errors.push(String(e))
+          }
+          sendProgress('categorias', i + 1, allRecords.length, 'importing')
+        }
+      }
+      results.categorias = catResult
+      sendProgress('categorias', catResult.imported + catResult.skipped, catResult.imported + catResult.skipped, 'done')
+    }
+
+    // 2. Import clients
+    if (entities.includes('clientes')) {
+      const cliResult = { imported: 0, skipped: 0, errors: [] as string[] }
+      const dbf = await openDbfFile(dirPath, 'clientes.dbf')
+      if (dbf) {
+        const allRecords: any[] = []
+        for await (const r of dbf) allRecords.push(r)
+        sendProgress('clientes', 0, allRecords.length, 'importing')
+
+        for (let i = 0; i < allRecords.length; i++) {
+          try {
+            const r = allRecords[i]
+            const nombre = decodeDbfString(r.NOMBRE || r.nombre)
+            if (!nombre) { cliResult.skipped++; continue }
+
+            const nif = decodeDbfString(r.CIF || r.cif) || null
+            // Skip duplicates by NIF
+            if (nif) {
+              const existing = await db.cliente.findFirst({ where: { nif } })
+              if (existing) { cliResult.skipped++; continue }
+            }
+
+            const baja = r.BAJA || r.baja
+            await db.cliente.create({
+              data: {
+                nombre,
+                email: decodeDbfString(r.EMAIL || r.email) || null,
+                telefono: decodeDbfString(r.TELEFONO || r.telefono) || null,
+                direccion: decodeDbfString(r.DIRECCION || r.direccion) || null,
+                ciudad: decodeDbfString(r.LOCALIDAD || r.localidad) || null,
+                provincia: decodeDbfString(r.PROVINCIA || r.provincia) || null,
+                codigoPostal: decodeDbfString(r.POSTAL || r.postal) || null,
+                pais: decodeDbfString(r.PAIS || r.pais) || 'España',
+                nif,
+                activo: baja ? !baja : true,
+              }
+            })
+            cliResult.imported++
+          } catch (e: any) {
+            if (e.code === 'P2002') cliResult.skipped++
+            else cliResult.errors.push(String(e))
+          }
+          sendProgress('clientes', i + 1, allRecords.length, 'importing')
+        }
+      }
+      results.clientes = cliResult
+      sendProgress('clientes', cliResult.imported + cliResult.skipped, cliResult.imported + cliResult.skipped, 'done')
+    }
+
+    // 3. Import products
+    if (entities.includes('productos')) {
+      const prodResult = { imported: 0, skipped: 0, errors: [] as string[] }
+      const dbf = await openDbfFile(dirPath, 'articulo.dbf')
+      if (dbf) {
+        const allRecords: any[] = []
+        for await (const r of dbf) allRecords.push(r)
+        sendProgress('productos', 0, allRecords.length, 'importing')
+
+        for (let i = 0; i < allRecords.length; i++) {
+          try {
+            const r = allRecords[i]
+            const nombre = decodeDbfString(r.NOMBRE || r.nombre)
+            if (!nombre) { prodResult.skipped++; continue }
+
+            const codigo = decodeDbfString(r.CODIGO || r.codigo) || null
+            // Skip duplicates by codigo
+            if (codigo) {
+              const existing = await db.producto.findFirst({ where: { codigo } })
+              if (existing) { prodResult.skipped++; continue }
+            }
+
+            const servicio = r.SERVICIO || r.servicio
+            const baja = r.BAJA || r.baja
+            await db.producto.create({
+              data: {
+                codigo,
+                nombre,
+                descripcion: decodeDbfString(r.DESCRIP || r.descrip) || null,
+                tipo: servicio ? 'servicio' : 'producto',
+                precioBase: dbfNumber(r.PVP1 || r.pvp1),
+                activo: baja ? !baja : true,
+              }
+            })
+            prodResult.imported++
+          } catch (e: any) {
+            if (e.code === 'P2002') prodResult.skipped++
+            else prodResult.errors.push(String(e))
+          }
+          sendProgress('productos', i + 1, allRecords.length, 'importing')
+        }
+      }
+      results.productos = prodResult
+      sendProgress('productos', prodResult.imported + prodResult.skipped, prodResult.imported + prodResult.skipped, 'done')
+    }
+
+    // 4. Import invoices (headers + lines)
+    if (entities.includes('facturas')) {
+      const facResult = { imported: 0, skipped: 0, errors: [] as string[] }
+      const dbfFac = await openDbfFile(dirPath, 'factura.dbf')
+      const dbfLines = await openDbfFile(dirPath, 'factural.dbf')
+
+      if (dbfFac) {
+        // Load all invoice lines grouped by multiple keys for reliable matching
+        const linesBySN = new Map<string, any[]>()   // SERIE+NUMERO key
+        const linesByCLAFAC = new Map<string, any[]>() // CLAFAC fallback key
+        if (dbfLines) {
+          for await (const lr of dbfLines) {
+            // Primary: group by SERIE+NUMERO (most reliable in ClassicGes 6)
+            const lSerie = decodeDbfString(lr.SERIE || lr.serie)
+            const lNumero = decodeDbfString(lr.NUMERO || lr.numero)
+            if (lSerie || lNumero) {
+              const snKey = `${lSerie}${lNumero}`
+              if (!linesBySN.has(snKey)) linesBySN.set(snKey, [])
+              linesBySN.get(snKey)!.push(lr)
+            }
+            // Fallback: group by CLAFAC
+            const clafac = String(lr.CLAFAC || lr.clafac || '').trim()
+            if (clafac) {
+              if (!linesByCLAFAC.has(clafac)) linesByCLAFAC.set(clafac, [])
+              linesByCLAFAC.get(clafac)!.push(lr)
+            }
+          }
+        }
+
+        // Get all impuestos for matching
+        const impuestos = await db.impuesto.findMany({ where: { activo: true } })
+
+        const allRecords: any[] = []
+        for await (const r of dbfFac) allRecords.push(r)
+        sendProgress('facturas', 0, allRecords.length, 'importing')
+
+        for (let i = 0; i < allRecords.length; i++) {
+          try {
+            const r = allRecords[i]
+            const serie = decodeDbfString(r.SERIE || r.serie) || 'F'
+            const numero = decodeDbfString(r.NUMERO || r.numero)
+            if (!numero) { facResult.skipped++; continue }
+
+            const fullNumero = `${serie}${numero}`
+
+            // Skip duplicate invoices
+            const existing = await db.factura.findFirst({ where: { numero: fullNumero } })
+            if (existing) { facResult.skipped++; continue }
+
+            // Find or create client
+            let clienteId: number
+            const clientNif = decodeDbfString(r.CIFCLI || r.cifcli)
+            const clientName = decodeDbfString(r.NOMCLI || r.nomcli)
+
+            if (clientNif) {
+              const existingClient = await db.cliente.findFirst({ where: { nif: clientNif } })
+              if (existingClient) {
+                clienteId = existingClient.id
+              } else {
+                const newClient = await db.cliente.create({
+                  data: { nombre: clientName || 'Cliente importado', nif: clientNif }
+                })
+                clienteId = newClient.id
+              }
+            } else if (clientName) {
+              const existingClient = await db.cliente.findFirst({ where: { nombre: clientName } })
+              if (existingClient) {
+                clienteId = existingClient.id
+              } else {
+                const newClient = await db.cliente.create({
+                  data: { nombre: clientName }
+                })
+                clienteId = newClient.id
+              }
+            } else {
+              // Create a generic client
+              let generic = await db.cliente.findFirst({ where: { nombre: 'Cliente ClassicGes' } })
+              if (!generic) {
+                generic = await db.cliente.create({ data: { nombre: 'Cliente ClassicGes' } })
+              }
+              clienteId = generic.id
+            }
+
+            const fecha = parseDbfDate(r.FECHA || r.fecha) || new Date()
+            const fechaVencimiento = parseDbfDate(r.FECHAVALOR || r.fechavalor) || null
+
+            // Determine estado from COBRADO field
+            const cobrado = dbfNumber(r.COBRADO || r.cobrado)
+            const total = dbfNumber(r.IMPORTE || r.importe)
+            let estado = 'emitida'
+            if (cobrado >= total && total > 0) estado = 'pagada'
+
+            const factura = await db.factura.create({
+              data: {
+                numero: fullNumero,
+                serie,
+                fecha,
+                fechaVencimiento,
+                clienteId,
+                subtotal: dbfNumber(r.BIMPO || r.bimpo),
+                totalImpuestos: dbfNumber(r.ITEIVA || r.iteiva),
+                totalRetenciones: dbfNumber(r.RETENCION || r.retencion),
+                total,
+                estado,
+              }
+            })
+
+            // Import invoice lines - match by SERIE+NUMERO first, then CLAFAC
+            const snKey = `${serie}${numero}`
+            let lines: any[] = linesBySN.get(snKey) || []
+
+            // Fallback: try CLAFAC using possible invoice keys
+            if (lines.length === 0) {
+              const clessionKey = String(r.CLESSION || r.clession || '').trim()
+              const codigoKey = String(r.CODIGO || r.codigo || '').trim()
+              for (const fk of [clessionKey, codigoKey, snKey].filter(k => k !== '')) {
+                if (linesByCLAFAC.has(fk)) {
+                  lines = linesByCLAFAC.get(fk)!
+                  break
+                }
+              }
+            }
+
+            for (const lr of lines) {
+              try {
+                const descripcion = decodeDbfString(lr.LINDESC || lr.lindesc) || 'Línea importada'
+                const cantidad = dbfNumber(lr.CANTIDAD || lr.cantidad) || 1
+                const precioUnit = dbfNumber(lr.PRECIO || lr.precio)
+                const descuento = dbfNumber(lr.DTO || lr.dto)
+                const ivaPercent = dbfNumber(lr.IVA || lr.iva)
+
+                // Match IVA to existing Impuesto
+                let impuestoId: number | null = null
+                if (ivaPercent > 0) {
+                  const match = impuestos.find(imp => imp.tipo === 'IVA' && Math.abs(imp.porcentaje - ivaPercent) < 0.01)
+                  if (match) impuestoId = match.id
+                }
+
+                const subtotal = cantidad * precioUnit * (1 - descuento / 100)
+                const totalImpuesto = impuestoId ? subtotal * ivaPercent / 100 : 0
+                const lineTotal = subtotal + totalImpuesto
+
+                await db.lineaFactura.create({
+                  data: {
+                    facturaId: factura.id,
+                    descripcion,
+                    cantidad,
+                    precioUnit,
+                    descuento,
+                    impuestoId,
+                    subtotal,
+                    totalImpuesto,
+                    totalRetencion: 0,
+                    total: lineTotal,
+                  }
+                })
+              } catch {
+                // Don't fail the whole invoice for a line error
+              }
+            }
+
+            facResult.imported++
+          } catch (e: any) {
+            if (e.code === 'P2002') facResult.skipped++
+            else facResult.errors.push(String(e))
+          }
+          sendProgress('facturas', i + 1, allRecords.length, 'importing')
+        }
+      }
+      results.facturas = facResult
+      sendProgress('facturas', facResult.imported + facResult.skipped, facResult.imported + facResult.skipped, 'done')
+    }
+
+    // 5. Import expenses
+    if (entities.includes('gastos')) {
+      const gasResult = { imported: 0, skipped: 0, errors: [] as string[] }
+      const dbf = await openDbfFile(dirPath, 'gastos.dbf')
+      if (dbf) {
+        // Build category mapping from tipgast
+        const catMap = new Map<string, number>()
+        const allCats = await db.categoriaGasto.findMany()
+        // Also try to load tipgast for CLATIPG mapping
+        const dbfTipg = await openDbfFile(dirPath, 'tipgast.dbf')
+        if (dbfTipg) {
+          let idx = 0
+          for await (const tr of dbfTipg) {
+            const tipNombre = decodeDbfString(tr.NOMBRE || tr.nombre)
+            const tipKey = String(tr.CLATIPG || tr.clatipg || tr.CODIGO || tr.codigo || idx).trim()
+            const matchedCat = allCats.find(c => c.nombre === tipNombre)
+            if (matchedCat && tipKey) {
+              catMap.set(tipKey, matchedCat.id)
+            }
+            idx++
+          }
+        }
+
+        const allRecords: any[] = []
+        for await (const r of dbf) allRecords.push(r)
+        sendProgress('gastos', 0, allRecords.length, 'importing')
+
+        for (let i = 0; i < allRecords.length; i++) {
+          try {
+            const r = allRecords[i]
+            const descripcion = decodeDbfString(r.DESCRIP || r.descrip)
+            if (!descripcion) { gasResult.skipped++; continue }
+
+            const catKey = String(r.CLATIPG || r.clatipg || '').trim()
+            const categoriaId = catMap.get(catKey) || null
+
+            await db.gasto.create({
+              data: {
+                descripcion,
+                monto: dbfNumber(r.IMPORTE || r.importe),
+                fecha: parseDbfDate(r.FECHA || r.fecha) || new Date(),
+                proveedor: decodeDbfString(r.NOMPRO || r.nompro) || null,
+                numeroFactura: decodeDbfString(r.NUMFACPROV || r.numfacprov) || null,
+                categoriaId,
+              }
+            })
+            gasResult.imported++
+          } catch (e: any) {
+            gasResult.errors.push(String(e))
+          }
+          sendProgress('gastos', i + 1, allRecords.length, 'importing')
+        }
+      }
+      results.gastos = gasResult
+      sendProgress('gastos', gasResult.imported + gasResult.skipped, gasResult.imported + gasResult.skipped, 'done')
+    }
+
+    return { success: true, data: results }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// Holded API Import
+// ============================================
+
+const HOLDED_BASE = 'https://api.holded.com/api/invoicing/v1'
+
+async function holdedGet(apiKey: string, path: string): Promise<any> {
+  const url = `${HOLDED_BASE}${path}`
+  const res = await fetch(url, { headers: { key: apiKey, Accept: 'application/json' } })
+  if (!res.ok) throw new Error(`Holded API ${res.status}: ${res.statusText}`)
+  return res.json()
+}
+
+async function holdedGetAll(apiKey: string, endpoint: string): Promise<any[]> {
+  const all: any[] = []
+  let page = 1
+  while (true) {
+    const data = await holdedGet(apiKey, `${endpoint}?page=${page}`)
+    if (!Array.isArray(data) || data.length === 0) break
+    all.push(...data)
+    page++
+  }
+  return all
+}
+
+function holdedSafeString(val: any): string | null {
+  if (val == null || val === '') return null
+  return String(val).trim() || null
+}
+
+function holdedSafeNumber(val: any): number {
+  const n = parseFloat(String(val))
+  return isNaN(n) ? 0 : n
+}
+
+function holdedDate(val: any): Date {
+  if (!val) return new Date()
+  const n = Number(val)
+  if (isNaN(n) || n <= 0) return new Date()
+  return new Date(n * 1000)
+}
+
+// Save Holded API key (encrypted)
+ipcMain.handle('holded:saveApiKey', async (_, apiKey: string) => {
+  try {
+    const db = requireAuth()
+    const encrypted = safeStorage.encryptString(apiKey).toString('base64')
+    await db.$executeRawUnsafe(
+      `INSERT OR REPLACE INTO Configuracion (clave, valor) VALUES ('holded.apiKey', ?)`,
+      encrypted
+    )
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Get Holded API key (decrypted)
+ipcMain.handle('holded:getApiKey', async () => {
+  try {
+    const db = requireAuth()
+    const rows: any[] = await db.$queryRawUnsafe(
+      `SELECT valor FROM Configuracion WHERE clave = 'holded.apiKey'`
+    )
+    if (rows.length === 0) return { success: true, data: null }
+    const decrypted = safeStorage.decryptString(Buffer.from(rows[0].valor, 'base64'))
+    return { success: true, data: decrypted }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Delete Holded API key
+ipcMain.handle('holded:deleteApiKey', async () => {
+  try {
+    const db = requireAuth()
+    await db.$executeRawUnsafe(`DELETE FROM Configuracion WHERE clave = 'holded.apiKey'`)
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Test Holded API connection
+ipcMain.handle('holded:testConnection', async (_, apiKey: string) => {
+  try {
+    await holdedGet(apiKey, '/contacts?page=1')
+    return { success: true, data: { connected: true } }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Scan Holded data (count all entities)
+ipcMain.handle('holded:scan', async (_, apiKey: string) => {
+  try {
+    const endpoints: Record<string, string> = {
+      clientes: '/contacts',
+      productos: '/products',
+      facturas: '/documents/invoice',
+      gastos: '/documents/purchase',
+    }
+    const result: Record<string, { found: boolean; count: number }> = {}
+    for (const [key, endpoint] of Object.entries(endpoints)) {
+      try {
+        const data = await holdedGetAll(apiKey, endpoint)
+        result[key] = { found: data.length > 0, count: data.length }
+      } catch {
+        result[key] = { found: false, count: 0 }
+      }
+    }
+    return { success: true, data: result }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Preview first 10 records from Holded
+ipcMain.handle('holded:preview', async (_, apiKey: string, entity: string) => {
+  try {
+    const endpointMap: Record<string, string> = {
+      clientes: '/contacts',
+      productos: '/products',
+      facturas: '/documents/invoice',
+      gastos: '/documents/purchase',
+    }
+    const endpoint = endpointMap[entity]
+    if (!endpoint) return { success: false, error: 'Unknown entity' }
+
+    const page1 = await holdedGet(apiKey, `${endpoint}?page=1`)
+    if (!Array.isArray(page1)) return { success: true, data: [] }
+
+    const preview = page1.slice(0, 10).map((item: any) => {
+      if (entity === 'clientes') {
+        return {
+          nombre: item.name || item.tradeName || '',
+          nif: item.code || '',
+          email: item.email || '',
+          telefono: item.mobile || item.phone || '',
+          ciudad: item.billAddress?.city || '',
+          pais: item.billAddress?.country || '',
+        }
+      } else if (entity === 'productos') {
+        return {
+          nombre: item.name || '',
+          codigo: item.sku || item.id || '',
+          descripcion: (item.desc || '').substring(0, 80),
+          tipo: ['service', 'digital'].includes(item.kind) ? 'servicio' : 'producto',
+          precio: holdedSafeNumber(item.price),
+          impuesto: item.tax != null ? `${holdedSafeNumber(item.tax)}%` : '',
+        }
+      } else if (entity === 'facturas') {
+        return {
+          numero: item.docNumber || '',
+          fecha: item.date ? holdedDate(item.date).toLocaleDateString() : '',
+          cliente: item.contactName || '',
+          subtotal: holdedSafeNumber(item.subtotal),
+          impuestos: holdedSafeNumber(item.tax),
+          total: holdedSafeNumber(item.total),
+        }
+      } else {
+        return {
+          numero: item.docNumber || '',
+          fecha: item.date ? holdedDate(item.date).toLocaleDateString() : '',
+          proveedor: item.contactName || '',
+          total: holdedSafeNumber(item.total),
+          descripcion: Array.isArray(item.products) ? item.products.map((p: any) => p.name || '').join(', ').substring(0, 80) : '',
+          estado: item.status != null ? String(item.status) : '',
+        }
+      }
+    })
+
+    return { success: true, data: preview }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Import data from Holded
+ipcMain.handle('holded:import', async (_, apiKey: string, entities: string[]) => {
+  try {
+    const db = requireAuth()
+    const results: Record<string, { imported: number; skipped: number; errors: string[] }> = {}
+
+    const sendProgress = (entity: string, current: number, total: number, status: string) => {
+      mainWindow?.webContents.send('holded:progress', { entity, current, total, status })
+    }
+
+    // Get all impuestos for matching
+    const impuestos = await db.impuesto.findMany({ where: { activo: true } })
+
+    // 1. Import clients
+    if (entities.includes('clientes')) {
+      const cliResult = { imported: 0, skipped: 0, errors: [] as string[] }
+      const contacts = await holdedGetAll(apiKey, '/contacts')
+      sendProgress('clientes', 0, contacts.length, 'importing')
+
+      for (let i = 0; i < contacts.length; i++) {
+        try {
+          const c = contacts[i]
+          const nombre = holdedSafeString(c.name || c.tradeName)
+          if (!nombre) { cliResult.skipped++; continue }
+
+          const nif = holdedSafeString(c.code)
+          if (nif) {
+            const existing = await db.cliente.findFirst({ where: { nif } })
+            if (existing) { cliResult.skipped++; continue }
+          }
+
+          const addr = c.billAddress || {}
+          await db.cliente.create({
+            data: {
+              nombre,
+              nif,
+              email: holdedSafeString(c.email),
+              telefono: holdedSafeString(c.mobile || c.phone),
+              direccion: holdedSafeString(addr.address),
+              ciudad: holdedSafeString(addr.city),
+              codigoPostal: holdedSafeString(addr.postalCode),
+              provincia: holdedSafeString(addr.province),
+              pais: holdedSafeString(addr.country) || 'España',
+              activo: true,
+            }
+          })
+          cliResult.imported++
+        } catch (e: any) {
+          if (e.code === 'P2002') cliResult.skipped++
+          else cliResult.errors.push(String(e))
+        }
+        sendProgress('clientes', i + 1, contacts.length, 'importing')
+      }
+      results.clientes = cliResult
+      sendProgress('clientes', contacts.length, contacts.length, 'done')
+    }
+
+    // 2. Import products
+    if (entities.includes('productos')) {
+      const prodResult = { imported: 0, skipped: 0, errors: [] as string[] }
+      const products = await holdedGetAll(apiKey, '/products')
+      sendProgress('productos', 0, products.length, 'importing')
+
+      for (let i = 0; i < products.length; i++) {
+        try {
+          const p = products[i]
+          const nombre = holdedSafeString(p.name)
+          if (!nombre) { prodResult.skipped++; continue }
+
+          const codigo = holdedSafeString(p.sku) || holdedSafeString(p.id)
+          if (codigo) {
+            const existing = await db.producto.findFirst({ where: { codigo } })
+            if (existing) { prodResult.skipped++; continue }
+          }
+
+          const tipo = ['service', 'digital'].includes(p.kind) ? 'servicio' : 'producto'
+          const taxPercent = holdedSafeNumber(p.tax)
+          let impuestoId: number | null = null
+          if (taxPercent > 0) {
+            const match = impuestos.find(imp => imp.tipo === 'IVA' && Math.abs(imp.porcentaje - taxPercent) < 0.01)
+            if (match) impuestoId = match.id
+          }
+
+          await db.producto.create({
+            data: {
+              codigo,
+              nombre,
+              descripcion: holdedSafeString(p.desc),
+              tipo,
+              precioBase: holdedSafeNumber(p.price),
+              impuestoId,
+              activo: true,
+            }
+          })
+          prodResult.imported++
+        } catch (e: any) {
+          if (e.code === 'P2002') prodResult.skipped++
+          else prodResult.errors.push(String(e))
+        }
+        sendProgress('productos', i + 1, products.length, 'importing')
+      }
+      results.productos = prodResult
+      sendProgress('productos', products.length, products.length, 'done')
+    }
+
+    // 3. Import invoices
+    if (entities.includes('facturas')) {
+      const facResult = { imported: 0, skipped: 0, errors: [] as string[] }
+      const invoices = await holdedGetAll(apiKey, '/documents/invoice')
+      sendProgress('facturas', 0, invoices.length, 'importing')
+
+      for (let i = 0; i < invoices.length; i++) {
+        try {
+          const inv = invoices[i]
+          const docNumber = holdedSafeString(inv.docNumber)
+          if (!docNumber) { facResult.skipped++; continue }
+
+          const numero = `H${docNumber}`
+          const existing = await db.factura.findFirst({ where: { numero } })
+          if (existing) { facResult.skipped++; continue }
+
+          // Find or create client
+          let clienteId: number
+          const contactName = holdedSafeString(inv.contactName)
+          if (contactName) {
+            const existingClient = await db.cliente.findFirst({ where: { nombre: contactName } })
+            if (existingClient) {
+              clienteId = existingClient.id
+            } else {
+              const newClient = await db.cliente.create({ data: { nombre: contactName } })
+              clienteId = newClient.id
+            }
+          } else {
+            let generic = await db.cliente.findFirst({ where: { nombre: 'Cliente Holded' } })
+            if (!generic) {
+              generic = await db.cliente.create({ data: { nombre: 'Cliente Holded' } })
+            }
+            clienteId = generic.id
+          }
+
+          // Map status: 0=borrador, 1=emitida, 2=pagada, 3=anulada
+          const statusMap: Record<number, string> = { 0: 'borrador', 1: 'emitida', 2: 'pagada', 3: 'anulada' }
+          const estado = statusMap[Number(inv.status)] || 'emitida'
+
+          const factura = await db.factura.create({
+            data: {
+              numero,
+              serie: 'H',
+              fecha: holdedDate(inv.date),
+              clienteId,
+              subtotal: holdedSafeNumber(inv.subtotal),
+              totalImpuestos: holdedSafeNumber(inv.tax),
+              totalRetenciones: 0,
+              total: holdedSafeNumber(inv.total),
+              estado,
+            }
+          })
+
+          // Import invoice lines
+          if (Array.isArray(inv.products)) {
+            for (const line of inv.products) {
+              try {
+                const descripcion = holdedSafeString(line.name) || 'Línea importada'
+                const cantidad = holdedSafeNumber(line.units) || 1
+                const precioUnit = holdedSafeNumber(line.price)
+                const descuento = holdedSafeNumber(line.discount)
+                const lineTaxPercent = holdedSafeNumber(line.tax)
+
+                let lineImpuestoId: number | null = null
+                if (lineTaxPercent > 0) {
+                  const match = impuestos.find(imp => imp.tipo === 'IVA' && Math.abs(imp.porcentaje - lineTaxPercent) < 0.01)
+                  if (match) lineImpuestoId = match.id
+                }
+
+                const subtotal = cantidad * precioUnit * (1 - descuento / 100)
+                const totalImpuesto = lineImpuestoId ? subtotal * lineTaxPercent / 100 : 0
+                const lineTotal = subtotal + totalImpuesto
+
+                await db.lineaFactura.create({
+                  data: {
+                    facturaId: factura.id,
+                    descripcion,
+                    cantidad,
+                    precioUnit,
+                    descuento,
+                    impuestoId: lineImpuestoId,
+                    subtotal,
+                    totalImpuesto,
+                    totalRetencion: 0,
+                    total: lineTotal,
+                  }
+                })
+              } catch {
+                // Don't fail the whole invoice for a line error
+              }
+            }
+          }
+
+          facResult.imported++
+        } catch (e: any) {
+          if (e.code === 'P2002') facResult.skipped++
+          else facResult.errors.push(String(e))
+        }
+        sendProgress('facturas', i + 1, invoices.length, 'importing')
+      }
+      results.facturas = facResult
+      sendProgress('facturas', invoices.length, invoices.length, 'done')
+    }
+
+    // 4. Import expenses (purchases)
+    if (entities.includes('gastos')) {
+      const gasResult = { imported: 0, skipped: 0, errors: [] as string[] }
+      const purchases = await holdedGetAll(apiKey, '/documents/purchase')
+      sendProgress('gastos', 0, purchases.length, 'importing')
+
+      // Find or create "Holded" category
+      let holdedCat = await db.categoriaGasto.findFirst({ where: { nombre: 'Holded' } })
+      if (!holdedCat) {
+        holdedCat = await db.categoriaGasto.create({
+          data: { nombre: 'Holded', color: '#0ea5e9', icono: 'cloud' }
+        })
+      }
+
+      for (let i = 0; i < purchases.length; i++) {
+        try {
+          const pur = purchases[i]
+          const docNumber = holdedSafeString(pur.docNumber) || ''
+          const proveedor = holdedSafeString(pur.contactName) || null
+
+          // Dedup by numeroFactura + proveedor
+          if (docNumber) {
+            const existing = await db.gasto.findFirst({
+              where: { numeroFactura: docNumber, proveedor: proveedor || undefined }
+            })
+            if (existing) { gasResult.skipped++; continue }
+          }
+
+          const descripcion = Array.isArray(pur.products)
+            ? pur.products.map((p: any) => p.name || '').filter(Boolean).join(', ') || 'Gasto importado de Holded'
+            : 'Gasto importado de Holded'
+
+          await db.gasto.create({
+            data: {
+              descripcion: descripcion.substring(0, 500),
+              categoriaId: holdedCat.id,
+              monto: holdedSafeNumber(pur.total),
+              impuestoIncluido: true,
+              fecha: holdedDate(pur.date),
+              proveedor,
+              numeroFactura: docNumber || null,
+            }
+          })
+          gasResult.imported++
+        } catch (e: any) {
+          if (e.code === 'P2002') gasResult.skipped++
+          else gasResult.errors.push(String(e))
+        }
+        sendProgress('gastos', i + 1, purchases.length, 'importing')
+      }
+      results.gastos = gasResult
+      sendProgress('gastos', purchases.length, purchases.length, 'done')
+    }
+
+    return { success: true, data: results }
   } catch (error) {
     return { success: false, error: String(error) }
   }

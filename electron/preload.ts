@@ -35,7 +35,7 @@ const electronAPI = {
   // Empresas
   empresa: {
     list: () => ipcRenderer.invoke('empresa:list') as Promise<ApiResponse<any>>,
-    create: (data: { nombre: string; customDataPath?: string }) => ipcRenderer.invoke('empresa:create', data) as Promise<ApiResponse<any>>,
+    create: (data: { nombre: string; customDataPath?: string; tipo?: 'local' | 'cloud'; passphrase?: string; cloudToken?: string; serverUrl?: string }) => ipcRenderer.invoke('empresa:create', data) as Promise<ApiResponse<any>>,
     select: (id: string) => ipcRenderer.invoke('empresa:select', id) as Promise<ApiResponse<any>>,
     rename: (id: string, nombre: string) => ipcRenderer.invoke('empresa:rename', id, nombre) as Promise<ApiResponse<void>>,
     delete: (id: string) => ipcRenderer.invoke('empresa:delete', id) as Promise<ApiResponse<void>>,
@@ -43,6 +43,8 @@ const electronAPI = {
     getDefaultPath: () => ipcRenderer.invoke('empresa:getDefaultPath') as Promise<ApiResponse<{ path: string }>>,
     detectVolumes: () => ipcRenderer.invoke('empresa:detectVolumes') as Promise<ApiResponse<{ name: string; path: string; available: boolean }[]>>,
     selectDirectory: () => ipcRenderer.invoke('empresa:selectDirectory') as Promise<ApiResponse<{ path: string } | null>>,
+    joinCloud: (data: { code: string; cloudToken: string; serverUrl: string; passphrase: string }) =>
+      ipcRenderer.invoke('empresa:joinCloud', data) as Promise<ApiResponse<any>>,
   },
 
   // Autenticación
@@ -50,6 +52,7 @@ const electronAPI = {
     checkStatus: () => ipcRenderer.invoke('auth:checkStatus') as Promise<ApiResponse<AuthStatus>>,
     setup: (password: string) => ipcRenderer.invoke('auth:setup', password) as Promise<ApiResponse<void>>,
     unlock: (password: string) => ipcRenderer.invoke('auth:unlock', password) as Promise<ApiResponse<void>>,
+    unlockCloud: (passphrase: string) => ipcRenderer.invoke('auth:unlockCloud', passphrase) as Promise<ApiResponse<void>>,
     lock: () => ipcRenderer.invoke('auth:lock') as Promise<ApiResponse<void>>,
     changePassword: (currentPassword: string, newPassword: string) =>
       ipcRenderer.invoke('auth:changePassword', currentPassword, newPassword) as Promise<ApiResponse<void>>,
@@ -255,6 +258,18 @@ const electronAPI = {
     },
   },
 
+  // Cloud Empresa Management
+  cloudEmpresa: {
+    getUsers: () =>
+      ipcRenderer.invoke('cloudEmpresa:getUsers') as Promise<ApiResponse<any[]>>,
+    inviteUser: (role?: string) =>
+      ipcRenderer.invoke('cloudEmpresa:inviteUser', role) as Promise<ApiResponse<{ code: string; role: string; expires_at: string }>>,
+    removeUser: (userId: number) =>
+      ipcRenderer.invoke('cloudEmpresa:removeUser', userId) as Promise<ApiResponse<void>>,
+    updateUserRole: (userId: number, role: string) =>
+      ipcRenderer.invoke('cloudEmpresa:updateUserRole', userId, role) as Promise<ApiResponse<void>>,
+  },
+
   // Logo
   logo: {
     upload: (fileData: { data: number[]; nombre: string; tipoMime: string }) =>
@@ -308,6 +323,33 @@ const electronAPI = {
     onError: (callback: (error: string) => void) => {
       ipcRenderer.on('updater:error', (_, err) => callback(err))
       return () => { ipcRenderer.removeAllListeners('updater:error') }
+    },
+  },
+
+  // ClassicGes 6 Import
+  clasges: {
+    selectFolder: () => ipcRenderer.invoke('clasges:selectFolder') as Promise<ApiResponse<{ path: string }>>,
+    scan: (dirPath: string) => ipcRenderer.invoke('clasges:scan', dirPath) as Promise<ApiResponse<Record<string, { found: boolean; count: number }>>>,
+    preview: (dirPath: string, entity: string) => ipcRenderer.invoke('clasges:preview', dirPath, entity) as Promise<ApiResponse<any[]>>,
+    import: (dirPath: string, entities: string[]) => ipcRenderer.invoke('clasges:import', dirPath, entities) as Promise<ApiResponse<Record<string, { imported: number; skipped: number; errors: string[] }>>>,
+    onProgress: (callback: (data: { entity: string; current: number; total: number; status: string }) => void) => {
+      ipcRenderer.on('clasges:progress', (_, data) => callback(data))
+      return () => { ipcRenderer.removeAllListeners('clasges:progress') }
+    },
+  },
+
+  // Holded Import
+  holded: {
+    saveApiKey: (apiKey: string) => ipcRenderer.invoke('holded:saveApiKey', apiKey) as Promise<ApiResponse<void>>,
+    getApiKey: () => ipcRenderer.invoke('holded:getApiKey') as Promise<ApiResponse<string | null>>,
+    deleteApiKey: () => ipcRenderer.invoke('holded:deleteApiKey') as Promise<ApiResponse<void>>,
+    testConnection: (apiKey: string) => ipcRenderer.invoke('holded:testConnection', apiKey) as Promise<ApiResponse<{ connected: boolean }>>,
+    scan: (apiKey: string) => ipcRenderer.invoke('holded:scan', apiKey) as Promise<ApiResponse<Record<string, { found: boolean; count: number }>>>,
+    preview: (apiKey: string, entity: string) => ipcRenderer.invoke('holded:preview', apiKey, entity) as Promise<ApiResponse<any[]>>,
+    import: (apiKey: string, entities: string[]) => ipcRenderer.invoke('holded:import', apiKey, entities) as Promise<ApiResponse<Record<string, { imported: number; skipped: number; errors: string[] }>>>,
+    onProgress: (callback: (data: { entity: string; current: number; total: number; status: string }) => void) => {
+      ipcRenderer.on('holded:progress', (_, data) => callback(data))
+      return () => { ipcRenderer.removeAllListeners('holded:progress') }
     },
   },
 

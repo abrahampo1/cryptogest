@@ -29,11 +29,23 @@ interface CustomPathConfig {
 // Multi-Empresa Support
 // ============================================
 
+export interface CloudConfig {
+  serverUrl: string
+  token: string
+  empresaId: number
+  userId: number
+  role: string
+  salt: string             // PBKDF2 salt (hex) for key derivation
+  verificationHash: string // SHA-256 hash of derived key, for local passphrase verification
+}
+
 export interface EmpresaInfo {
   id: string
   nombre: string
-  dataPath: string | null  // null = {userData}/empresas/{id}/
+  dataPath: string | null  // null = {userData}/empresas/{id}/ (local), null for cloud
   creadaEn: string
+  tipo?: 'local' | 'cloud'  // defaults to 'local' for backward compat
+  cloudConfig?: CloudConfig  // only for cloud empresas
 }
 
 export interface EmpresasConfig {
@@ -59,7 +71,14 @@ export function loadEmpresasConfig(): EmpresasConfig {
   }
   try {
     const content = fs.readFileSync(configFile, 'utf-8')
-    return JSON.parse(content) as EmpresasConfig
+    const config = JSON.parse(content) as EmpresasConfig
+    // Backward compat: default tipo to 'local' for older configs
+    for (const empresa of config.empresas) {
+      if (!empresa.tipo) {
+        empresa.tipo = 'local'
+      }
+    }
+    return config
   } catch {
     return { empresas: [], ultimaEmpresaId: null }
   }
@@ -111,6 +130,37 @@ export function createEmpresa(nombre: string, customDataPath?: string): EmpresaI
   saveEmpresasConfig(config)
 
   return empresa
+}
+
+export function createCloudEmpresa(nombre: string, cloudConfig: CloudConfig): EmpresaInfo {
+  const config = loadEmpresasConfig()
+  const empresa: EmpresaInfo = {
+    id: crypto.randomUUID(),
+    nombre,
+    dataPath: null,
+    creadaEn: new Date().toISOString(),
+    tipo: 'cloud',
+    cloudConfig,
+  }
+
+  config.empresas.push(empresa)
+  config.ultimaEmpresaId = empresa.id
+  saveEmpresasConfig(config)
+
+  return empresa
+}
+
+export function isCloudEmpresa(empresa: EmpresaInfo): boolean {
+  return empresa.tipo === 'cloud'
+}
+
+export function updateEmpresaCloudConfig(id: string, cloudConfig: CloudConfig): void {
+  const config = loadEmpresasConfig()
+  const empresa = config.empresas.find(e => e.id === id)
+  if (empresa && empresa.tipo === 'cloud') {
+    empresa.cloudConfig = cloudConfig
+    saveEmpresasConfig(config)
+  }
 }
 
 export function renameEmpresa(id: string, nombre: string): void {

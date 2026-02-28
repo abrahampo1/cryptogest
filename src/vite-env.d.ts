@@ -16,11 +16,37 @@ interface AuthStatus {
   passkeyEnabled: boolean
 }
 
+interface CloudConfigInfo {
+  serverUrl: string
+  token: string
+  empresaId: number
+  userId: number
+  role: string
+  salt: string
+  verificationHash: string
+}
+
 interface EmpresaInfo {
   id: string
   nombre: string
   dataPath: string | null
   creadaEn: string
+  tipo?: 'local' | 'cloud'
+  cloudConfig?: CloudConfigInfo
+}
+
+interface CloudEmpresaUser {
+  id: number
+  name: string
+  email: string
+  role: string
+  joined_at: string
+}
+
+interface CloudInvitation {
+  code: string
+  role: string
+  expires_at: string
 }
 
 interface EmpresaListResult {
@@ -32,6 +58,7 @@ interface EmpresaListResult {
 interface EmpresaSelectResult {
   empresa: EmpresaInfo
   authStatus: AuthStatus
+  isCloud?: boolean
 }
 
 interface Cliente {
@@ -413,7 +440,7 @@ interface ElectronAPI {
 
   empresa: {
     list: () => Promise<ApiResponse<EmpresaListResult>>
-    create: (data: { nombre: string; customDataPath?: string }) => Promise<ApiResponse<EmpresaInfo>>
+    create: (data: { nombre: string; customDataPath?: string; tipo?: 'local' | 'cloud'; passphrase?: string; cloudToken?: string; serverUrl?: string }) => Promise<ApiResponse<EmpresaInfo>>
     select: (id: string) => Promise<ApiResponse<EmpresaSelectResult>>
     rename: (id: string, nombre: string) => Promise<ApiResponse<void>>
     delete: (id: string) => Promise<ApiResponse<void>>
@@ -421,12 +448,14 @@ interface ElectronAPI {
     getDefaultPath: () => Promise<ApiResponse<{ path: string }>>
     detectVolumes: () => Promise<ApiResponse<{ name: string; path: string; available: boolean }[]>>
     selectDirectory: () => Promise<ApiResponse<{ path: string } | null>>
+    joinCloud: (data: { code: string; cloudToken: string; serverUrl: string; passphrase: string }) => Promise<ApiResponse<EmpresaInfo>>
   }
 
   auth: {
     checkStatus: () => Promise<ApiResponse<AuthStatus>>
     setup: (password: string) => Promise<ApiResponse<void>>
     unlock: (password: string) => Promise<ApiResponse<void>>
+    unlockCloud: (passphrase: string) => Promise<ApiResponse<void>>
     lock: () => Promise<ApiResponse<void>>
     changePassword: (currentPassword: string, newPassword: string) => Promise<ApiResponse<void>>
     setupPasskey: (password: string) => Promise<ApiResponse<void>>
@@ -583,6 +612,13 @@ interface ElectronAPI {
     onDeepLinkConnected: (callback: (data: { success: boolean; user?: CloudUser; server?: string; error?: string }) => void) => () => void
   }
 
+  cloudEmpresa: {
+    getUsers: () => Promise<ApiResponse<CloudEmpresaUser[]>>
+    inviteUser: (role?: string) => Promise<ApiResponse<CloudInvitation>>
+    removeUser: (userId: number) => Promise<ApiResponse<void>>
+    updateUserRole: (userId: number, role: string) => Promise<ApiResponse<void>>
+  }
+
   logo: {
     upload: (fileData: { data: number[]; nombre: string; tipoMime: string }) => Promise<ApiResponse<{ path: string }>>
     read: () => Promise<ApiResponse<{ data: number[]; tipoMime: string }>>
@@ -616,6 +652,25 @@ interface ElectronAPI {
     deleteMessage: (cuentaId: number, carpetaId: number, uid: number) => Promise<ApiResponse<void>>
     moveMessage: (cuentaId: number, carpetaId: number, uid: number, destPath: string) => Promise<ApiResponse<void>>
     sendEmail: (cuentaId: number, data: BuzonSendData) => Promise<ApiResponse<void>>
+  }
+
+  clasges: {
+    selectFolder: () => Promise<ApiResponse<{ path: string }>>
+    scan: (dirPath: string) => Promise<ApiResponse<Record<string, { found: boolean; count: number }>>>
+    preview: (dirPath: string, entity: string) => Promise<ApiResponse<any[]>>
+    import: (dirPath: string, entities: string[]) => Promise<ApiResponse<Record<string, { imported: number; skipped: number; errors: string[] }>>>
+    onProgress: (callback: (data: { entity: string; current: number; total: number; status: string }) => void) => () => void
+  }
+
+  holded: {
+    saveApiKey: (apiKey: string) => Promise<ApiResponse<void>>
+    getApiKey: () => Promise<ApiResponse<string | null>>
+    deleteApiKey: () => Promise<ApiResponse<void>>
+    testConnection: (apiKey: string) => Promise<ApiResponse<{ connected: boolean }>>
+    scan: (apiKey: string) => Promise<ApiResponse<Record<string, { found: boolean; count: number }>>>
+    preview: (apiKey: string, entity: string) => Promise<ApiResponse<any[]>>
+    import: (apiKey: string, entities: string[]) => Promise<ApiResponse<Record<string, { imported: number; skipped: number; errors: string[] }>>>
+    onProgress: (callback: (data: { entity: string; current: number; total: number; status: string }) => void) => () => void
   }
 
   updater: {
