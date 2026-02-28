@@ -18,7 +18,12 @@
       "Bash(head:*)",
       "Bash(cd \"/Users/abraham/Repos Personales/cryptogest\" && npx electron-rebuild 2>&1 || node node_modules/electron/install.js 2>&1)",
       "Bash(node node_modules/electron/install.js)",
-      "Bash(npm run dev)"
+      "Bash(npm run dev)",
+      "Bash(cat:*)",
+      "Bash(ls -ld \"E:/ClasGes6\"/*/)",
+      "WebFetch(domain:developers.holded.com)",
+      "WebSearch",
+      "WebFetch(domain:rollout.com)"
     ]
   }
 }
