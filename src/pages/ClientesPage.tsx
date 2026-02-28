@@ -38,6 +38,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 import {
   Plus,
   Search,
@@ -45,9 +47,16 @@ import {
   Trash2,
   Loader2,
   Eye,
-  Download,
   Filter,
   HelpCircle,
+  Calendar,
+  MapPin,
+  Mail,
+  Phone,
+  TrendingUp,
+  BarChart3,
+  FileText,
+  User,
 } from "lucide-react"
 import { formatCurrency } from "@/lib/formatting"
 
@@ -67,7 +76,7 @@ const emptyFormData = {
   activo: true,
 }
 
-export function ClientesPage({ onHelp }: { onHelp?: () => void }) {
+export function ClientesPage({ onHelp, initialItemId }: { onHelp?: () => void; initialItemId?: number | null }) {
   const { t } = useTranslation(['clientes', 'common'])
   const [clientes, setClientes] = useState<ClienteWithFacturas[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -79,6 +88,8 @@ export function ClientesPage({ onHelp }: { onHelp?: () => void }) {
   const [clienteToDelete, setClienteToDelete] = useState<ClienteWithFacturas | null>(null)
   const [editingCliente, setEditingCliente] = useState<ClienteWithFacturas | null>(null)
   const [selectedCliente, setSelectedCliente] = useState<ClienteWithFacturas | null>(null)
+  const [detailCliente, setDetailCliente] = useState<(Cliente & { facturas?: (Factura & { lineas?: (LineaFactura & { producto?: Producto | null })[] })[] }) | null>(null)
+  const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [formData, setFormData] = useState(emptyFormData)
 
@@ -99,6 +110,15 @@ export function ClientesPage({ onHelp }: { onHelp?: () => void }) {
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (initialItemId && !isLoading && clientes.length > 0) {
+      const cliente = clientes.find(c => c.id === initialItemId)
+      if (cliente) {
+        handleViewDetail(cliente)
+      }
+    }
+  }, [initialItemId, isLoading])
 
   const filteredClientes = clientes.filter((cliente) => {
     const matchesSearch =
@@ -142,9 +162,21 @@ export function ClientesPage({ onHelp }: { onHelp?: () => void }) {
     setIsDialogOpen(true)
   }
 
-  const handleViewDetail = (cliente: ClienteWithFacturas) => {
+  const handleViewDetail = async (cliente: ClienteWithFacturas) => {
     setSelectedCliente(cliente)
+    setDetailCliente(null)
     setIsDetailOpen(true)
+    setIsDetailLoading(true)
+    try {
+      const response = await window.electronAPI?.clientes.getById(cliente.id)
+      if (response?.success && response.data) {
+        setDetailCliente(response.data)
+      }
+    } catch (error) {
+      console.error("Error loading client detail:", error)
+    } finally {
+      setIsDetailLoading(false)
+    }
   }
 
   const handleSubmit = async () => {
@@ -490,75 +522,390 @@ export function ClientesPage({ onHelp }: { onHelp?: () => void }) {
         </DialogContent>
       </Dialog>
 
-      {/* Detail Dialog */}
+      {/* Detail Dialog - Enriched */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-base">{t('clientCard')}</DialogTitle>
-          </DialogHeader>
-          {selectedCliente && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <div className="text-xs text-muted-foreground">{t('common:name')}</div>
-                  <div className="font-medium">{selectedCliente.nombre}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">{t('nifCif')}</div>
-                  <div className="font-mono">{selectedCliente.nif || "-"}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">{t('common:email')}</div>
-                  <div>{selectedCliente.email || "-"}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">{t('common:phone')}</div>
-                  <div>{selectedCliente.telefono || "-"}</div>
-                </div>
-              </div>
-              <div className="text-sm">
-                <div className="text-xs text-muted-foreground">{t('common:address')}</div>
-                <div>
-                  {selectedCliente.direccion || "-"}
-                  {selectedCliente.ciudad && `, ${selectedCliente.ciudad}`}
-                  {selectedCliente.provincia && ` (${selectedCliente.provincia})`}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 p-3 bg-slate-50 rounded">
-                <div className="text-center">
-                  <div className="text-lg font-semibold">{selectedCliente.facturas?.length || 0}</div>
-                  <div className="text-xs text-muted-foreground">{t('invoices')}</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-semibold tabular-nums">
-                    {formatCurrency(getClienteFacturasTotal(selectedCliente))}
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          {selectedCliente && (() => {
+            const dc = detailCliente || selectedCliente
+            const facturas = dc.facturas || []
+            const totalFacturadoCliente = facturas.reduce((sum, f) => sum + f.total, 0)
+            const facturaCount = facturas.length
+            const facturaMedia = facturaCount > 0 ? totalFacturadoCliente / facturaCount : 0
+            const pendienteCobro = facturas
+              .filter(f => f.estado === 'emitida' || f.estado === 'vencida')
+              .reduce((sum, f) => sum + f.total, 0)
+
+            const estadoColors: Record<string, string> = {
+              borrador: 'bg-slate-300',
+              emitida: 'bg-blue-500',
+              pagada: 'bg-green-500',
+              vencida: 'bg-red-500',
+              anulada: 'bg-gray-400',
+            }
+            const estadoLabels: Record<string, string> = {
+              borrador: t('statusDraft'),
+              emitida: t('statusIssued'),
+              pagada: t('statusPaid'),
+              vencida: t('statusOverdue'),
+              anulada: t('statusCancelled'),
+            }
+            const estadoBadgeVariants: Record<string, 'secondary' | 'info' | 'success' | 'destructive' | 'outline'> = {
+              borrador: 'secondary',
+              emitida: 'info',
+              pagada: 'success',
+              vencida: 'destructive',
+              anulada: 'outline',
+            }
+            const estadoCounts: Record<string, number> = {}
+            for (const f of facturas) {
+              estadoCounts[f.estado] = (estadoCounts[f.estado] || 0) + 1
+            }
+
+            // Monthly billing for last 6 months
+            const now = new Date()
+            const monthlyData: { label: string; total: number }[] = []
+            for (let i = 5; i >= 0; i--) {
+              const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+              const year = d.getFullYear()
+              const month = d.getMonth()
+              const label = d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
+              const total = facturas
+                .filter(f => {
+                  const fd = new Date(f.fecha)
+                  return fd.getFullYear() === year && fd.getMonth() === month
+                })
+                .reduce((sum, f) => sum + f.total, 0)
+              monthlyData.push({ label, total })
+            }
+            const maxMonthly = Math.max(...monthlyData.map(m => m.total), 1)
+
+            // Top products from invoice lines
+            const productMap = new Map<string, { nombre: string; cantidad: number; total: number }>()
+            for (const f of facturas) {
+              const lineas = (f as Factura & { lineas?: (LineaFactura & { producto?: Producto | null })[] }).lineas || []
+              for (const l of lineas) {
+                const nombre = l.producto?.nombre || l.descripcion
+                const existing = productMap.get(nombre)
+                if (existing) {
+                  existing.cantidad += l.cantidad
+                  existing.total += l.total
+                } else {
+                  productMap.set(nombre, { nombre, cantidad: l.cantidad, total: l.total })
+                }
+              }
+            }
+            const topProducts = [...productMap.values()]
+              .sort((a, b) => b.total - a.total)
+              .slice(0, 5)
+
+            // Additional metrics
+            const sortedByDate = [...facturas].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+            const firstInvoice = sortedByDate[0]
+            const lastInvoice = sortedByDate[sortedByDate.length - 1]
+            const avgDueDays = facturas.length > 0
+              ? facturas
+                  .filter(f => f.fechaVencimiento)
+                  .reduce((sum, f) => {
+                    const diff = new Date(f.fechaVencimiento!).getTime() - new Date(f.fecha).getTime()
+                    return sum + diff / (1000 * 60 * 60 * 24)
+                  }, 0) / (facturas.filter(f => f.fechaVencimiento).length || 1)
+              : 0
+
+            return (
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-semibold">{dc.nombre}</h2>
+                      <Badge variant={dc.activo ? 'success' : 'secondary'}>
+                        {dc.activo ? t('common:active') : t('common:inactive')}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                      {dc.nif && (
+                        <span className="font-mono">{dc.nif}</span>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {t('memberSince')} {new Date(dc.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">{t('totalInvoiced')}</div>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setIsDetailOpen(false)
+                        handleOpenDialog(dc as ClienteWithFacturas)
+                      }}
+                    >
+                      <Pencil className="mr-1 h-3 w-3" />
+                      {t('common:edit')}
+                    </Button>
+                  </div>
                 </div>
+
+                {isDetailLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <Tabs defaultValue="overview">
+                    <TabsList className="w-full justify-start">
+                      <TabsTrigger value="overview">
+                        <User className="mr-1 h-3.5 w-3.5" />
+                        {t('tabOverview')}
+                      </TabsTrigger>
+                      <TabsTrigger value="invoices">
+                        <FileText className="mr-1 h-3.5 w-3.5" />
+                        {t('tabInvoices')}
+                        {facturaCount > 0 && (
+                          <span className="ml-1.5 text-xs bg-muted px-1.5 py-0.5 rounded-full">{facturaCount}</span>
+                        )}
+                      </TabsTrigger>
+                      <TabsTrigger value="stats">
+                        <BarChart3 className="mr-1 h-3.5 w-3.5" />
+                        {t('tabStats')}
+                      </TabsTrigger>
+                    </TabsList>
+
+                    {/* Tab 1: Overview */}
+                    <TabsContent value="overview">
+                      <div className="space-y-4">
+                        {/* Contact info */}
+                        <div className="rounded-lg border p-4">
+                          <h3 className="text-sm font-medium mb-3">{t('contactInfo')}</h3>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span>{dc.email || "-"}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span>{dc.telefono || "-"}</span>
+                            </div>
+                            <div className="flex items-start gap-2 col-span-2">
+                              <MapPin className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
+                              <span>
+                                {[dc.direccion, dc.codigoPostal, dc.ciudad, dc.provincia, dc.pais].filter(Boolean).join(", ") || "-"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 4 KPI Cards */}
+                        <div className="grid grid-cols-4 gap-3">
+                          <div className="rounded-lg border p-3 text-center">
+                            <div className="text-lg font-semibold tabular-nums text-blue-600">
+                              {formatCurrency(totalFacturadoCliente)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{t('totalInvoiced')}</div>
+                          </div>
+                          <div className="rounded-lg border p-3 text-center">
+                            <div className="text-lg font-semibold tabular-nums">{facturaCount}</div>
+                            <div className="text-xs text-muted-foreground">{t('invoices')}</div>
+                          </div>
+                          <div className="rounded-lg border p-3 text-center">
+                            <div className="text-lg font-semibold tabular-nums">
+                              {formatCurrency(facturaMedia)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{t('averageInvoice')}</div>
+                          </div>
+                          <div className="rounded-lg border p-3 text-center">
+                            <div className={`text-lg font-semibold tabular-nums ${pendienteCobro > 0 ? 'text-amber-600' : ''}`}>
+                              {formatCurrency(pendienteCobro)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{t('pendingCollection')}</div>
+                          </div>
+                        </div>
+
+                        {/* Invoice status distribution */}
+                        {facturaCount > 0 && (
+                          <div className="rounded-lg border p-4">
+                            <h3 className="text-sm font-medium mb-3">{t('invoiceDistribution')}</h3>
+                            {/* Stacked bar */}
+                            <div className="flex h-3 rounded-full overflow-hidden mb-3">
+                              {Object.entries(estadoCounts).map(([estado, count]) => (
+                                <div
+                                  key={estado}
+                                  className={`${estadoColors[estado] || 'bg-gray-300'}`}
+                                  style={{ width: `${(count / facturaCount) * 100}%` }}
+                                  title={`${estadoLabels[estado] || estado}: ${count}`}
+                                />
+                              ))}
+                            </div>
+                            <div className="flex flex-wrap gap-3 text-xs">
+                              {Object.entries(estadoCounts).map(([estado, count]) => (
+                                <div key={estado} className="flex items-center gap-1.5">
+                                  <div className={`w-2.5 h-2.5 rounded-full ${estadoColors[estado] || 'bg-gray-300'}`} />
+                                  <span>{estadoLabels[estado] || estado}</span>
+                                  <span className="text-muted-foreground">({count})</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {facturaCount === 0 && (
+                          <div className="rounded-lg border p-6 text-center text-sm text-muted-foreground">
+                            <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                            {t('noInvoicesYet')}
+                          </div>
+                        )}
+
+                        {/* Notes */}
+                        {dc.notas && (
+                          <div className="rounded-lg border p-4">
+                            <h3 className="text-sm font-medium mb-2">{t('common:notes')}</h3>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{dc.notas}</p>
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+
+                    {/* Tab 2: Invoices */}
+                    <TabsContent value="invoices">
+                      {facturaCount > 0 ? (
+                        <div className="rounded-lg border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="hover:bg-transparent">
+                                <TableHead className="h-9 text-xs">{t('invoiceNumber')}</TableHead>
+                                <TableHead className="h-9 text-xs">{t('date')}</TableHead>
+                                <TableHead className="h-9 text-xs">{t('dueDate')}</TableHead>
+                                <TableHead className="h-9 text-xs text-right">{t('total')}</TableHead>
+                                <TableHead className="h-9 text-xs text-center">{t('status')}</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {facturas.map((factura) => (
+                                <TableRow key={factura.id}>
+                                  <TableCell className="py-2 font-mono text-xs">{factura.numero}</TableCell>
+                                  <TableCell className="py-2 text-xs">
+                                    {new Date(factura.fecha).toLocaleDateString()}
+                                  </TableCell>
+                                  <TableCell className="py-2 text-xs">
+                                    {factura.fechaVencimiento
+                                      ? new Date(factura.fechaVencimiento).toLocaleDateString()
+                                      : "-"}
+                                  </TableCell>
+                                  <TableCell className="py-2 text-right font-mono tabular-nums text-xs">
+                                    {formatCurrency(factura.total)}
+                                  </TableCell>
+                                  <TableCell className="py-2 text-center">
+                                    <Badge variant={estadoBadgeVariants[factura.estado] || 'secondary'}>
+                                      {estadoLabels[factura.estado] || factura.estado}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                          <div className="flex justify-between items-center px-4 py-2 border-t bg-muted/30 text-sm">
+                            <span className="font-medium">{t('totalAtBottom')}</span>
+                            <span className="font-semibold tabular-nums">{formatCurrency(totalFacturadoCliente)}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border p-6 text-center text-sm text-muted-foreground">
+                          <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                          {t('noInvoicesYet')}
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    {/* Tab 3: Statistics */}
+                    <TabsContent value="stats">
+                      {facturaCount > 0 ? (
+                        <div className="space-y-4">
+                          {/* Monthly billing */}
+                          <div className="rounded-lg border p-4">
+                            <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
+                              <TrendingUp className="h-3.5 w-3.5" />
+                              {t('monthlyBilling')}
+                            </h3>
+                            <div className="space-y-2">
+                              {monthlyData.map((m) => (
+                                <div key={m.label} className="flex items-center gap-3 text-xs">
+                                  <span className="w-16 text-muted-foreground text-right">{m.label}</span>
+                                  <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
+                                    {m.total > 0 && (
+                                      <div
+                                        className="h-full bg-blue-500 rounded-full flex items-center justify-end pr-2"
+                                        style={{ width: `${Math.max((m.total / maxMonthly) * 100, 8)}%` }}
+                                      >
+                                        <span className="text-[10px] font-medium text-white whitespace-nowrap">
+                                          {formatCurrency(m.total)}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Top products */}
+                          <div className="rounded-lg border p-4">
+                            <h3 className="text-sm font-medium mb-3 flex items-center gap-1.5">
+                              <BarChart3 className="h-3.5 w-3.5" />
+                              {t('topProducts')}
+                            </h3>
+                            {topProducts.length > 0 ? (
+                              <div className="space-y-2">
+                                {topProducts.map((p, i) => (
+                                  <div key={i} className="flex items-center justify-between text-sm py-1.5 border-b last:border-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-muted-foreground w-5">{i + 1}.</span>
+                                      <span>{p.nombre}</span>
+                                      <span className="text-xs text-muted-foreground">({p.cantidad} {t('units')})</span>
+                                    </div>
+                                    <span className="font-mono tabular-nums text-xs">{formatCurrency(p.total)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">{t('noProductData')}</p>
+                            )}
+                          </div>
+
+                          {/* Additional metrics */}
+                          <div className="rounded-lg border p-4">
+                            <h3 className="text-sm font-medium mb-3">{t('additionalMetrics')}</h3>
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                              <div>
+                                <div className="text-xs text-muted-foreground">{t('firstInvoice')}</div>
+                                <div className="font-medium">
+                                  {firstInvoice ? new Date(firstInvoice.fecha).toLocaleDateString() : "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-muted-foreground">{t('lastInvoice')}</div>
+                                <div className="font-medium">
+                                  {lastInvoice ? new Date(lastInvoice.fecha).toLocaleDateString() : "-"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-muted-foreground">{t('avgDueDays')}</div>
+                                <div className="font-medium">{Math.round(avgDueDays)} d</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border p-6 text-center text-sm text-muted-foreground">
+                          <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                          {t('noInvoicesYet')}
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                )}
               </div>
-              {selectedCliente.notas && (
-                <div className="text-sm">
-                  <div className="text-xs text-muted-foreground">{t('common:notes')}</div>
-                  <div className="whitespace-pre-wrap">{selectedCliente.notas}</div>
-                </div>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setIsDetailOpen(false)}>
-              {t('common:close')}
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                setIsDetailOpen(false)
-                if (selectedCliente) handleOpenDialog(selectedCliente)
-              }}
-            >
-              <Pencil className="mr-1 h-3 w-3" />
-              {t('common:edit')}
-            </Button>
-          </DialogFooter>
+            )
+          })()}
         </DialogContent>
       </Dialog>
 

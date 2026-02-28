@@ -30,6 +30,7 @@ interface SidebarProps {
   onSwitchEmpresa?: () => Promise<void>
   empresaNombre?: string
   buzonEnabled?: boolean
+  isCloudEmpresa?: boolean
 }
 
 const menuItems = [
@@ -59,7 +60,7 @@ const helpItems = [
   { id: "manual" as Page, labelKey: "manual", icon: HelpCircle },
 ]
 
-export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, empresaNombre, buzonEnabled }: SidebarProps) {
+export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, empresaNombre, buzonEnabled, isCloudEmpresa }: SidebarProps) {
   const { t } = useTranslation(['sidebar', 'common'])
   const [isLocking, setIsLocking] = useState(false)
 
@@ -255,7 +256,10 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
           <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
           <div className="min-w-0 flex-1">
             <span className="text-[10px] text-slate-500 block leading-tight">{t('activeCompany')}</span>
-            <span className="text-[11px] text-slate-300 truncate block leading-tight">{empresaNombre || t('common:noCompany')}</span>
+            <span className="text-[11px] text-slate-300 truncate block leading-tight flex items-center gap-1">
+              {empresaNombre || t('common:noCompany')}
+              {isCloudEmpresa && <Cloud className="h-3 w-3 text-blue-400 shrink-0" />}
+            </span>
           </div>
           <ChevronRight className="h-3 w-3 text-slate-600 shrink-0" />
         </button>

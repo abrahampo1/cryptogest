@@ -96,7 +96,7 @@ const estadoConfig: Record<string, { labelKey: string; color: string; icon: type
   anulada: { labelKey: "cancelled", color: "bg-slate-100 text-slate-500", icon: Ban },
 }
 
-export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
+export function FacturasPage({ onHelp, initialItemId }: { onHelp?: () => void; initialItemId?: number | null }) {
   const { t } = useTranslation(['facturas', 'common'])
   const [facturas, setFacturas] = useState<Factura[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -170,6 +170,16 @@ export function FacturasPage({ onHelp }: { onHelp?: () => void }) {
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (initialItemId && !isLoading && facturas.length > 0) {
+      const factura = facturas.find(f => f.id === initialItemId)
+      if (factura) {
+        setSelectedFactura(factura)
+        setIsDetailOpen(true)
+      }
+    }
+  }, [initialItemId, isLoading])
 
   const activeFiltersCount = [
     filterClienteId !== "todos",

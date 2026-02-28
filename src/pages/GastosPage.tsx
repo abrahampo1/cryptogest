@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { translateError } from "@/lib/formatting"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -128,7 +128,7 @@ const emptyFormData = {
   notas: "",
 }
 
-export function GastosPage({ onHelp }: { onHelp?: () => void }) {
+export function GastosPage({ onHelp, initialItemId }: { onHelp?: () => void; initialItemId?: number | null }) {
   const { t } = useTranslation(['gastos', 'common'])
   const [gastos, setGastos] = useState<Gasto[]>([])
   const [categorias, setCategorias] = useState<CategoriaGasto[]>([])
@@ -152,6 +152,9 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
   const [previewData, setPreviewData] = useState<{ url: string; nombre: string; tipo: string } | null>(null)
   const [isLoadingPreview, setIsLoadingPreview] = useState<number | null>(null)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1)
+  const suggestionContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     loadData()
@@ -192,6 +195,16 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
       console.error("Error creating default categories:", error)
     }
   }
+
+  useEffect(() => {
+    if (initialItemId && !isLoading && gastos.length > 0) {
+      const gasto = gastos.find(g => g.id === initialItemId)
+      if (gasto) {
+        setSelectedGasto(gasto)
+        setIsDetailOpen(true)
+      }
+    }
+  }, [initialItemId, isLoading])
 
   const meses = [
     { value: "todos", label: t('allMonths') },
@@ -262,6 +275,53 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
       })
     }
     setIsDialogOpen(true)
+  }
+
+  // Autocomplete: compute unique suggestions grouped by descripcion (most recent each)
+  const suggestions = useMemo(() => {
+    const text = formData.descripcion.trim().toLowerCase()
+    if (!text || editingGasto) return []
+    const map = new Map<string, Gasto>()
+    for (const g of gastos) {
+      if (!g.descripcion.toLowerCase().includes(text)) continue
+      const key = g.descripcion.toLowerCase()
+      const existing = map.get(key)
+      if (!existing || new Date(g.createdAt) > new Date(existing.createdAt)) {
+        map.set(key, g)
+      }
+    }
+    return Array.from(map.values()).slice(0, 7)
+  }, [formData.descripcion, gastos, editingGasto])
+
+  const handleSelectSuggestion = (gasto: Gasto) => {
+    setFormData((prev) => ({
+      ...prev,
+      descripcion: gasto.descripcion,
+      categoriaId: gasto.categoriaId ? String(gasto.categoriaId) : "",
+      monto: String(gasto.monto),
+      impuestoId: gasto.impuestoId ? String(gasto.impuestoId) : "",
+      impuestoIncluido: gasto.impuestoIncluido,
+      proveedor: gasto.proveedor || "",
+    }))
+    setShowSuggestions(false)
+    setActiveSuggestionIndex(-1)
+  }
+
+  const handleDescripcionKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestions.length === 0) return
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      setActiveSuggestionIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0))
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      setActiveSuggestionIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1))
+    } else if (e.key === "Enter" && activeSuggestionIndex >= 0) {
+      e.preventDefault()
+      handleSelectSuggestion(suggestions[activeSuggestionIndex])
+    } else if (e.key === "Escape") {
+      setShowSuggestions(false)
+      setActiveSuggestionIndex(-1)
+    }
   }
 
   const handleViewDetail = (gasto: Gasto) => {
@@ -799,13 +859,61 @@ export function GastosPage({ onHelp }: { onHelp?: () => void }) {
             )}
             <div className="grid gap-1.5">
               <Label htmlFor="descripcion" className="text-xs">{t('descriptionRequired')}</Label>
-              <Input
-                id="descripcion"
-                className="h-8 text-sm"
-                value={formData.descripcion}
-                onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                placeholder={t('descriptionPlaceholder')}
-              />
+              <div className="relative" ref={suggestionContainerRef}>
+                <Input
+                  id="descripcion"
+                  className="h-8 text-sm"
+                  value={formData.descripcion}
+                  onChange={(e) => {
+                    setFormData({ ...formData, descripcion: e.target.value })
+                    setShowSuggestions(true)
+                    setActiveSuggestionIndex(-1)
+                  }}
+                  onFocus={() => {
+                    if (formData.descripcion.trim() && !editingGasto) setShowSuggestions(true)
+                  }}
+                  onBlur={() => {
+                    // Delay to allow click on suggestion
+                    setTimeout(() => setShowSuggestions(false), 200)
+                  }}
+                  onKeyDown={handleDescripcionKeyDown}
+                  placeholder={t('descriptionPlaceholder')}
+                  autoComplete="off"
+                />
+                {showSuggestions && suggestions.length > 0 && !editingGasto && (
+                  <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
+                    <p className="px-3 py-1.5 text-[10px] text-muted-foreground">{t('suggestionHint')}</p>
+                    {suggestions.map((gasto, index) => (
+                      <div
+                        key={gasto.id}
+                        className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm ${
+                          index === activeSuggestionIndex ? "bg-accent" : "hover:bg-accent/50"
+                        }`}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          handleSelectSuggestion(gasto)
+                        }}
+                        onMouseEnter={() => setActiveSuggestionIndex(index)}
+                      >
+                        <div
+                          className="h-5 w-0.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: getCategoriaColor(gasto.categoriaId) }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs font-medium truncate block">{gasto.descripcion}</span>
+                          <span className="text-[10px] text-muted-foreground truncate block">
+                            {getCategoriaNombre(gasto.categoriaId)}
+                            {gasto.proveedor ? ` · ${gasto.proveedor}` : ""}
+                          </span>
+                        </div>
+                        <span className="text-xs font-medium tabular-nums text-muted-foreground flex-shrink-0">
+                          {formatCurrency(gasto.monto)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">

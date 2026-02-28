@@ -29,7 +29,7 @@ import {
 } from "lucide-react"
 
 interface DashboardPageProps {
-  onNavigate: (page: Page) => void
+  onNavigate: (page: Page, itemId?: number) => void
   onHelp?: () => void
 }
 
@@ -74,6 +74,19 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
     const vencimiento = new Date(fechaVencimiento)
     const now = new Date()
     return Math.ceil((vencimiento.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  }
+
+  const handleActivityClick = (activity: RecentActivity) => {
+    const pageMap: Record<string, Page> = {
+      factura: 'facturas',
+      gasto: 'gastos',
+      cliente: 'clientes',
+      producto: 'productos',
+    }
+    const page = pageMap[activity.tipo]
+    if (page) {
+      onNavigate(page, activity.id)
+    }
   }
 
   const balance = stats ? stats.ingresosTotales - stats.gastosTotales : 0
@@ -216,7 +229,11 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
                     const isUrgent = daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 5
 
                     return (
-                      <TableRow key={factura.id} className="text-sm">
+                      <TableRow
+                        key={factura.id}
+                        className="text-sm cursor-pointer hover:bg-muted/50"
+                        onClick={() => onNavigate('facturas', factura.id)}
+                      >
                         <TableCell className="py-2 font-mono text-xs">{factura.numero}</TableCell>
                         <TableCell className="py-2 truncate max-w-[150px]" title={factura.cliente?.nombre}>
                           {factura.cliente?.nombre || '-'}
@@ -281,7 +298,11 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
                 </TableHeader>
                 <TableBody>
                   {activities.slice(0, 8).map((activity, idx) => (
-                    <TableRow key={`${activity.tipo}-${activity.id}-${idx}`} className="text-sm">
+                    <TableRow
+                      key={`${activity.tipo}-${activity.id}-${idx}`}
+                      className="text-sm cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleActivityClick(activity)}
+                    >
                       <TableCell className="py-2">
                         <span className={`inline-block text-xs px-2 py-0.5 rounded ${
                           activity.tipo === 'factura' ? 'bg-blue-50 text-blue-700' :

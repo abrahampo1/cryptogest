@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { translateError } from "@/lib/formatting"
 import { Button } from "@/components/ui/button"
@@ -18,6 +18,8 @@ import {
   FolderOpen,
   CheckCircle2,
   Database,
+  Cloud,
+  ExternalLink,
 } from "lucide-react"
 import {
   AlertDialog,
@@ -36,6 +38,7 @@ interface EmpresaInfo {
   nombre: string
   dataPath: string | null
   creadaEn: string
+  tipo?: 'local' | 'cloud'
 }
 
 interface EmpresaSelectorPageProps {
@@ -46,7 +49,7 @@ interface EmpresaSelectorPageProps {
 }
 
 type CreationStep = "name" | "location"
-type LocationMode = "default" | "volume" | "custom"
+type LocationMode = "default" | "volume" | "custom" | "cloud"
 
 interface VolumeInfo {
   name: string
@@ -72,6 +75,23 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
   const [defaultPath, setDefaultPath] = useState<string>("")
   const [volumes, setVolumes] = useState<VolumeInfo[]>([])
   const [loadingVolumes, setLoadingVolumes] = useState(false)
+
+  // Cloud creation
+  const [cloudPassphrase, setCloudPassphrase] = useState("")
+  const [cloudPassphraseConfirm, setCloudPassphraseConfirm] = useState("")
+  // Cloud connection (inline)
+  const [cloudConnected, setCloudConnected] = useState(false)
+  const [cloudCheckingConfig, setCloudCheckingConfig] = useState(false)
+  const [cloudServerUrl, setCloudServerUrl] = useState("https://cryptogest.app")
+  const [cloudToken, setCloudToken] = useState("")
+  const [codeDigits, setCodeDigits] = useState(["", "", "", "", "", ""])
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false)
+  const [deviceName, setDeviceName] = useState("CryptoGest Desktop")
+  const codeInputRefs = useRef<(HTMLInputElement | null)[]>([])
+  // Join cloud
+  const [isJoining, setIsJoining] = useState(false)
+  const [joinCode, setJoinCode] = useState("")
+  const [joinPassphrase, setJoinPassphrase] = useState("")
 
   const loadLocationData = useCallback(async () => {
     setLoadingVolumes(true)
@@ -99,6 +119,81 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
     }
   }, [creationStep, loadLocationData])
 
+  // Check cloud connection when user selects cloud mode
+  const checkCloudConnection = useCallback(async () => {
+    setCloudCheckingConfig(true)
+    try {
+      const result = await window.electronAPI?.cloud.getConfig()
+      if (result?.success && result.data?.token && result.data?.serverUrl) {
+        setCloudConnected(true)
+        setCloudToken(result.data.token)
+        setCloudServerUrl(result.data.serverUrl)
+      } else {
+        setCloudConnected(false)
+      }
+    } catch {
+      setCloudConnected(false)
+    } finally {
+      setCloudCheckingConfig(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (locationMode === "cloud") {
+      checkCloudConnection()
+    }
+  }, [locationMode, checkCloudConnection])
+
+  const handleCodeChange = (index: number, value: string) => {
+    const char = value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(-1)
+    const newDigits = [...codeDigits]
+    newDigits[index] = char
+    setCodeDigits(newDigits)
+    if (char && index < 5) {
+      codeInputRefs.current[index + 1]?.focus()
+    }
+  }
+
+  const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !codeDigits[index] && index > 0) {
+      codeInputRefs.current[index - 1]?.focus()
+    }
+  }
+
+  const handleCodePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData("text").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 6)
+    if (pasted.length === 0) return
+    const newDigits = [...codeDigits]
+    for (let i = 0; i < 6; i++) {
+      newDigits[i] = pasted[i] || ""
+    }
+    setCodeDigits(newDigits)
+    const focusIndex = Math.min(pasted.length, 5)
+    codeInputRefs.current[focusIndex]?.focus()
+  }
+
+  const handleVerifyCloudCode = async () => {
+    const code = codeDigits.join("")
+    if (code.length !== 6) return
+    setIsVerifyingCode(true)
+    setError(null)
+    try {
+      const result = await window.electronAPI?.cloud.verifyCode({ code, server: cloudServerUrl, deviceName: deviceName.trim() || undefined })
+      if (result?.success && result.data) {
+        setCloudConnected(true)
+        setCloudToken(result.data.api_token)
+        setCodeDigits(["", "", "", "", "", ""])
+      } else {
+        setError(result?.error ? translateError(result.error) : t('empresaSelector.codeInvalid', 'Invalid or expired code'))
+      }
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setIsVerifyingCode(false)
+    }
+  }
+
   const handleNameNext = () => {
     if (!newName.trim()) return
     setError(null)
@@ -120,26 +215,60 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
     setLocationMode("default")
     setCustomDataPath(null)
     setError(null)
+    setCloudPassphrase("")
+    setCloudPassphraseConfirm("")
+    setCodeDigits(["", "", "", "", "", ""])
   }
 
   const handleCreate = async () => {
     if (!newName.trim()) return
+    if (locationMode === "cloud") {
+      if (!cloudPassphrase || cloudPassphrase.length < 6) {
+        setError(t('auth:passwordMinLength'))
+        return
+      }
+      if (cloudPassphrase !== cloudPassphraseConfirm) {
+        setError(t('auth:passwordsDoNotMatch'))
+        return
+      }
+    }
     setIsSubmitting(true)
     setError(null)
     try {
-      const selectedPath =
-        locationMode === "default" ? undefined :
-        (locationMode === "custom" || locationMode === "volume") && customDataPath ? customDataPath :
-        undefined
-      const result = await window.electronAPI?.empresa.create({
-        nombre: newName.trim(),
-        ...(selectedPath ? { customDataPath: selectedPath } : {}),
-      })
-      if (result?.success) {
-        resetCreation()
-        onCreated()
+      if (locationMode === "cloud") {
+        if (!cloudConnected || !cloudToken || !cloudServerUrl) {
+          setError(t('empresaSelector.cloudNotConnected', 'Connect to cloud first'))
+          setIsSubmitting(false)
+          return
+        }
+        const result = await window.electronAPI?.empresa.create({
+          nombre: newName.trim(),
+          tipo: 'cloud',
+          passphrase: cloudPassphrase,
+          cloudToken: cloudToken,
+          serverUrl: cloudServerUrl,
+        })
+        if (result?.success) {
+          resetCreation()
+          onCreated()
+        } else {
+          setError(result?.error ? translateError(result.error) : t('empresaSelector.errorCreating'))
+        }
       } else {
-        setError(result?.error ? translateError(result.error) : t('empresaSelector.errorCreating'))
+        const selectedPath =
+          locationMode === "default" ? undefined :
+          (locationMode === "custom" || locationMode === "volume") && customDataPath ? customDataPath :
+          undefined
+        const result = await window.electronAPI?.empresa.create({
+          nombre: newName.trim(),
+          ...(selectedPath ? { customDataPath: selectedPath } : {}),
+        })
+        if (result?.success) {
+          resetCreation()
+          onCreated()
+        } else {
+          setError(result?.error ? translateError(result.error) : t('empresaSelector.errorCreating'))
+        }
       }
     } catch (err) {
       setError(String(err))
@@ -174,6 +303,45 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
     } finally {
       setIsDeleting(false)
       setDeleteTarget(null)
+    }
+  }
+
+  const handleJoinCloud = async () => {
+    if (!joinCode.trim() || !joinPassphrase) return
+    setIsJoining(true)
+    setError(null)
+    try {
+      // Check cloud connection first
+      let token = cloudToken
+      let serverUrl = cloudServerUrl
+      if (!token) {
+        const cloudConfig = await window.electronAPI?.cloud.getConfig()
+        if (!cloudConfig?.success || !cloudConfig.data?.token || !cloudConfig.data?.serverUrl) {
+          setError(t('empresaSelector.cloudNotConnected', 'Connect to cloud first'))
+          setIsJoining(false)
+          return
+        }
+        token = cloudConfig.data.token
+        serverUrl = cloudConfig.data.serverUrl
+      }
+      const result = await window.electronAPI?.empresa.joinCloud({
+        code: joinCode.trim(),
+        passphrase: joinPassphrase,
+        cloudToken: token,
+        serverUrl: serverUrl,
+      })
+      if (result?.success) {
+        setIsJoining(false)
+        setJoinCode("")
+        setJoinPassphrase("")
+        onCreated()
+      } else {
+        setError(result?.error ? translateError(result.error) : t('empresaSelector.errorCreating'))
+      }
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setIsJoining(false)
     }
   }
 
@@ -235,7 +403,15 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                   </div>
                 ) : (
                   <>
-                    <p className="text-sm font-medium text-white truncate">{empresa.nombre}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium text-white truncate">{empresa.nombre}</p>
+                      {empresa.tipo === 'cloud' && (
+                        <span className="text-[9px] bg-blue-500/20 text-blue-400 rounded px-1 py-0.5 leading-none flex items-center gap-0.5">
+                          <Cloud className="h-2.5 w-2.5" />
+                          Cloud
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[10px] text-slate-500">
                       {t('empresaSelector.createdOn', { date: formatDate(empresa.creadaEn) })}
                     </p>
@@ -372,6 +548,132 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                   ))
                 )}
 
+                {/* Cloud option */}
+                <button
+                  className={`w-full text-left p-2.5 rounded-md border transition-colors ${
+                    locationMode === "cloud"
+                      ? "border-blue-500/50 bg-blue-500/10"
+                      : "border-slate-700 bg-slate-800/30 hover:bg-slate-800/50"
+                  }`}
+                  onClick={() => { setLocationMode("cloud"); setCustomDataPath(null) }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Cloud className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-medium text-white">{t('empresaSelector.cloudOption')}</span>
+                      <p className="text-[10px] text-slate-500">{t('empresaSelector.cloudOptionDesc')}</p>
+                    </div>
+                    {locationMode === "cloud" && <CheckCircle2 className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
+                  </div>
+                </button>
+
+                {/* Cloud connection + passphrase fields */}
+                {locationMode === "cloud" && (
+                  <div className="space-y-3 pl-6 border-l-2 border-blue-500/30">
+                    {cloudCheckingConfig ? (
+                      <div className="flex items-center gap-2 py-2">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
+                        <span className="text-xs text-slate-400">{t('common:loading', 'Loading...')}</span>
+                      </div>
+                    ) : cloudConnected ? (
+                      <>
+                        {/* Connected — show passphrase fields */}
+                        <div className="flex items-center gap-2 p-2 rounded bg-green-500/10 border border-green-500/20">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0" />
+                          <span className="text-xs text-green-400">{t('empresaSelector.cloudConnected', 'Connected to CryptoGest Cloud')}</span>
+                        </div>
+                        <div>
+                          <input
+                            type="password"
+                            value={cloudPassphrase}
+                            onChange={(e) => setCloudPassphrase(e.target.value)}
+                            placeholder={t('empresaSelector.passphrase')}
+                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                          <p className="text-[10px] text-slate-500 mt-1">{t('empresaSelector.passphraseHint')}</p>
+                        </div>
+                        <input
+                          type="password"
+                          value={cloudPassphraseConfirm}
+                          onChange={(e) => setCloudPassphraseConfirm(e.target.value)}
+                          placeholder={t('empresaSelector.passphraseConfirm')}
+                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        {/* Not connected — show connection flow */}
+                        <p className="text-xs text-slate-400">
+                          {t('empresaSelector.cloudConnectFirst', 'Connect your CryptoGest Cloud account to create a cloud company.')}
+                        </p>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full border-blue-500/30 text-blue-400 hover:bg-blue-500/10 text-xs"
+                          onClick={() => window.electronAPI?.shell.openExternal(`${cloudServerUrl}/login`)}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1.5" />
+                          {t('empresaSelector.openCloudLogin', 'Open CryptoGest Cloud')}
+                        </Button>
+
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 border-t border-slate-700" />
+                          <span className="text-[10px] text-slate-500">{t('empresaSelector.orEnterCode', 'or enter device code')}</span>
+                          <div className="flex-1 border-t border-slate-700" />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Input
+                            value={deviceName}
+                            onChange={(e) => setDeviceName(e.target.value)}
+                            placeholder={t('empresaSelector.deviceName', 'Device name')}
+                            className="h-7 text-xs bg-slate-800 border-slate-600 text-white text-center"
+                            disabled={isVerifyingCode}
+                          />
+                          <div className="flex items-center justify-center gap-1.5" onPaste={handleCodePaste}>
+                            {codeDigits.map((digit, i) => (
+                              <Input
+                                key={i}
+                                ref={(el) => { codeInputRefs.current[i] = el }}
+                                value={digit}
+                                onChange={(e) => handleCodeChange(i, e.target.value)}
+                                onKeyDown={(e) => handleCodeKeyDown(i, e)}
+                                className="h-9 w-9 text-center text-sm font-mono uppercase bg-slate-800 border-slate-600 text-white"
+                                maxLength={1}
+                                disabled={isVerifyingCode}
+                              />
+                            ))}
+                          </div>
+                          <Button
+                            size="sm"
+                            className="w-full text-xs"
+                            onClick={handleVerifyCloudCode}
+                            disabled={codeDigits.join("").length !== 6 || isVerifyingCode}
+                          >
+                            {isVerifyingCode ? (
+                              <Loader2 className="h-3 w-3 animate-spin mr-1.5" />
+                            ) : (
+                              <Cloud className="h-3 w-3 mr-1.5" />
+                            )}
+                            {t('empresaSelector.connectCloud', 'Connect')}
+                          </Button>
+                          <p className="text-[10px] text-slate-500 text-center">
+                            {t('empresaSelector.codeHint', 'Generate a code at')}{' '}
+                            <button
+                              type="button"
+                              onClick={() => window.electronAPI?.shell.openExternal(`${cloudServerUrl}/dashboard/devices`)}
+                              className="text-blue-400 hover:underline"
+                            >
+                              {t('empresaSelector.devices', 'Devices')}
+                            </button>
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {/* Elegir carpeta */}
                 <button
                   className={`w-full text-left p-2.5 rounded-md border transition-colors ${
@@ -422,14 +724,66 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
             )}
           </div>
         ) : (
-          <Button
-            variant="outline"
-            className="w-full border-slate-700 bg-slate-900/30 text-slate-300 hover:bg-slate-800 hover:text-white"
-            onClick={() => setIsCreating(true)}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            {t('empresaSelector.createNewCompany')}
-          </Button>
+          <div className="space-y-2">
+            <Button
+              variant="outline"
+              className="w-full border-slate-700 bg-slate-900/30 text-slate-300 hover:bg-slate-800 hover:text-white"
+              onClick={() => setIsCreating(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {t('empresaSelector.createNewCompany')}
+            </Button>
+
+            {/* Join Cloud Company */}
+            {!isJoining ? (
+              <Button
+                variant="outline"
+                className="w-full border-blue-500/30 bg-blue-500/5 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300"
+                onClick={() => setIsJoining(true)}
+              >
+                <Cloud className="h-4 w-4 mr-2" />
+                {t('empresaSelector.joinCloud')}
+              </Button>
+            ) : (
+              <div className="p-4 rounded-lg border border-blue-500/30 bg-slate-900/50 space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Cloud className="h-4 w-4 text-blue-400" />
+                  <span className="text-sm font-medium text-white">{t('empresaSelector.joinCloud')}</span>
+                </div>
+                <input
+                  type="text"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  placeholder={t('empresaSelector.joinCloudCode')}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono tracking-wider"
+                  maxLength={8}
+                />
+                <input
+                  type="password"
+                  value={joinPassphrase}
+                  onChange={(e) => setJoinPassphrase(e.target.value)}
+                  placeholder={t('empresaSelector.joinCloudPassphrase')}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleJoinCloud}
+                    disabled={!joinCode.trim() || !joinPassphrase || isJoining}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isJoining ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Cloud className="h-3.5 w-3.5 mr-1.5" />}
+                    {t('empresaSelector.joinCloudButton')}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => { setIsJoining(false); setJoinCode(""); setJoinPassphrase("") }}
+                    className="border-slate-600 text-slate-300 hover:bg-slate-800"
+                  >
+                    {t('common:cancel')}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Delete confirmation */}

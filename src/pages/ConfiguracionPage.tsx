@@ -74,9 +74,12 @@ import {
   HelpCircle,
   Mail,
   FlaskConical,
+  Cloud,
 } from "lucide-react"
 import { generateInvoicePdf, TemplateConfig } from "@/lib/generateInvoicePdf"
 import { PREVIEW_FACTURA } from "@/lib/invoicePreviewData"
+import ImportarClasGesDialog from "@/components/ImportarClasGesDialog"
+import ImportarHoldedDialog from "@/components/ImportarHoldedDialog"
 
 interface EmpresaData {
   nombre: string
@@ -115,7 +118,7 @@ const emptyImpuestoForm = {
   porDefecto: false,
 }
 
-export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onHelp?: () => void; buzonEnabled?: boolean; onBuzonToggle?: (v: boolean) => void }) {
+export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle, isCloudEmpresa }: { onHelp?: () => void; buzonEnabled?: boolean; onBuzonToggle?: (v: boolean) => void; isCloudEmpresa?: boolean }) {
   const { t, i18n } = useTranslation(['configuracion', 'common'])
   const [empresaData, setEmpresaData] = useState<EmpresaData>({
     nombre: "",
@@ -185,6 +188,11 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
   const [migrateSuccess, setMigrateSuccess] = useState<string | null>(null)
   const [migrateError, setMigrateError] = useState<string | null>(null)
   const [isResettingPath, setIsResettingPath] = useState(false)
+
+  // ClassicGes import state
+  const [showClasGesImport, setShowClasGesImport] = useState(false)
+  // Holded import state
+  const [showHoldedImport, setShowHoldedImport] = useState(false)
 
   const [empresaSaving, setEmpresaSaving] = useState(false)
   const [empresaSuccess, setEmpresaSuccess] = useState<string | null>(null)
@@ -276,6 +284,21 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
     }
     return () => { cleanups.forEach(fn => fn()) }
   }, [])
+
+  const handleCheckForUpdates = async () => {
+    setUpdateStatus('checking')
+    setUpdateError(null)
+    try {
+      const res = await window.electronAPI?.updater.checkForUpdates()
+      if (res && !res.success) {
+        setUpdateStatus('error')
+        setUpdateError(res.error || t('updates.checkError'))
+      }
+    } catch {
+      setUpdateStatus('error')
+      setUpdateError(t('updates.checkError'))
+    }
+  }
 
   const loadConfig = async () => {
     try {
@@ -1767,12 +1790,12 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {updateStatus === 'idle' && (
+                  {(updateStatus === 'idle' || updateStatus === 'not-available' || updateStatus === 'error') && (
                     <Button
                       variant="outline"
                       size="sm"
                       className="h-7 text-xs"
-                      onClick={() => window.electronAPI?.updater.checkForUpdates()}
+                      onClick={handleCheckForUpdates}
                     >
                       <RefreshCw className="h-3 w-3 mr-1" />
                       {t('updates.checkForUpdates')}
@@ -1806,35 +1829,6 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
                       {t('updates.restartAndUpdate')}
                     </Button>
                   )}
-                  {updateStatus === 'not-available' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => {
-                        setUpdateStatus('idle')
-                        window.electronAPI?.updater.checkForUpdates()
-                      }}
-                    >
-                      <RefreshCw className="h-3 w-3 mr-1" />
-                      {t('updates.checkForUpdates')}
-                    </Button>
-                  )}
-                  {updateStatus === 'error' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => {
-                        setUpdateStatus('idle')
-                        setUpdateError(null)
-                        window.electronAPI?.updater.checkForUpdates()
-                      }}
-                    >
-                      <RefreshCw className="h-3 w-3 mr-1" />
-                      {t('updates.checkForUpdates')}
-                    </Button>
-                  )}
                 </div>
               </div>
 
@@ -1862,6 +1856,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
           </Card>
 
           {/* Backup / Exportar */}
+          {!isCloudEmpresa && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -1930,8 +1925,69 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               </p>
             </CardContent>
           </Card>
+          )}
+
+          {/* Importar Datos Externos */}
+          {!isCloudEmpresa && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                {t('data.importExternalData')}
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">{t('data.importExternalDataDesc')}</p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex items-center justify-between p-3 border rounded">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full p-2 bg-orange-50 text-orange-600">
+                    <Database className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{t('data.importClassicGes')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('data.importClassicGesDesc')}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setShowClasGesImport(true)}
+                >
+                  <Upload className="h-3 w-3 mr-1" />
+                  {t('data.importClassicGes')}
+                </Button>
+              </div>
+              <div className="flex items-center justify-between p-3 border rounded">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full p-2 bg-sky-50 text-sky-600">
+                    <Cloud className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{t('data.importHolded')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('data.importHoldedDesc')}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setShowHoldedImport(true)}
+                >
+                  <Cloud className="h-3 w-3 mr-1" />
+                  {t('data.importHolded')}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          )}
 
           {/* Ubicación de Datos */}
+          {!isCloudEmpresa && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -2037,7 +2093,9 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               </p>
             </CardContent>
           </Card>
+          )}
 
+          {!isCloudEmpresa && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -2101,6 +2159,7 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
               </div>
             </CardContent>
           </Card>
+          )}
 
           <Card>
             <CardHeader className="pb-3">
@@ -2327,6 +2386,20 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle }: { onH
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ClassicGes Import Dialog */}
+      <ImportarClasGesDialog
+        open={showClasGesImport}
+        onOpenChange={setShowClasGesImport}
+        onImportComplete={() => {}}
+      />
+
+      {/* Holded Import Dialog */}
+      <ImportarHoldedDialog
+        open={showHoldedImport}
+        onOpenChange={setShowHoldedImport}
+        onImportComplete={() => {}}
+      />
     </div>
   )
 }

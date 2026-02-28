@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { translateError } from "@/lib/formatting"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -47,10 +47,20 @@ import {
   Loader2,
   Filter,
   HelpCircle,
+  Eye,
+  TrendingUp,
+  ShoppingCart,
+  Users,
+  Calendar,
+  BarChart3,
+  FileText,
 } from "lucide-react"
-import { formatCurrency } from "@/lib/formatting"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { formatCurrency, formatDate } from "@/lib/formatting"
 
-export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
+export function ProductosPage({ onHelp, initialItemId }: { onHelp?: () => void; initialItemId?: number | null }) {
   const { t } = useTranslation(['productos', 'common'])
   const [productos, setProductos] = useState<Producto[]>([])
   const [impuestos, setImpuestos] = useState<Impuesto[]>([])
@@ -76,6 +86,83 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
   })
   const [precioMode, setPrecioMode] = useState<'base' | 'pvp'>('base')
   const [error, setError] = useState<string | null>(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [selectedProducto, setSelectedProducto] = useState<Producto | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [relatedFacturas, setRelatedFacturas] = useState<Factura[]>([])
+
+  const handleViewDetail = async (producto: Producto) => {
+    setSelectedProducto(producto)
+    setIsDetailOpen(true)
+    setDetailLoading(true)
+    try {
+      const res = await window.electronAPI?.facturas.getAll()
+      if (res?.success && res.data) {
+        const related = res.data.filter(f =>
+          f.lineas?.some(l => l.productoId === producto.id)
+        )
+        setRelatedFacturas(related)
+      }
+    } catch (err) {
+      console.error('Error loading related invoices:', err)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const productStats = useMemo(() => {
+    if (!selectedProducto || relatedFacturas.length === 0) {
+      return { unitsSold: 0, totalRevenue: 0, avgPrice: 0, invoiceCount: 0, clientCount: 0, lastSale: null as Date | null }
+    }
+
+    let unitsSold = 0
+    let totalRevenue = 0
+    const clientIds = new Set<number>()
+    let lastSale: Date | null = null
+
+    for (const factura of relatedFacturas) {
+      clientIds.add(factura.clienteId)
+      const fechaFactura = new Date(factura.fecha)
+      if (!lastSale || fechaFactura > lastSale) {
+        lastSale = fechaFactura
+      }
+      for (const linea of factura.lineas || []) {
+        if (linea.productoId === selectedProducto.id) {
+          unitsSold += linea.cantidad
+          totalRevenue += linea.subtotal
+        }
+      }
+    }
+
+    return {
+      unitsSold,
+      totalRevenue,
+      avgPrice: unitsSold > 0 ? totalRevenue / unitsSold : 0,
+      invoiceCount: relatedFacturas.length,
+      clientCount: clientIds.size,
+      lastSale,
+    }
+  }, [selectedProducto, relatedFacturas])
+
+  const topClients = useMemo(() => {
+    if (!selectedProducto || relatedFacturas.length === 0) return []
+
+    const clientMap = new Map<number, { cliente: Cliente | undefined; revenue: number; invoiceCount: number }>()
+
+    for (const factura of relatedFacturas) {
+      const existing = clientMap.get(factura.clienteId) || { cliente: factura.cliente, revenue: 0, invoiceCount: 0 }
+      existing.invoiceCount++
+      for (const linea of factura.lineas || []) {
+        if (linea.productoId === selectedProducto.id) {
+          existing.revenue += linea.subtotal
+        }
+      }
+      clientMap.set(factura.clienteId, existing)
+    }
+
+    return Array.from(clientMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+  }, [selectedProducto, relatedFacturas])
 
   useEffect(() => {
     loadData()
@@ -101,6 +188,15 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (initialItemId && !isLoading && productos.length > 0) {
+      const producto = productos.find(p => p.id === initialItemId)
+      if (producto) {
+        handleViewDetail(producto)
+      }
+    }
+  }, [initialItemId, isLoading])
 
   const filteredProductos = productos.filter((producto) => {
     const matchesSearch =
@@ -440,6 +536,14 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0"
+                        onClick={() => handleViewDetail(producto)}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
                         onClick={() => handleOpenDialog(producto)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
@@ -654,6 +758,255 @@ export function ProductosPage({ onHelp }: { onHelp?: () => void }) {
               {editingProducto ? t('common:save') : t('common:create')}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Detail Dialog */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          {selectedProducto && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-base flex items-center gap-3">
+                  <span>{t('detail.title')}</span>
+                </DialogTitle>
+              </DialogHeader>
+
+              {/* Product Header */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <h2 className="text-xl font-semibold">{selectedProducto.nombre}</h2>
+                  <div className="flex items-center gap-2">
+                    {selectedProducto.codigo && (
+                      <span className="font-mono text-sm text-muted-foreground">{selectedProducto.codigo}</span>
+                    )}
+                    <Badge variant={selectedProducto.tipo === 'servicio' ? 'info' : 'secondary'}>
+                      {selectedProducto.tipo === 'servicio' ? t('service') : t('product')}
+                    </Badge>
+                    <Badge variant={selectedProducto.activo ? 'success' : 'outline'}>
+                      {selectedProducto.activo ? t('common:active') : t('common:inactive')}
+                    </Badge>
+                  </div>
+                  {selectedProducto.descripcion && (
+                    <p className="text-sm text-muted-foreground mt-1">{selectedProducto.descripcion}</p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold tabular-nums">{formatCurrency(getPrecioConImpuesto(selectedProducto))}</p>
+                  <p className="text-xs text-muted-foreground">{t('pvp')}</p>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Price Breakdown */}
+              <div>
+                <h3 className="text-sm font-medium mb-2">{t('detail.priceBreakdown')}</h3>
+                <div className="bg-slate-50 dark:bg-slate-900 border rounded p-3 text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">{t('base')}</span>
+                    <span className="tabular-nums">{formatCurrency(selectedProducto.precioBase)}</span>
+                  </div>
+                  {selectedProducto.impuesto && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>{selectedProducto.impuesto.nombre} ({selectedProducto.impuesto.porcentaje}%):</span>
+                      <span className="tabular-nums">+{formatCurrency(selectedProducto.precioBase * selectedProducto.impuesto.porcentaje / 100)}</span>
+                    </div>
+                  )}
+                  {selectedProducto.retencion && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>{selectedProducto.retencion.nombre} ({selectedProducto.retencion.porcentaje}%):</span>
+                      <span className="tabular-nums text-red-600">-{formatCurrency(selectedProducto.precioBase * selectedProducto.retencion.porcentaje / 100)}</span>
+                    </div>
+                  )}
+                  {(selectedProducto.impuesto || selectedProducto.retencion) && (
+                    <div className="flex justify-between font-medium border-t pt-1">
+                      <span>{t('pvp')}</span>
+                      <span className="tabular-nums">{formatCurrency(getPrecioConImpuesto(selectedProducto))}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Stats Cards */}
+              <div>
+                <h3 className="text-sm font-medium mb-2">{t('detail.statistics')}</h3>
+                {detailLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-3">
+                    <Card>
+                      <CardContent className="p-3 flex items-center gap-3">
+                        <div className="rounded-md bg-blue-50 p-2">
+                          <ShoppingCart className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">{t('detail.unitsSold')}</p>
+                          <p className="text-lg font-semibold tabular-nums">{productStats.unitsSold}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-3 flex items-center gap-3">
+                        <div className="rounded-md bg-green-50 p-2">
+                          <TrendingUp className="h-4 w-4 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">{t('detail.totalRevenue')}</p>
+                          <p className="text-lg font-semibold tabular-nums">{formatCurrency(productStats.totalRevenue)}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-3 flex items-center gap-3">
+                        <div className="rounded-md bg-amber-50 p-2">
+                          <BarChart3 className="h-4 w-4 text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">{t('detail.avgPrice')}</p>
+                          <p className="text-lg font-semibold tabular-nums">{formatCurrency(productStats.avgPrice)}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-3 flex items-center gap-3">
+                        <div className="rounded-md bg-purple-50 p-2">
+                          <FileText className="h-4 w-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">{t('detail.invoiceCount')}</p>
+                          <p className="text-lg font-semibold tabular-nums">{productStats.invoiceCount}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-3 flex items-center gap-3">
+                        <div className="rounded-md bg-indigo-50 p-2">
+                          <Users className="h-4 w-4 text-indigo-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">{t('detail.clientCount')}</p>
+                          <p className="text-lg font-semibold tabular-nums">{productStats.clientCount}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-3 flex items-center gap-3">
+                        <div className="rounded-md bg-rose-50 p-2">
+                          <Calendar className="h-4 w-4 text-rose-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">{t('detail.lastSale')}</p>
+                          <p className="text-lg font-semibold tabular-nums">
+                            {productStats.lastSale ? formatDate(productStats.lastSale) : t('detail.never')}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Tabs: Invoices & Clients */}
+              {!detailLoading && (
+                <Tabs defaultValue="invoices">
+                  <TabsList>
+                    <TabsTrigger value="invoices">
+                      <FileText className="h-3.5 w-3.5 mr-1.5" />
+                      {t('detail.relatedInvoices')} ({productStats.invoiceCount})
+                    </TabsTrigger>
+                    <TabsTrigger value="clients">
+                      <Users className="h-3.5 w-3.5 mr-1.5" />
+                      {t('detail.topClients')} ({productStats.clientCount})
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="invoices">
+                    {relatedFacturas.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <FileText className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                        <p className="text-sm text-muted-foreground">{t('detail.noInvoices')}</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead className="h-9 text-xs">{t('detail.invoiceNumber')}</TableHead>
+                            <TableHead className="h-9 text-xs">{t('detail.client')}</TableHead>
+                            <TableHead className="h-9 text-xs">{t('detail.date')}</TableHead>
+                            <TableHead className="h-9 text-xs text-right">{t('detail.quantity')}</TableHead>
+                            <TableHead className="h-9 text-xs text-right">{t('detail.amount')}</TableHead>
+                            <TableHead className="h-9 text-xs text-center">{t('detail.status')}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {relatedFacturas.map((factura) => {
+                            const lineasProducto = (factura.lineas ?? []).filter((l: LineaFactura) => l.productoId === selectedProducto.id)
+                            const cantidadTotal = lineasProducto.reduce((sum: number, l: LineaFactura) => sum + l.cantidad, 0)
+                            const importeTotal = lineasProducto.reduce((sum: number, l: LineaFactura) => sum + l.subtotal, 0)
+                            return (
+                              <TableRow key={factura.id}>
+                                <TableCell className="py-2 font-mono text-xs">{factura.numero}</TableCell>
+                                <TableCell className="py-2 text-sm">{factura.cliente?.nombre || '-'}</TableCell>
+                                <TableCell className="py-2 text-sm">{formatDate(factura.fecha)}</TableCell>
+                                <TableCell className="py-2 text-right tabular-nums">{cantidadTotal}</TableCell>
+                                <TableCell className="py-2 text-right font-mono tabular-nums">{formatCurrency(importeTotal)}</TableCell>
+                                <TableCell className="py-2 text-center">
+                                  <Badge variant={
+                                    factura.estado === 'pagada' ? 'success' :
+                                    factura.estado === 'pendiente' ? 'warning' :
+                                    factura.estado === 'vencida' ? 'destructive' : 'secondary'
+                                  }>
+                                    {factura.estado}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="clients">
+                    {topClients.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 text-center">
+                        <Users className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                        <p className="text-sm text-muted-foreground">{t('detail.noClients')}</p>
+                      </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead className="h-9 text-xs w-8">#</TableHead>
+                            <TableHead className="h-9 text-xs">{t('detail.client')}</TableHead>
+                            <TableHead className="h-9 text-xs text-right">{t('detail.invoiceCount')}</TableHead>
+                            <TableHead className="h-9 text-xs text-right">{t('detail.revenue')}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {topClients.map((item, index) => (
+                            <TableRow key={index}>
+                              <TableCell className="py-2 text-sm text-muted-foreground">{index + 1}</TableCell>
+                              <TableCell className="py-2 text-sm font-medium">{item.cliente?.nombre || '-'}</TableCell>
+                              <TableCell className="py-2 text-right tabular-nums">{item.invoiceCount}</TableCell>
+                              <TableCell className="py-2 text-right font-mono tabular-nums font-medium">{formatCurrency(item.revenue)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              )}
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

@@ -27,6 +27,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Cloud,
   Upload,
@@ -43,6 +44,12 @@ import {
   KeyRound,
   HelpCircle,
   ShoppingCart,
+  Users,
+  UserPlus,
+  UserMinus,
+  Shield,
+  Copy,
+  RefreshCw,
 } from "lucide-react"
 import { formatDateTime } from "@/lib/formatting"
 
@@ -66,9 +73,10 @@ interface CloudPageProps {
   deepLinkResult?: { success: boolean; user?: any; server?: string } | null
   onDeepLinkHandled?: () => void
   onHelp?: () => void
+  isCloudEmpresa?: boolean
 }
 
-export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPageProps) {
+export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp, isCloudEmpresa }: CloudPageProps) {
   const { t } = useTranslation(['cloud', 'common'])
 
   // Connection state
@@ -125,6 +133,17 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
   const [successMessage, setSuccessMessage] = useState("")
   const [errorMessage, setErrorMessage] = useState("")
 
+  // Cloud empresa user management
+  const [cloudUsers, setCloudUsers] = useState<CloudEmpresaUser[]>([])
+  const [cloudUsersLoading, setCloudUsersLoading] = useState(false)
+  const [inviteRole, setInviteRole] = useState<string>("editor")
+  const [inviteCode, setInviteCode] = useState<string | null>(null)
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [removeUserId, setRemoveUserId] = useState<number | null>(null)
+  const [removeUserName, setRemoveUserName] = useState("")
+  const [isRemovingUser, setIsRemovingUser] = useState(false)
+  const [codeCopied, setCodeCopied] = useState(false)
+
   // ============================================
   // Load config on mount
   // ============================================
@@ -174,6 +193,84 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
       return () => clearTimeout(t)
     }
   }, [errorMessage])
+
+  // Load cloud empresa users
+  useEffect(() => {
+    if (isCloudEmpresa) {
+      loadCloudUsers()
+    }
+  }, [isCloudEmpresa])
+
+  const loadCloudUsers = async () => {
+    setCloudUsersLoading(true)
+    try {
+      const result = await window.electronAPI?.cloudEmpresa.getUsers()
+      if (result?.success && result.data) {
+        setCloudUsers(result.data)
+      }
+    } catch (err) {
+      console.error("Error loading cloud users:", err)
+    } finally {
+      setCloudUsersLoading(false)
+    }
+  }
+
+  const handleInviteUser = async () => {
+    setInviteLoading(true)
+    setInviteCode(null)
+    try {
+      const result = await window.electronAPI?.cloudEmpresa.inviteUser(inviteRole)
+      if (result?.success && result.data?.code) {
+        setInviteCode(result.data.code)
+        setSuccessMessage(t('inviteGenerated'))
+      } else {
+        setErrorMessage(result?.error || "Error")
+      }
+    } catch (err) {
+      setErrorMessage(String(err))
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
+  const handleRemoveUser = async (userId: number) => {
+    setIsRemovingUser(true)
+    try {
+      const result = await window.electronAPI?.cloudEmpresa.removeUser(userId)
+      if (result?.success) {
+        setSuccessMessage(t('removeUser') + " OK")
+        setRemoveUserId(null)
+        loadCloudUsers()
+      } else {
+        setErrorMessage(result?.error || "Error")
+      }
+    } catch (err) {
+      setErrorMessage(String(err))
+    } finally {
+      setIsRemovingUser(false)
+    }
+  }
+
+  const handleChangeRole = async (userId: number, newRole: string) => {
+    try {
+      const result = await window.electronAPI?.cloudEmpresa.updateUserRole(userId, newRole)
+      if (result?.success) {
+        loadCloudUsers()
+      } else {
+        setErrorMessage(result?.error || "Error")
+      }
+    } catch (err) {
+      setErrorMessage(String(err))
+    }
+  }
+
+  const copyInviteCode = () => {
+    if (inviteCode) {
+      navigator.clipboard.writeText(inviteCode)
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 2000)
+    }
+  }
 
   const loadConfig = async () => {
     setIsLoading(true)
@@ -436,6 +533,205 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp }: CloudPa
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  // ============================================
+  // Cloud Empresa — User Management View
+  // ============================================
+
+  if (isCloudEmpresa) {
+    return (
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b pb-3">
+          <div className="flex items-center gap-2">
+            <div>
+              <h1 className="text-xl font-semibold">{t('empresaCloud')}</h1>
+              <p className="text-sm text-muted-foreground">
+                {t('cloudEmpresaInfo')}
+              </p>
+            </div>
+            {onHelp && (
+              <button onClick={onHelp} className="rounded-full p-1.5 hover:bg-accent transition-colors" title={t('common:viewHelp')}>
+                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+          <Badge variant="outline" className="border-blue-300 text-blue-700 bg-blue-50">
+            <Cloud className="mr-1 h-3 w-3" />
+            {t('connected')}
+          </Badge>
+        </div>
+
+        {/* Messages */}
+        {successMessage && (
+          <div className="flex items-center gap-2 rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
+            <CheckCircle className="h-4 w-4 shrink-0" />
+            {successMessage}
+          </div>
+        )}
+        {errorMessage && (
+          <div className="flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {errorMessage}
+          </div>
+        )}
+
+        {/* User Management */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                {t('usersManagement')}
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={loadCloudUsers}
+                disabled={cloudUsersLoading}
+              >
+                {cloudUsersLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                {t('common:refresh', 'Refresh')}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Users List */}
+            {cloudUsersLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : cloudUsers.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground">
+                <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">{t('noUsersYet')}</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="h-9 text-xs">{t('usersList')}</TableHead>
+                    <TableHead className="h-9 text-xs">{t('changeRole')}</TableHead>
+                    <TableHead className="h-9 text-xs text-right">{t('common:actions', 'Actions')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cloudUsers.map((u) => (
+                    <TableRow key={u.id} className="text-sm">
+                      <TableCell className="py-2">
+                        <div>
+                          <p className="font-medium">{u.name} {u.isCurrentUser && <span className="text-xs text-muted-foreground">({t('you')})</span>}</p>
+                          <p className="text-xs text-muted-foreground">{u.email}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2">
+                        {u.role === 'owner' ? (
+                          <Badge variant="outline" className="border-amber-300 text-amber-700 bg-amber-50">
+                            <Shield className="mr-1 h-3 w-3" />
+                            {t('roleOwner')}
+                          </Badge>
+                        ) : u.isCurrentUser ? (
+                          <Badge variant="secondary">{t(`role${u.role.charAt(0).toUpperCase() + u.role.slice(1)}`)}</Badge>
+                        ) : (
+                          <Select value={u.role} onValueChange={(val) => handleChangeRole(u.id, val)}>
+                            <SelectTrigger className="h-7 w-28 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="admin">{t('roleAdmin')}</SelectItem>
+                              <SelectItem value="editor">{t('roleEditor')}</SelectItem>
+                              <SelectItem value="viewer">{t('roleViewer')}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2 text-right">
+                        {u.role !== 'owner' && !u.isCurrentUser && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => { setRemoveUserId(u.id); setRemoveUserName(u.name) }}
+                          >
+                            <UserMinus className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Invite User */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <UserPlus className="h-4 w-4" />
+              {t('invite')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-3">
+              <Select value={inviteRole} onValueChange={setInviteRole}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder={t('inviteRole')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">{t('roleAdmin')}</SelectItem>
+                  <SelectItem value="editor">{t('roleEditor')}</SelectItem>
+                  <SelectItem value="viewer">{t('roleViewer')}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button onClick={handleInviteUser} disabled={inviteLoading} size="sm">
+                {inviteLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <UserPlus className="h-3.5 w-3.5 mr-1.5" />}
+                {t('invite')}
+              </Button>
+            </div>
+
+            {inviteCode && (
+              <div className="flex items-center gap-3 p-3 border border-blue-200 bg-blue-50 rounded-lg">
+                <div className="flex-1">
+                  <p className="text-xs text-blue-600 font-medium mb-1">{t('inviteCode')}</p>
+                  <p className="font-mono text-lg font-bold text-blue-800 tracking-wider">{inviteCode}</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={copyInviteCode} className="shrink-0">
+                  <Copy className="h-3.5 w-3.5 mr-1" />
+                  {codeCopied ? t('codeCopied') : t('copyCode')}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Remove User Confirmation */}
+        <AlertDialog open={removeUserId !== null} onOpenChange={(open) => !open && setRemoveUserId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('removeUser')}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t('removeUserConfirm', { name: removeUserName })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isRemovingUser}>{t('common:cancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => removeUserId !== null && handleRemoveUser(removeUserId)}
+                disabled={isRemovingUser}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isRemovingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserMinus className="mr-2 h-4 w-4" />}
+                {t('removeUser')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     )
   }
