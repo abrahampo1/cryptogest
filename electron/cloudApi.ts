@@ -73,7 +73,7 @@ class CloudApiAuthError extends Error {
   }
 }
 
-class CloudApiError extends Error {
+export class CloudApiError extends Error {
   public status: number
   constructor(message: string, status: number) {
     super(message)

@@ -673,6 +673,26 @@ ipcMain.handle('empresa:create', async (_, data: { nombre: string; customDataPat
     const empresa = crypto.createEmpresa(data.nombre, data.customDataPath)
     return { success: true, data: empresa }
   } catch (error) {
+    // Detect plan quota exceeded (403) and signal upgrade needed
+    if (error instanceof cloudApi.CloudApiError && error.status === 403) {
+      try {
+        const planData = await cloud.getAccountPlan()
+        const currentSlug = planData.plan.slug
+        const hasSubscription = currentSlug !== 'free'
+        const targetPlan = hasSubscription ? 'enterprise' : 'pro'
+        return {
+          success: false,
+          error: error.message,
+          upgrade_required: true,
+          has_subscription: hasSubscription,
+          current_plan: currentSlug,
+          target_plan: targetPlan,
+        }
+      } catch {
+        // Fallback if plan fetch fails
+        return { success: false, error: error.message, upgrade_required: true, target_plan: 'pro' }
+      }
+    }
     return { success: false, error: String(error) }
   }
 })
@@ -3191,6 +3211,23 @@ ipcMain.handle('cloud:licenseCheckout', async () => {
     requireAuth()
     const result = await cloud.createLicenseCheckout()
     await shell.openExternal(result.checkout_url)
+    return { success: true, data: result }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// Create subscription checkout or upgrade plan
+ipcMain.handle('cloud:subscriptionCheckout', async (_, plan: string) => {
+  try {
+    requireAuth()
+    const result = await cloud.createSubscriptionCheckout(plan)
+
+    // If it returned a checkout URL, open it in the browser
+    if (result.checkout_url) {
+      await shell.openExternal(result.checkout_url)
+    }
+
     return { success: true, data: result }
   } catch (error) {
     return { success: false, error: String(error) }

@@ -116,6 +116,14 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
   // Cloud login fullscreen
   const [showCloudLogin, setShowCloudLogin] = useState(false)
 
+  // Subscription upgrade flow
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false)
+  const [upgradeMessage, setUpgradeMessage] = useState("")
+  const [upgradeTargetPlan, setUpgradeTargetPlan] = useState("")
+  const [upgradeHasSubscription, setUpgradeHasSubscription] = useState(false)
+  const [isPollingSubscription, setIsPollingSubscription] = useState(false)
+  const [upgradeSuccess, setUpgradeSuccess] = useState("")
+
   // Cloud empresas from server
   const [cloudEmpresas, setCloudEmpresas] = useState<CloudEmpresaInfo[]>([])
   const [loadingCloudEmpresas, setLoadingCloudEmpresas] = useState(false)
@@ -247,6 +255,16 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
           resetCreation()
           onCreated()
           fetchCloudEmpresas()
+        } else if ((result as any)?.upgrade_required) {
+          const hasSubscription = (result as any)?.has_subscription ?? false
+          setUpgradeHasSubscription(hasSubscription)
+          setUpgradeTargetPlan((result as any)?.target_plan || 'pro')
+          setUpgradeMessage(
+            hasSubscription
+              ? t('empresaSelector.upgradeRequiredLimit')
+              : t('empresaSelector.upgradeRequiredFree')
+          )
+          setShowUpgradeDialog(true)
         } else {
           setError(result?.error ? translateError(result.error) : t('empresaSelector.errorCreating'))
         }
@@ -272,6 +290,51 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
       setIsSubmitting(false)
     }
   }
+
+  const handleSubscriptionCheckout = async () => {
+    setShowUpgradeDialog(false)
+    setError(null)
+    try {
+      const result = await window.electronAPI?.cloud.subscriptionCheckout(upgradeTargetPlan)
+      if (result?.success) {
+        if (result.data?.upgraded) {
+          // Instant upgrade (already subscribed, just swapped plan)
+          setUpgradeSuccess(t('empresaSelector.planUpgraded'))
+          setTimeout(() => setUpgradeSuccess(""), 5000)
+        } else if (result.data?.checkout_url) {
+          // Checkout opened in browser, start polling
+          setIsPollingSubscription(true)
+        }
+      } else {
+        setError(result?.error || t('empresaSelector.errorCreating'))
+      }
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
+  // Poll for subscription activation after checkout
+  useEffect(() => {
+    if (!isPollingSubscription) return
+    const interval = setInterval(async () => {
+      try {
+        const result = await window.electronAPI?.cloud.plan()
+        if (result?.success && result.data?.plan) {
+          const plan = result.data.plan
+          // Check if plan has changed from free (subscription activated)
+          if (plan.slug !== 'free' && plan.max_empresas !== 0) {
+            setIsPollingSubscription(false)
+            setUpgradeSuccess(t('empresaSelector.subscriptionActivated'))
+            setTimeout(() => setUpgradeSuccess(""), 5000)
+          }
+        }
+      } catch {
+        // silently retry
+      }
+    }, 4000)
+    const timeout = setTimeout(() => setIsPollingSubscription(false), 600000) // 10 min
+    return () => { clearInterval(interval); clearTimeout(timeout) }
+  }, [isPollingSubscription, t])
 
   const handleRename = async (id: string) => {
     if (!editName.trim()) return
@@ -928,6 +991,46 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Subscription upgrade dialog */}
+        <AlertDialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('empresaSelector.upgradeRequired')}</AlertDialogTitle>
+              <AlertDialogDescription>{upgradeMessage}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('common:cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={handleSubscriptionCheckout}>
+                {upgradeHasSubscription
+                  ? t('empresaSelector.upgradePlan')
+                  : t('empresaSelector.subscribePlan')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Polling for subscription activation */}
+        {isPollingSubscription && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm mx-4 text-center space-y-3">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+              <p className="font-medium text-sm">{t('empresaSelector.waitingSubscription')}</p>
+              <p className="text-xs text-muted-foreground">{t('empresaSelector.completePaymentInBrowser')}</p>
+              <Button variant="ghost" size="sm" onClick={() => setIsPollingSubscription(false)}>
+                {t('empresaSelector.cancelWait')}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Subscription success message */}
+        {upgradeSuccess && (
+          <div className="fixed bottom-4 right-4 z-50 bg-emerald-600 text-white px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            {upgradeSuccess}
           </div>
         )}
 

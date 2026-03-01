@@ -422,6 +422,8 @@ interface CloudPlan {
   slug: string
   max_backups: number
   max_storage_bytes: number
+  max_empresas: number
+  max_users_per_empresa: number
 }
 
 interface CloudUsage {
@@ -617,6 +619,7 @@ interface ElectronAPI {
     delete: (backupId: number) => Promise<ApiResponse<void>>
     plan: () => Promise<ApiResponse<{ plan: CloudPlan; usage: CloudUsage; license: CloudLicense }>>
     licenseCheckout: () => Promise<ApiResponse<{ checkout_url: string }>>
+    subscriptionCheckout: (plan: string) => Promise<ApiResponse<{ checkout_url?: string; upgraded?: boolean }>>
     onUploadProgress: (callback: (percent: number) => void) => () => void
     onDownloadProgress: (callback: (percent: number) => void) => () => void
     confirmDeviceLink: (data: { token: string; server: string; deviceName?: string }) => Promise<ApiResponse<any>>

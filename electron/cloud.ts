@@ -27,6 +27,8 @@ export interface CloudPlan {
   slug: string
   max_backups: number
   max_storage_bytes: number
+  max_empresas: number
+  max_users_per_empresa: number
 }
 
 export interface CloudUsage {
@@ -507,6 +509,15 @@ export async function createLicenseCheckout(): Promise<{ checkout_url: string }>
     path: '/api/v1/license/checkout',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({}),
+  })
+}
+
+export async function createSubscriptionCheckout(plan: string): Promise<{ checkout_url?: string; upgraded?: boolean; plan?: CloudPlan }> {
+  return await makeRequest<{ checkout_url?: string; upgraded?: boolean; plan?: CloudPlan }>({
+    method: 'POST',
+    path: '/api/v1/subscription/checkout',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan }),
   })
 }
 
