@@ -17,5 +17,6 @@
   "configuracion": "Settings",
   "manual": "User Manual",
   "lockSystem": "Lock System",
-  "activeCompany": "Active company"
+  "activeCompany": "Active company",
+  "cloudUser": "Cloud account"
 }

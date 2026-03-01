@@ -49,6 +49,16 @@ interface CloudInvitation {
   expires_at: string
 }
 
+interface CloudEmpresaInfo {
+  id: number
+  nombre_encrypted: string
+  salt: string
+  verification_hash: string
+  role: string
+  created_at: string
+  updated_at: string
+}
+
 interface EmpresaListResult {
   empresas: EmpresaInfo[]
   ultimaEmpresaId: string | null
@@ -440,7 +450,7 @@ interface ElectronAPI {
 
   empresa: {
     list: () => Promise<ApiResponse<EmpresaListResult>>
-    create: (data: { nombre: string; customDataPath?: string; tipo?: 'local' | 'cloud'; passphrase?: string; cloudToken?: string; serverUrl?: string }) => Promise<ApiResponse<EmpresaInfo>>
+    create: (data: { nombre: string; customDataPath?: string; tipo?: 'local' | 'cloud'; passphrase?: string }) => Promise<ApiResponse<EmpresaInfo>>
     select: (id: string) => Promise<ApiResponse<EmpresaSelectResult>>
     rename: (id: string, nombre: string) => Promise<ApiResponse<void>>
     delete: (id: string) => Promise<ApiResponse<void>>
@@ -448,7 +458,9 @@ interface ElectronAPI {
     getDefaultPath: () => Promise<ApiResponse<{ path: string }>>
     detectVolumes: () => Promise<ApiResponse<{ name: string; path: string; available: boolean }[]>>
     selectDirectory: () => Promise<ApiResponse<{ path: string } | null>>
-    joinCloud: (data: { code: string; cloudToken: string; serverUrl: string; passphrase: string }) => Promise<ApiResponse<EmpresaInfo>>
+    joinCloud: (data: { code: string; passphrase: string }) => Promise<ApiResponse<EmpresaInfo>>
+    listCloud: () => Promise<ApiResponse<CloudEmpresaInfo[]>>
+    addCloudLocal: (data: { empresaId: number; salt: string; verificationHash: string; role: string; passphrase: string }) => Promise<ApiResponse<EmpresaInfo>>
   }
 
   auth: {
@@ -610,6 +622,11 @@ interface ElectronAPI {
     confirmDeviceLink: (data: { token: string; server: string; deviceName?: string }) => Promise<ApiResponse<any>>
     verifyCode: (data: { code: string; server: string; deviceName?: string }) => Promise<ApiResponse<{ api_token: string; user: CloudUser }>>
     onDeepLinkConnected: (callback: (data: { success: boolean; user?: CloudUser; server?: string; error?: string }) => void) => () => void
+  }
+
+  cloudSession: {
+    get: () => Promise<ApiResponse<{ serverUrl: string; token: string; user: { id: number; name: string; email: string } } | null>>
+    logout: () => Promise<ApiResponse<void>>
   }
 
   cloudEmpresa: {

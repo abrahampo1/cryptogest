@@ -26,17 +26,56 @@ interface CustomPathConfig {
 }
 
 // ============================================
+// Cloud Session (program-level, persisted to disk)
+// ============================================
+
+export interface CloudSession {
+  serverUrl: string
+  token: string
+  user: { id: number; name: string; email: string }
+}
+
+const getCloudSessionFile = () => path.join(getDefaultDataPath(), 'cloud-session.json')
+
+export function loadCloudSession(): CloudSession | null {
+  const sessionFile = getCloudSessionFile()
+  if (!fs.existsSync(sessionFile)) return null
+  try {
+    const content = fs.readFileSync(sessionFile, 'utf-8')
+    return JSON.parse(content) as CloudSession
+  } catch {
+    return null
+  }
+}
+
+export function saveCloudSession(session: CloudSession): void {
+  const defaultPath = getDefaultDataPath()
+  if (!fs.existsSync(defaultPath)) {
+    fs.mkdirSync(defaultPath, { recursive: true })
+  }
+  fs.writeFileSync(getCloudSessionFile(), JSON.stringify(session, null, 2))
+}
+
+export function clearCloudSession(): void {
+  const sessionFile = getCloudSessionFile()
+  if (fs.existsSync(sessionFile)) {
+    try { fs.unlinkSync(sessionFile) } catch { /* ignore */ }
+  }
+}
+
+// ============================================
 // Multi-Empresa Support
 // ============================================
 
 export interface CloudConfig {
-  serverUrl: string
-  token: string
   empresaId: number
   userId: number
   role: string
   salt: string             // PBKDF2 salt (hex) for key derivation
   verificationHash: string // SHA-256 hash of derived key, for local passphrase verification
+  // Legacy fields (kept for backward compat during migration, not used in new code)
+  serverUrl?: string
+  token?: string
 }
 
 export interface EmpresaInfo {
@@ -72,11 +111,37 @@ export function loadEmpresasConfig(): EmpresasConfig {
   try {
     const content = fs.readFileSync(configFile, 'utf-8')
     const config = JSON.parse(content) as EmpresasConfig
+    let needsSave = false
     // Backward compat: default tipo to 'local' for older configs
     for (const empresa of config.empresas) {
       if (!empresa.tipo) {
         empresa.tipo = 'local'
       }
+    }
+    // Migration: extract per-empresa cloud tokens into cloud-session.json
+    if (!loadCloudSession()) {
+      for (const empresa of config.empresas) {
+        if (empresa.cloudConfig?.token && empresa.cloudConfig?.serverUrl) {
+          // Migrate the first token found to program-level session
+          saveCloudSession({
+            serverUrl: empresa.cloudConfig.serverUrl,
+            token: empresa.cloudConfig.token,
+            user: { id: empresa.cloudConfig.userId, name: '', email: '' },
+          })
+          break
+        }
+      }
+    }
+    // Clean legacy token/serverUrl from all cloud configs
+    for (const empresa of config.empresas) {
+      if (empresa.cloudConfig && ('token' in empresa.cloudConfig || 'serverUrl' in empresa.cloudConfig)) {
+        delete empresa.cloudConfig.token
+        delete empresa.cloudConfig.serverUrl
+        needsSave = true
+      }
+    }
+    if (needsSave) {
+      saveEmpresasConfig(config)
     }
     return config
   } catch {

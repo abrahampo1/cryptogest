@@ -17,5 +17,6 @@
   "configuracion": "Configuración",
   "manual": "Manual de Uso",
   "lockSystem": "Bloquear Sistema",
-  "activeCompany": "Empresa activa"
+  "activeCompany": "Empresa activa",
+  "cloudUser": "Cuenta cloud"
 }

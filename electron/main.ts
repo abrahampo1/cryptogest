@@ -405,19 +405,12 @@ async function tryProcessDeepLink() {
     // Set cloud config in memory
     cloud.setCloudConfig(data.server, response.api_token)
 
-    // Save config to database only if authenticated (local empresa active)
-    if (isAuthenticated && prisma) {
-      await prisma.configuracion.upsert({
-        where: { clave: 'cloud_server_url' },
-        update: { valor: data.server },
-        create: { clave: 'cloud_server_url', valor: data.server },
-      })
-      await prisma.configuracion.upsert({
-        where: { clave: 'cloud_token' },
-        update: { valor: response.api_token },
-        create: { clave: 'cloud_token', valor: response.api_token },
-      })
-    }
+    // Save session to disk (program-level)
+    crypto.saveCloudSession({
+      serverUrl: data.server,
+      token: response.api_token,
+      user: response.user,
+    })
 
     console.log('[DeepLink] Device linked successfully for user:', response.user.email)
 
@@ -478,6 +471,9 @@ const createWindow = () => {
 }
 
 app.whenReady().then(() => {
+  // Initialize cloud config from persisted session
+  cloud.initFromSession()
+
   createWindow()
 
   // --- Auto-updater configuration ---
@@ -529,6 +525,46 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('updater:getVersion', () => {
     return { success: true, data: app.getVersion() }
+  })
+
+  // ============================================
+  // IPC Handlers - Cloud Session (program-level)
+  // ============================================
+
+  ipcMain.handle('cloudSession:get', async () => {
+    try {
+      const session = crypto.loadCloudSession()
+      if (!session) return { success: true, data: null }
+      // Verify token is still valid
+      cloud.setCloudConfig(session.serverUrl, session.token)
+      try {
+        const authResult = await cloud.checkAuth()
+        // Update user info if changed
+        const updatedSession: crypto.CloudSession = {
+          ...session,
+          user: authResult.user,
+        }
+        if (JSON.stringify(updatedSession.user) !== JSON.stringify(session.user)) {
+          crypto.saveCloudSession(updatedSession)
+        }
+        return { success: true, data: updatedSession }
+      } catch {
+        // Token may be expired — still return session but mark as unverified
+        return { success: true, data: session }
+      }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('cloudSession:logout', async () => {
+    try {
+      crypto.clearCloudSession()
+      cloud.clearCloudConfig()
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   })
 
   // Check argv for Windows (first instance opened by deep link)
@@ -592,19 +628,23 @@ ipcMain.handle('empresa:list', async () => {
   }
 })
 
-ipcMain.handle('empresa:create', async (_, data: { nombre: string; customDataPath?: string; tipo?: 'local' | 'cloud'; passphrase?: string; cloudToken?: string; serverUrl?: string }) => {
+ipcMain.handle('empresa:create', async (_, data: { nombre: string; customDataPath?: string; tipo?: 'local' | 'cloud'; passphrase?: string }) => {
   try {
     if (data.tipo === 'cloud') {
-      if (!data.passphrase || !data.cloudToken || !data.serverUrl) {
-        return { success: false, error: 'Missing cloud parameters' }
+      if (!data.passphrase) {
+        return { success: false, error: 'Missing passphrase' }
+      }
+      // Read token from program-level session
+      const session = crypto.loadCloudSession()
+      if (!session) {
+        return { success: false, error: 'No cloud session' }
       }
       // Create cloud empresa
       const salt = cloudApi.generateSalt()
       const verificationHash = cloudApi.generateVerificationHash(data.passphrase, salt)
-      // nombre is stored encrypted on the server via the API
 
       // Configure cloud API temporarily to create empresa
-      cloudApi.setCloudApiConfig(data.serverUrl, data.cloudToken, 0)
+      cloudApi.setCloudApiConfig(session.serverUrl, session.token, 0)
       const key = cloudApi.deriveCloudKey(data.passphrase, salt)
       cloudApi.setEncryptionKey(key)
 
@@ -620,8 +660,6 @@ ipcMain.handle('empresa:create', async (_, data: { nombre: string; customDataPat
 
       // Save locally
       const empresa = crypto.createCloudEmpresa(data.nombre, {
-        serverUrl: data.serverUrl,
-        token: data.cloudToken,
         empresaId: serverEmpresa.id,
         userId: authCheck.user.id,
         role: 'owner',
@@ -828,10 +866,15 @@ ipcMain.handle('empresa:getActive', async () => {
   }
 })
 
-ipcMain.handle('empresa:joinCloud', async (_, data: { code: string; cloudToken: string; serverUrl: string; passphrase: string }) => {
+ipcMain.handle('empresa:joinCloud', async (_, data: { code: string; passphrase: string }) => {
   try {
-    cloud.setCloudConfig(data.serverUrl, data.cloudToken)
-    cloudApi.setCloudApiConfig(data.serverUrl, data.cloudToken, 0)
+    // Read token from program-level session
+    const session = crypto.loadCloudSession()
+    if (!session) {
+      return { success: false, error: 'No cloud session' }
+    }
+    cloud.setCloudConfig(session.serverUrl, session.token)
+    cloudApi.setCloudApiConfig(session.serverUrl, session.token, 0)
     const serverEmpresa = await cloudApi.empresaCloud.join(data.code)
     if (!cloudApi.verifyPassphrase(data.passphrase, serverEmpresa.salt, serverEmpresa.verification_hash)) {
       cloudApi.clearCloudApiConfig()
@@ -841,8 +884,6 @@ ipcMain.handle('empresa:joinCloud', async (_, data: { code: string; cloudToken: 
     const empresa = crypto.createCloudEmpresa(
       `Cloud Empresa #${serverEmpresa.id}`,
       {
-        serverUrl: data.serverUrl,
-        token: data.cloudToken,
         empresaId: serverEmpresa.id,
         userId: authCheck.user.id,
         role: serverEmpresa.role,
@@ -854,6 +895,52 @@ ipcMain.handle('empresa:joinCloud', async (_, data: { code: string; cloudToken: 
     return { success: true, data: empresa }
   } catch (error) {
     cloudApi.clearCloudApiConfig()
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('empresa:listCloud', async () => {
+  try {
+    const session = crypto.loadCloudSession()
+    if (!session) {
+      return { success: false, error: 'No cloud session' }
+    }
+    cloudApi.setCloudApiConfig(session.serverUrl, session.token, 0)
+    const empresas = await cloudApi.empresaCloud.list()
+    cloudApi.clearCloudApiConfig()
+    return { success: true, data: empresas }
+  } catch (error) {
+    cloudApi.clearCloudApiConfig()
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('empresa:addCloudLocal', async (_, data: { empresaId: number; salt: string; verificationHash: string; role: string; passphrase: string }) => {
+  try {
+    // Verify passphrase locally (no network needed)
+    if (!cloudApi.verifyPassphrase(data.passphrase, data.salt, data.verificationHash)) {
+      return { success: false, error: 'passwordIncorrect' }
+    }
+    // Get userId from cloud session
+    const session = crypto.loadCloudSession()
+    if (!session) {
+      return { success: false, error: 'No cloud session' }
+    }
+    cloud.setCloudConfig(session.serverUrl, session.token)
+    const authCheck = await cloud.checkAuth()
+    // Create local empresa entry
+    const empresa = crypto.createCloudEmpresa(
+      `Cloud Empresa #${data.empresaId}`,
+      {
+        empresaId: data.empresaId,
+        userId: authCheck.user.id,
+        role: data.role,
+        salt: data.salt,
+        verificationHash: data.verificationHash,
+      }
+    )
+    return { success: true, data: empresa }
+  } catch (error) {
     return { success: false, error: String(error) }
   }
 })
@@ -1028,6 +1115,12 @@ ipcMain.handle('auth:unlockCloud', async (_, passphrase: string) => {
 
     const cc = activeEmpresa.cloudConfig
 
+    // Read token from program-level session
+    const session = crypto.loadCloudSession()
+    if (!session) {
+      return { success: false, error: 'No cloud session' }
+    }
+
     if (cc.verificationHash) {
       // Verify passphrase locally using stored verificationHash (fast, no network needed)
       if (!cloudApi.verifyPassphrase(passphrase, cc.salt, cc.verificationHash)) {
@@ -1035,7 +1128,7 @@ ipcMain.handle('auth:unlockCloud', async (_, passphrase: string) => {
       }
     } else {
       // Backward compat: old config without verificationHash, verify via server
-      cloudApi.setCloudApiConfig(cc.serverUrl, cc.token, cc.empresaId)
+      cloudApi.setCloudApiConfig(session.serverUrl, session.token, cc.empresaId)
       try {
         const empresas = await cloudApi.empresaCloud.list()
         const serverEmpresa = empresas.find((e: any) => e.id === cc.empresaId)
@@ -1056,8 +1149,8 @@ ipcMain.handle('auth:unlockCloud', async (_, passphrase: string) => {
       }
     }
 
-    // Configure cloud API
-    cloudApi.setCloudApiConfig(cc.serverUrl, cc.token, cc.empresaId)
+    // Configure cloud API using session token
+    cloudApi.setCloudApiConfig(session.serverUrl, session.token, cc.empresaId)
 
     // Derive key and set it
     const key = cloudApi.deriveCloudKey(passphrase, cc.salt)
@@ -2651,11 +2744,9 @@ ipcMain.handle('backup:resetToDefault', async () => {
 // IPC Handlers - Cloud Backup
 // ============================================
 
-// Configure cloud connection (save to Configuracion + verify token)
+// Configure cloud connection (save to session file + verify token)
 ipcMain.handle('cloud:configure', async (_, data: { serverUrl: string; token: string }) => {
   try {
-    const db = requireAuth()
-
     // Set config in cloud module
     cloud.setCloudConfig(data.serverUrl, data.token)
 
@@ -2675,16 +2766,11 @@ ipcMain.handle('cloud:configure', async (_, data: { serverUrl: string; token: st
       return { success: false, error: String(err) }
     }
 
-    // Save to Configuracion table
-    await db.configuracion.upsert({
-      where: { clave: 'cloud_server_url' },
-      update: { valor: data.serverUrl },
-      create: { clave: 'cloud_server_url', valor: data.serverUrl },
-    })
-    await db.configuracion.upsert({
-      where: { clave: 'cloud_token' },
-      update: { valor: data.token },
-      create: { clave: 'cloud_token', valor: data.token },
+    // Save to program-level session file
+    crypto.saveCloudSession({
+      serverUrl: data.serverUrl,
+      token: data.token,
+      user,
     })
 
     return { success: true, data: { user } }
@@ -2693,30 +2779,32 @@ ipcMain.handle('cloud:configure', async (_, data: { serverUrl: string; token: st
   }
 })
 
-// Get cloud config from DB
+// Get cloud config from session file
 ipcMain.handle('cloud:getConfig', async () => {
   try {
-    const db = requireAuth()
-
-    const serverUrlConfig = await db.configuracion.findUnique({ where: { clave: 'cloud_server_url' } })
-    const tokenConfig = await db.configuracion.findUnique({ where: { clave: 'cloud_token' } })
+    // Read from program-level session
+    const session = crypto.loadCloudSession()
 
     // Check locally persisted license (perpetual, independent of connection)
-    const licenseConfig = await db.configuracion.findUnique({ where: { clave: 'cloud_license_granted' } })
-    const license: cloud.CloudLicense = licenseConfig
-      ? { has_license: true, purchased_at: licenseConfig.valor }
-      : { has_license: false, purchased_at: null }
+    let license: cloud.CloudLicense = { has_license: false, purchased_at: null }
+    if (isAuthenticated && prisma) {
+      try {
+        const licenseConfig = await prisma.configuracion.findUnique({ where: { clave: 'cloud_license_granted' } })
+        if (licenseConfig) {
+          license = { has_license: true, purchased_at: licenseConfig.valor }
+        }
+      } catch { /* DB may not be available */ }
+    }
 
-    if (!serverUrlConfig || !tokenConfig) {
-      // Not connected, but may still have a perpetual license
+    if (!session) {
       return { success: true, data: license.has_license ? { license } : null }
     }
 
     // Re-initialize cloud module config
-    cloud.setCloudConfig(serverUrlConfig.valor, tokenConfig.valor)
+    cloud.setCloudConfig(session.serverUrl, session.token)
 
     // Optionally verify token (non-blocking, we return config even if check fails)
-    let user: cloud.CloudUser | undefined
+    let user: cloud.CloudUser | undefined = session.user
     try {
       const authResult = await cloud.checkAuth()
       user = authResult.user
@@ -2727,8 +2815,8 @@ ipcMain.handle('cloud:getConfig', async () => {
     return {
       success: true,
       data: {
-        serverUrl: serverUrlConfig.valor,
-        token: tokenConfig.valor,
+        serverUrl: session.serverUrl,
+        token: session.token,
         user,
         license,
       },
@@ -2738,16 +2826,11 @@ ipcMain.handle('cloud:getConfig', async () => {
   }
 })
 
-// Disconnect cloud (clear config)
+// Disconnect cloud (clear session)
 ipcMain.handle('cloud:disconnect', async () => {
   try {
-    const db = requireAuth()
-
     cloud.clearCloudConfig()
-
-    // Remove from DB
-    try { await db.configuracion.delete({ where: { clave: 'cloud_server_url' } }) } catch { /* may not exist */ }
-    try { await db.configuracion.delete({ where: { clave: 'cloud_token' } }) } catch { /* may not exist */ }
+    crypto.clearCloudSession()
 
     return { success: true }
   } catch (error) {
@@ -3122,20 +3205,13 @@ ipcMain.handle('cloud:confirmDeviceLink', async (_, data: { token: string; serve
   try {
     const response = await cloud.confirmDeviceLink(data.server, data.token, data.deviceName)
 
-    // Save config to database if authenticated
-    if (isAuthenticated && prisma) {
-      await prisma.configuracion.upsert({
-        where: { clave: 'cloud_server_url' },
-        update: { valor: data.server },
-        create: { clave: 'cloud_server_url', valor: data.server },
-      })
-      await prisma.configuracion.upsert({
-        where: { clave: 'cloud_token' },
-        update: { valor: response.api_token },
-        create: { clave: 'cloud_token', valor: response.api_token },
-      })
-      cloud.setCloudConfig(data.server, response.api_token)
-    }
+    // Save to program-level session
+    cloud.setCloudConfig(data.server, response.api_token)
+    crypto.saveCloudSession({
+      serverUrl: data.server,
+      token: response.api_token,
+      user: response.user,
+    })
 
     return { success: true, data: response }
   } catch (error) {
@@ -3147,22 +3223,13 @@ ipcMain.handle('cloud:verifyCode', async (_, data: { code: string; server: strin
   try {
     const response = await cloud.verifyDeviceCode(data.server, data.code, data.deviceName)
 
-    // Set cloud config in memory (always)
+    // Set cloud config in memory and save to session file
     cloud.setCloudConfig(data.server, response.api_token)
-
-    // Save config to database only if authenticated (local empresa active)
-    if (isAuthenticated && prisma) {
-      await prisma.configuracion.upsert({
-        where: { clave: 'cloud_server_url' },
-        update: { valor: data.server },
-        create: { clave: 'cloud_server_url', valor: data.server },
-      })
-      await prisma.configuracion.upsert({
-        where: { clave: 'cloud_token' },
-        update: { valor: response.api_token },
-        create: { clave: 'cloud_token', valor: response.api_token },
-      })
-    }
+    crypto.saveCloudSession({
+      serverUrl: data.server,
+      token: response.api_token,
+      user: response.user,
+    })
 
     return { success: true, data: response }
   } catch (error) {

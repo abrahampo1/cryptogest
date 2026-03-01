@@ -69,14 +69,22 @@ function formatBytes(bytes: number): string {
 // Main Component
 // ============================================
 
+interface CloudSession {
+  serverUrl: string
+  token: string
+  user: { id: number; name: string; email: string }
+}
+
 interface CloudPageProps {
   deepLinkResult?: { success: boolean; user?: any; server?: string } | null
   onDeepLinkHandled?: () => void
   onHelp?: () => void
   isCloudEmpresa?: boolean
+  cloudSession?: CloudSession | null
+  onCloudSessionChange?: (session: CloudSession | null) => void
 }
 
-export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp, isCloudEmpresa }: CloudPageProps) {
+export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp, isCloudEmpresa, cloudSession, onCloudSessionChange }: CloudPageProps) {
   const { t } = useTranslation(['cloud', 'common'])
 
   // Connection state
@@ -159,6 +167,12 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp, isCloudEm
       setUser(deepLinkResult.user)
       if (deepLinkResult.server) setServerUrl(deepLinkResult.server)
       setSuccessMessage(t('connectedAutomatic'))
+      // Refresh cloud session
+      window.electronAPI?.cloudSession.get().then((result) => {
+        if (result?.success && result.data) {
+          onCloudSessionChange?.(result.data)
+        }
+      })
       loadBackups(1)
       loadPlan()
       onDeepLinkHandled?.()
@@ -275,6 +289,13 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp, isCloudEm
   const loadConfig = async () => {
     setIsLoading(true)
     try {
+      // Initialize from cloudSession prop if available
+      if (cloudSession) {
+        setServerUrl(cloudSession.serverUrl)
+        setIsConnected(true)
+        setUser(cloudSession.user)
+      }
+
       const result = await window.electronAPI?.cloud.getConfig()
       if (result?.success && result.data) {
         // Load locally persisted license (perpetual, independent of connection)
@@ -350,6 +371,11 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp, isCloudEm
         setUser(result.data.user)
         setSuccessMessage(t('connectedSuccess'))
         setCodeDigits(["", "", "", "", "", ""])
+        // Update cloud session
+        const sessionResult = await window.electronAPI?.cloudSession.get()
+        if (sessionResult?.success && sessionResult.data) {
+          onCloudSessionChange?.(sessionResult.data)
+        }
         loadBackups(1)
         loadPlan()
       } else {
@@ -374,6 +400,7 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp, isCloudEm
       // License is NOT cleared — it's perpetual and persisted locally
       setShowDisconnectConfirm(false)
       setSuccessMessage(t('disconnectedSuccess'))
+      onCloudSessionChange?.(null)
     } catch (err) {
       setErrorMessage(String(err))
     }

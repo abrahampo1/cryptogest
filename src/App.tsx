@@ -17,9 +17,16 @@ import { BuzonPage } from '@/pages/BuzonPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { EmpresaSelectorPage } from '@/pages/EmpresaSelectorPage'
 import { SetupWizardPage } from '@/pages/SetupWizardPage'
-import { Loader2, Cloud, ArrowLeft, Lock } from 'lucide-react'
+import { Loader2, Cloud, ArrowLeft, Lock, CheckCircle2 } from 'lucide-react'
+import { CloudLoginPrompt } from '@/components/CloudLoginPrompt'
 
 type AppPhase = 'loading' | 'setup-wizard' | 'empresa-selector' | 'auth' | 'cloud-auth' | 'authenticated'
+
+interface CloudSession {
+  serverUrl: string
+  token: string
+  user: { id: number; name: string; email: string }
+}
 
 function App() {
   const { t } = useTranslation('common')
@@ -36,21 +43,43 @@ function App() {
   const [cloudPassphrase, setCloudPassphrase] = useState('')
   const [cloudAuthError, setCloudAuthError] = useState<string | null>(null)
   const [cloudAuthLoading, setCloudAuthLoading] = useState(false)
+  const [cloudSession, setCloudSession] = useState<CloudSession | null>(null)
 
   useEffect(() => {
     loadEmpresas()
+    loadCloudSession()
   }, [])
+
+  const loadCloudSession = async () => {
+    try {
+      const result = await window.electronAPI?.cloudSession.get()
+      if (result?.success && result.data) {
+        setCloudSession(result.data)
+      }
+    } catch {
+      // Cloud session is optional
+    }
+  }
+
+  const handleCloudSessionChange = (session: CloudSession | null) => {
+    setCloudSession(session)
+  }
 
   // Listen for deep link connection results from main process (fires after auth + API confirm)
   useEffect(() => {
     const cleanup = window.electronAPI?.cloud.onDeepLinkConnected((data) => {
       if (data.success) {
         setDeepLinkResult({ success: true, user: data.user, server: data.server })
-        setCurrentPage('cloud')
+        // Refresh cloud session
+        loadCloudSession()
+        // Only navigate to cloud page if authenticated (not on empresa-selector/setup)
+        if (phase === 'authenticated') {
+          setCurrentPage('cloud')
+        }
       }
     })
     return () => cleanup?.()
-  }, [])
+  }, [phase])
 
   const loadEmpresas = async () => {
     setPhase('loading')
@@ -210,7 +239,7 @@ function App() {
       case 'buzon':
         return <BuzonPage />
       case 'cloud':
-        return <CloudPage deepLinkResult={deepLinkResult} onDeepLinkHandled={() => setDeepLinkResult(null)} onHelp={() => navigateToManual('cloud')} isCloudEmpresa={isCloudEmpresa} />
+        return <CloudPage deepLinkResult={deepLinkResult} onDeepLinkHandled={() => setDeepLinkResult(null)} onHelp={() => navigateToManual('cloud')} isCloudEmpresa={isCloudEmpresa} cloudSession={cloudSession} onCloudSessionChange={handleCloudSessionChange} />
       case 'configuracion':
         return <ConfiguracionPage onHelp={() => navigateToManual('configuracion')} buzonEnabled={buzonEnabled} onBuzonToggle={(v) => { localStorage.setItem('beta.buzon', v ? 'true' : 'false'); setBuzonEnabled(v) }} isCloudEmpresa={isCloudEmpresa} />
       case 'manual':
@@ -244,6 +273,8 @@ function App() {
         onCreated={loadEmpresas}
         deepLinkResult={deepLinkResult}
         onDeepLinkHandled={() => setDeepLinkResult(null)}
+        cloudSession={cloudSession}
+        onCloudSessionChange={handleCloudSessionChange}
       />
     )
   }
@@ -270,43 +301,60 @@ function App() {
             <p className="text-sm text-slate-400">{activeEmpresa?.nombre}</p>
             <p className="text-xs text-slate-500 mt-1">{t('auth:empresaSelector.cloudPassphraseDesc', 'Enter the passphrase to decrypt the data')}</p>
           </div>
-          <div className="space-y-4">
-            <div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                <input
-                  type="password"
-                  value={cloudPassphrase}
-                  onChange={(e) => setCloudPassphrase(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCloudAuth()}
-                  placeholder={t('auth:empresaSelector.passphrase', 'Passphrase')}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  autoFocus
-                />
-              </div>
+          {!cloudSession ? (
+            <div className="space-y-4">
+              <CloudLoginPrompt onConnected={handleCloudSessionChange} />
+              <button
+                onClick={handleBackFromAuth}
+                className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors flex items-center justify-center gap-1"
+              >
+                <ArrowLeft className="h-3 w-3" />
+                {t('common:back', 'Back')}
+              </button>
             </div>
-            {cloudAuthError && (
-              <p className="text-sm text-red-400">{cloudAuthError}</p>
-            )}
-            <button
-              onClick={handleCloudAuth}
-              disabled={!cloudPassphrase || cloudAuthLoading}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-            >
-              {cloudAuthLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                t('auth:unlock', 'Unlock')
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
+                <span className="text-xs text-green-400">{t('auth:empresaSelector.cloudSessionActive', { email: cloudSession.user.email, defaultValue: 'Connected as {{email}}' })}</span>
+              </div>
+              <div>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    type="password"
+                    value={cloudPassphrase}
+                    onChange={(e) => setCloudPassphrase(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCloudAuth()}
+                    placeholder={t('auth:empresaSelector.passphrase', 'Passphrase')}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              {cloudAuthError && (
+                <p className="text-sm text-red-400">{cloudAuthError}</p>
               )}
-            </button>
-            <button
-              onClick={handleBackFromAuth}
-              className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors flex items-center justify-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              {t('common:back', 'Back')}
-            </button>
-          </div>
+              <button
+                onClick={handleCloudAuth}
+                disabled={!cloudPassphrase || cloudAuthLoading}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              >
+                {cloudAuthLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  t('auth:unlock', 'Unlock')
+                )}
+              </button>
+              <button
+                onClick={handleBackFromAuth}
+                className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors flex items-center justify-center gap-1"
+              >
+                <ArrowLeft className="h-3 w-3" />
+                {t('common:back', 'Back')}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -321,6 +369,7 @@ function App() {
       empresaNombre={activeEmpresa?.nombre}
       buzonEnabled={buzonEnabled}
       isCloudEmpresa={isCloudEmpresa}
+      cloudSession={cloudSession}
     >
       {renderPage()}
     </DashboardLayout>

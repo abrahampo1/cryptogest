@@ -35,7 +35,7 @@ const electronAPI = {
   // Empresas
   empresa: {
     list: () => ipcRenderer.invoke('empresa:list') as Promise<ApiResponse<any>>,
-    create: (data: { nombre: string; customDataPath?: string; tipo?: 'local' | 'cloud'; passphrase?: string; cloudToken?: string; serverUrl?: string }) => ipcRenderer.invoke('empresa:create', data) as Promise<ApiResponse<any>>,
+    create: (data: { nombre: string; customDataPath?: string; tipo?: 'local' | 'cloud'; passphrase?: string }) => ipcRenderer.invoke('empresa:create', data) as Promise<ApiResponse<any>>,
     select: (id: string) => ipcRenderer.invoke('empresa:select', id) as Promise<ApiResponse<any>>,
     rename: (id: string, nombre: string) => ipcRenderer.invoke('empresa:rename', id, nombre) as Promise<ApiResponse<void>>,
     delete: (id: string) => ipcRenderer.invoke('empresa:delete', id) as Promise<ApiResponse<void>>,
@@ -43,8 +43,11 @@ const electronAPI = {
     getDefaultPath: () => ipcRenderer.invoke('empresa:getDefaultPath') as Promise<ApiResponse<{ path: string }>>,
     detectVolumes: () => ipcRenderer.invoke('empresa:detectVolumes') as Promise<ApiResponse<{ name: string; path: string; available: boolean }[]>>,
     selectDirectory: () => ipcRenderer.invoke('empresa:selectDirectory') as Promise<ApiResponse<{ path: string } | null>>,
-    joinCloud: (data: { code: string; cloudToken: string; serverUrl: string; passphrase: string }) =>
+    joinCloud: (data: { code: string; passphrase: string }) =>
       ipcRenderer.invoke('empresa:joinCloud', data) as Promise<ApiResponse<any>>,
+    listCloud: () => ipcRenderer.invoke('empresa:listCloud') as Promise<ApiResponse<any>>,
+    addCloudLocal: (data: { empresaId: number; salt: string; verificationHash: string; role: string; passphrase: string }) =>
+      ipcRenderer.invoke('empresa:addCloudLocal', data) as Promise<ApiResponse<any>>,
   },
 
   // Autenticación
@@ -256,6 +259,12 @@ const electronAPI = {
       ipcRenderer.on('deep-link:connected', handler)
       return () => { ipcRenderer.removeListener('deep-link:connected', handler) }
     },
+  },
+
+  // Cloud Session (program-level)
+  cloudSession: {
+    get: () => ipcRenderer.invoke('cloudSession:get') as Promise<ApiResponse<{ serverUrl: string; token: string; user: { id: number; name: string; email: string } } | null>>,
+    logout: () => ipcRenderer.invoke('cloudSession:logout') as Promise<ApiResponse<void>>,
   },
 
   // Cloud Empresa Management

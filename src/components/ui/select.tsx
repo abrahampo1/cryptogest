@@ -1,4 +1,5 @@
 import * as React from "react"
+import * as ReactDOM from "react-dom"
 import { cn } from "@/lib/utils"
 import { ChevronDown, Check } from "lucide-react"
 
@@ -7,6 +8,7 @@ interface SelectContextType {
   onValueChange: (value: string) => void
   open: boolean
   setOpen: (open: boolean) => void
+  triggerRef: React.RefObject<HTMLButtonElement | null>
 }
 
 const SelectContext = React.createContext<SelectContextType | undefined>(undefined)
@@ -19,9 +21,10 @@ interface SelectProps {
 
 const Select = ({ value = "", onValueChange = () => {}, children }: SelectProps) => {
   const [open, setOpen] = React.useState(false)
+  const triggerRef = React.useRef<HTMLButtonElement | null>(null)
 
   return (
-    <SelectContext.Provider value={{ value, onValueChange, open, setOpen }}>
+    <SelectContext.Provider value={{ value, onValueChange, open, setOpen, triggerRef }}>
       <div className="relative">{children}</div>
     </SelectContext.Provider>
   )
@@ -34,9 +37,18 @@ const SelectTrigger = React.forwardRef<
   const context = React.useContext(SelectContext)
   if (!context) throw new Error("SelectTrigger must be used within Select")
 
+  const combinedRef = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      context.triggerRef.current = node
+      if (typeof ref === "function") ref(node)
+      else if (ref) (ref as React.MutableRefObject<HTMLButtonElement | null>).current = node
+    },
+    [ref, context.triggerRef]
+  )
+
   return (
     <button
-      ref={ref}
+      ref={combinedRef}
       type="button"
       className={cn(
         "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
@@ -66,22 +78,33 @@ const SelectContent = React.forwardRef<
   const context = React.useContext(SelectContext)
   if (!context) throw new Error("SelectContent must be used within Select")
 
-  if (!context.open) return null
+  const [pos, setPos] = React.useState<{ top: number; left: number; width: number } | null>(null)
 
-  return (
+  React.useEffect(() => {
+    if (context.open && context.triggerRef.current) {
+      const rect = context.triggerRef.current.getBoundingClientRect()
+      setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+    }
+  }, [context.open, context.triggerRef])
+
+  if (!context.open || !pos) return null
+
+  return ReactDOM.createPortal(
     <>
       <div className="fixed inset-0 z-40" onClick={() => context.setOpen(false)} />
       <div
         ref={ref}
         className={cn(
-          "absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
+          "fixed z-50 max-h-60 overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
           className
         )}
+        style={{ top: pos.top, left: pos.left, minWidth: pos.width }}
         {...props}
       >
         {children}
       </div>
-    </>
+    </>,
+    document.body
   )
 })
 SelectContent.displayName = "SelectContent"

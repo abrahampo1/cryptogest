@@ -1,6 +1,7 @@
 import { net } from 'electron'
 import * as fs from 'fs'
 import * as crypto from 'crypto'
+import { loadCloudSession } from './crypto'
 
 // Uses Electron's `net` module (Chromium networking stack) instead of Node.js
 // `https`. This properly handles certificate chains, AIA fetching, and the OS
@@ -118,6 +119,17 @@ export function getCloudConfig(): { serverUrl: string; token: string } | null {
 export function clearCloudConfig(): void {
   cloudServerUrl = null
   cloudToken = null
+}
+
+/**
+ * Initialize cloud config from persisted cloud-session.json on app startup.
+ * Imported lazily to avoid circular deps.
+ */
+export function initFromSession(): void {
+  const session = loadCloudSession()
+  if (session) {
+    setCloudConfig(session.serverUrl, session.token)
+  }
 }
 
 // ============================================

@@ -23,6 +23,12 @@ import {
 
 export type Page = "dashboard" | "clientes" | "productos" | "facturas" | "gastos" | "ejercicios" | "contabilidad" | "modelos" | "buzon" | "cloud" | "configuracion" | "manual"
 
+interface CloudSession {
+  serverUrl: string
+  token: string
+  user: { id: number; name: string; email: string }
+}
+
 interface SidebarProps {
   currentPage: Page
   onPageChange: (page: Page) => void
@@ -31,6 +37,7 @@ interface SidebarProps {
   empresaNombre?: string
   buzonEnabled?: boolean
   isCloudEmpresa?: boolean
+  cloudSession?: CloudSession | null
 }
 
 const menuItems = [
@@ -60,7 +67,7 @@ const helpItems = [
   { id: "manual" as Page, labelKey: "manual", icon: HelpCircle },
 ]
 
-export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, empresaNombre, buzonEnabled, isCloudEmpresa }: SidebarProps) {
+export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, empresaNombre, buzonEnabled, isCloudEmpresa, cloudSession }: SidebarProps) {
   const { t } = useTranslation(['sidebar', 'common'])
   const [isLocking, setIsLocking] = useState(false)
 
@@ -263,6 +270,12 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
           </div>
           <ChevronRight className="h-3 w-3 text-slate-600 shrink-0" />
         </button>
+        {cloudSession && (
+          <div className="flex items-center gap-1.5 px-1.5 pt-1">
+            <Cloud className="h-3 w-3 text-blue-400 shrink-0" />
+            <span className="text-[10px] text-slate-500 truncate">{cloudSession.user.email}</span>
+          </div>
+        )}
       </div>
     </div>
   )
