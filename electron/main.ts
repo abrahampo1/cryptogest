@@ -674,6 +674,43 @@ ipcMain.handle('empresa:create', async (_, data: { nombre: string; customDataPat
         verification_hash: verificationHash,
       })
 
+      // Update config with real empresa ID so seeding targets the correct empresa
+      cloudApi.setCloudApiConfig(session.serverUrl, session.token, serverEmpresa.id)
+
+      // Seed default data (non-blocking: if seeding fails, empresa is still created)
+      try {
+        // Default impuestos
+        const defaultImpuestos = [
+          { nombre: 'IVA General', porcentaje: 21, tipo: 'IVA', porDefecto: true },
+          { nombre: 'IVA Reducido', porcentaje: 10, tipo: 'IVA', porDefecto: false },
+          { nombre: 'IVA Super Reducido', porcentaje: 4, tipo: 'IVA', porDefecto: false },
+          { nombre: 'Exento de IVA', porcentaje: 0, tipo: 'IVA', porDefecto: false },
+          { nombre: 'IRPF General', porcentaje: 15, tipo: 'IRPF', porDefecto: false },
+          { nombre: 'IRPF Reducido', porcentaje: 7, tipo: 'IRPF', porDefecto: false },
+        ]
+        await Promise.all(defaultImpuestos.map((imp) => cloudApi.impuestos.create(imp)))
+
+        // Default categorias de gasto
+        const defaultCategorias = [
+          { nombre: 'Alquiler', color: '#3B82F6', icono: 'building' },
+          { nombre: 'Material', color: '#F97316', icono: 'shopping-bag' },
+          { nombre: 'Software', color: '#8B5CF6', icono: 'laptop' },
+          { nombre: 'Transporte', color: '#22C55E', icono: 'car' },
+          { nombre: 'Suministros', color: '#EAB308', icono: 'lightbulb' },
+          { nombre: 'Comunicaciones', color: '#EC4899', icono: 'phone' },
+          { nombre: 'Otros', color: '#6B7280', icono: 'receipt' },
+        ]
+        await Promise.all(defaultCategorias.map((cat) => cloudApi.categoriasGasto.create(cat)))
+
+        // Default plan contable (PGC)
+        await cloudApi.cuentas.seedPGC()
+
+        // Default configuracion: empresa name
+        await cloudApi.configuracion.set('empresa_nombre', data.nombre)
+      } catch (seedError) {
+        console.error('Failed to seed default data for cloud empresa:', seedError)
+      }
+
       // Save locally
       const empresa = crypto.createCloudEmpresa(data.nombre, {
         empresaId: serverEmpresa.id,
