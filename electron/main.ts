@@ -469,6 +469,12 @@ const createWindow = () => {
     rendererReady = true
     tryProcessDeepLink() // Process any queued deep link now that the page is loaded
   })
+
+  // Connect mainWindow to cloudApi for cache sync notifications
+  cloudApi.setCacheMainWindow(mainWindow)
+  mainWindow.on('closed', () => {
+    cloudApi.setCacheMainWindow(null)
+  })
 }
 
 app.whenReady().then(() => {
@@ -5208,7 +5214,9 @@ ipcMain.handle('clasges:preview', async (_, dirPath: string, entity: string) => 
 // Import data from ClassicGes 6
 ipcMain.handle('clasges:import', async (_, dirPath: string, entities: string[]) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    const isCloud = ctx.mode === 'cloud'
+    const db = isCloud ? null : ctx.db
     const results: Record<string, { imported: number; skipped: number; errors: string[] }> = {}
 
     // Helper to send progress to renderer
@@ -5225,23 +5233,42 @@ ipcMain.handle('clasges:import', async (_, dirPath: string, entities: string[]) 
         for await (const r of dbf) allRecords.push(r)
         sendProgress('categorias', 0, allRecords.length, 'importing')
 
-        for (let i = 0; i < allRecords.length; i++) {
-          try {
-            const r = allRecords[i]
+        if (isCloud) {
+          const existingCats = await cloudApi.categoriasGasto.getAll()
+          const existingNames = new Set(existingCats.map((c: any) => c.nombre))
+          const toCreate: any[] = []
+
+          for (const r of allRecords) {
             const nombre = decodeDbfString(r.NOMBRE || r.nombre)
-            if (!nombre) { catResult.skipped++; continue }
-
-            // Check for duplicates
-            const existing = await db.categoriaGasto.findFirst({ where: { nombre } })
-            if (existing) { catResult.skipped++; continue }
-
-            await db.categoriaGasto.create({ data: { nombre } })
-            catResult.imported++
-          } catch (e: any) {
-            if (e.code === 'P2002') catResult.skipped++
-            else catResult.errors.push(String(e))
+            if (!nombre || existingNames.has(nombre)) { catResult.skipped++; continue }
+            existingNames.add(nombre)
+            toCreate.push({ nombre })
           }
-          sendProgress('categorias', i + 1, allRecords.length, 'importing')
+
+          if (toCreate.length > 0) {
+            await cloudApi.batchCreateEntities('categoriaGasto', toCreate, (cur, tot) => {
+              sendProgress('categorias', cur, tot, 'importing')
+            })
+            catResult.imported = toCreate.length
+          }
+        } else {
+          for (let i = 0; i < allRecords.length; i++) {
+            try {
+              const r = allRecords[i]
+              const nombre = decodeDbfString(r.NOMBRE || r.nombre)
+              if (!nombre) { catResult.skipped++; continue }
+
+              const existing = await db!.categoriaGasto.findFirst({ where: { nombre } })
+              if (existing) { catResult.skipped++; continue }
+
+              await db!.categoriaGasto.create({ data: { nombre } })
+              catResult.imported++
+            } catch (e: any) {
+              if (e.code === 'P2002') catResult.skipped++
+              else catResult.errors.push(String(e))
+            }
+            sendProgress('categorias', i + 1, allRecords.length, 'importing')
+          }
         }
       }
       results.categorias = catResult
@@ -5257,40 +5284,73 @@ ipcMain.handle('clasges:import', async (_, dirPath: string, entities: string[]) 
         for await (const r of dbf) allRecords.push(r)
         sendProgress('clientes', 0, allRecords.length, 'importing')
 
-        for (let i = 0; i < allRecords.length; i++) {
-          try {
-            const r = allRecords[i]
+        if (isCloud) {
+          const existingClients = await cloudApi.clientes.getAll()
+          const existingNifs = new Set(existingClients.filter((c: any) => c.nif).map((c: any) => c.nif))
+          const toCreate: any[] = []
+
+          for (const r of allRecords) {
             const nombre = decodeDbfString(r.NOMBRE || r.nombre)
             if (!nombre) { cliResult.skipped++; continue }
-
             const nif = decodeDbfString(r.CIF || r.cif) || null
-            // Skip duplicates by NIF
-            if (nif) {
-              const existing = await db.cliente.findFirst({ where: { nif } })
-              if (existing) { cliResult.skipped++; continue }
-            }
-
+            if (nif && existingNifs.has(nif)) { cliResult.skipped++; continue }
+            if (nif) existingNifs.add(nif)
             const baja = r.BAJA || r.baja
-            await db.cliente.create({
-              data: {
-                nombre,
-                email: decodeDbfString(r.EMAIL || r.email) || null,
-                telefono: decodeDbfString(r.TELEFONO || r.telefono) || null,
-                direccion: decodeDbfString(r.DIRECCION || r.direccion) || null,
-                ciudad: decodeDbfString(r.LOCALIDAD || r.localidad) || null,
-                provincia: decodeDbfString(r.PROVINCIA || r.provincia) || null,
-                codigoPostal: decodeDbfString(r.POSTAL || r.postal) || null,
-                pais: decodeDbfString(r.PAIS || r.pais) || 'España',
-                nif,
-                activo: baja ? !baja : true,
-              }
+            toCreate.push({
+              nombre,
+              email: decodeDbfString(r.EMAIL || r.email) || null,
+              telefono: decodeDbfString(r.TELEFONO || r.telefono) || null,
+              direccion: decodeDbfString(r.DIRECCION || r.direccion) || null,
+              ciudad: decodeDbfString(r.LOCALIDAD || r.localidad) || null,
+              provincia: decodeDbfString(r.PROVINCIA || r.provincia) || null,
+              codigoPostal: decodeDbfString(r.POSTAL || r.postal) || null,
+              pais: decodeDbfString(r.PAIS || r.pais) || 'España',
+              nif,
+              activo: baja ? !baja : true,
             })
-            cliResult.imported++
-          } catch (e: any) {
-            if (e.code === 'P2002') cliResult.skipped++
-            else cliResult.errors.push(String(e))
           }
-          sendProgress('clientes', i + 1, allRecords.length, 'importing')
+
+          if (toCreate.length > 0) {
+            await cloudApi.batchCreateEntities('cliente', toCreate, (cur, tot) => {
+              sendProgress('clientes', cur, tot, 'importing')
+            })
+            cliResult.imported = toCreate.length
+          }
+        } else {
+          for (let i = 0; i < allRecords.length; i++) {
+            try {
+              const r = allRecords[i]
+              const nombre = decodeDbfString(r.NOMBRE || r.nombre)
+              if (!nombre) { cliResult.skipped++; continue }
+
+              const nif = decodeDbfString(r.CIF || r.cif) || null
+              if (nif) {
+                const existing = await db!.cliente.findFirst({ where: { nif } })
+                if (existing) { cliResult.skipped++; continue }
+              }
+
+              const baja = r.BAJA || r.baja
+              await db!.cliente.create({
+                data: {
+                  nombre,
+                  email: decodeDbfString(r.EMAIL || r.email) || null,
+                  telefono: decodeDbfString(r.TELEFONO || r.telefono) || null,
+                  direccion: decodeDbfString(r.DIRECCION || r.direccion) || null,
+                  ciudad: decodeDbfString(r.LOCALIDAD || r.localidad) || null,
+                  provincia: decodeDbfString(r.PROVINCIA || r.provincia) || null,
+                  codigoPostal: decodeDbfString(r.POSTAL || r.postal) || null,
+                  pais: decodeDbfString(r.PAIS || r.pais) || 'España',
+                  nif,
+                  activo: baja ? !baja : true,
+                }
+              })
+              cliResult.imported++
+            } catch (e: any) {
+              if (e.code === 'P2002') cliResult.skipped++
+              else cliResult.errors.push(String(e))
+            }
+            sendProgress('clientes', i + 1, allRecords.length, 'importing')
+          }
         }
       }
       results.clientes = cliResult
@@ -5306,37 +5366,67 @@ ipcMain.handle('clasges:import', async (_, dirPath: string, entities: string[]) 
         for await (const r of dbf) allRecords.push(r)
         sendProgress('productos', 0, allRecords.length, 'importing')
 
-        for (let i = 0; i < allRecords.length; i++) {
-          try {
-            const r = allRecords[i]
+        if (isCloud) {
+          const existingProds = await cloudApi.productos.getAll()
+          const existingCodigos = new Set(existingProds.filter((p: any) => p.codigo).map((p: any) => p.codigo))
+          const toCreate: any[] = []
+
+          for (const r of allRecords) {
             const nombre = decodeDbfString(r.NOMBRE || r.nombre)
             if (!nombre) { prodResult.skipped++; continue }
-
             const codigo = decodeDbfString(r.CODIGO || r.codigo) || null
-            // Skip duplicates by codigo
-            if (codigo) {
-              const existing = await db.producto.findFirst({ where: { codigo } })
-              if (existing) { prodResult.skipped++; continue }
-            }
-
+            if (codigo && existingCodigos.has(codigo)) { prodResult.skipped++; continue }
+            if (codigo) existingCodigos.add(codigo)
             const servicio = r.SERVICIO || r.servicio
             const baja = r.BAJA || r.baja
-            await db.producto.create({
-              data: {
-                codigo,
-                nombre,
-                descripcion: decodeDbfString(r.DESCRIP || r.descrip) || null,
-                tipo: servicio ? 'servicio' : 'producto',
-                precioBase: dbfNumber(r.PVP1 || r.pvp1),
-                activo: baja ? !baja : true,
-              }
+            toCreate.push({
+              codigo,
+              nombre,
+              descripcion: decodeDbfString(r.DESCRIP || r.descrip) || null,
+              tipo: servicio ? 'servicio' : 'producto',
+              precioBase: dbfNumber(r.PVP1 || r.pvp1),
+              activo: baja ? !baja : true,
             })
-            prodResult.imported++
-          } catch (e: any) {
-            if (e.code === 'P2002') prodResult.skipped++
-            else prodResult.errors.push(String(e))
           }
-          sendProgress('productos', i + 1, allRecords.length, 'importing')
+
+          if (toCreate.length > 0) {
+            await cloudApi.batchCreateEntities('producto', toCreate, (cur, tot) => {
+              sendProgress('productos', cur, tot, 'importing')
+            })
+            prodResult.imported = toCreate.length
+          }
+        } else {
+          for (let i = 0; i < allRecords.length; i++) {
+            try {
+              const r = allRecords[i]
+              const nombre = decodeDbfString(r.NOMBRE || r.nombre)
+              if (!nombre) { prodResult.skipped++; continue }
+
+              const codigo = decodeDbfString(r.CODIGO || r.codigo) || null
+              if (codigo) {
+                const existing = await db!.producto.findFirst({ where: { codigo } })
+                if (existing) { prodResult.skipped++; continue }
+              }
+
+              const servicio = r.SERVICIO || r.servicio
+              const baja = r.BAJA || r.baja
+              await db!.producto.create({
+                data: {
+                  codigo,
+                  nombre,
+                  descripcion: decodeDbfString(r.DESCRIP || r.descrip) || null,
+                  tipo: servicio ? 'servicio' : 'producto',
+                  precioBase: dbfNumber(r.PVP1 || r.pvp1),
+                  activo: baja ? !baja : true,
+                }
+              })
+              prodResult.imported++
+            } catch (e: any) {
+              if (e.code === 'P2002') prodResult.skipped++
+              else prodResult.errors.push(String(e))
+            }
+            sendProgress('productos', i + 1, allRecords.length, 'importing')
+          }
         }
       }
       results.productos = prodResult
@@ -5355,7 +5445,6 @@ ipcMain.handle('clasges:import', async (_, dirPath: string, entities: string[]) 
         const linesByCLAFAC = new Map<string, any[]>() // CLAFAC fallback key
         if (dbfLines) {
           for await (const lr of dbfLines) {
-            // Primary: group by SERIE+NUMERO (most reliable in ClassicGes 6)
             const lSerie = decodeDbfString(lr.SERIE || lr.serie)
             const lNumero = decodeDbfString(lr.NUMERO || lr.numero)
             if (lSerie || lNumero) {
@@ -5363,7 +5452,6 @@ ipcMain.handle('clasges:import', async (_, dirPath: string, entities: string[]) 
               if (!linesBySN.has(snKey)) linesBySN.set(snKey, [])
               linesBySN.get(snKey)!.push(lr)
             }
-            // Fallback: group by CLAFAC
             const clafac = String(lr.CLAFAC || lr.clafac || '').trim()
             if (clafac) {
               if (!linesByCLAFAC.has(clafac)) linesByCLAFAC.set(clafac, [])
@@ -5372,71 +5460,89 @@ ipcMain.handle('clasges:import', async (_, dirPath: string, entities: string[]) 
           }
         }
 
-        // Get all impuestos for matching
-        const impuestos = await db.impuesto.findMany({ where: { activo: true } })
-
         const allRecords: any[] = []
         for await (const r of dbfFac) allRecords.push(r)
         sendProgress('facturas', 0, allRecords.length, 'importing')
 
-        for (let i = 0; i < allRecords.length; i++) {
-          try {
-            const r = allRecords[i]
-            const serie = decodeDbfString(r.SERIE || r.serie) || 'F'
-            const numero = decodeDbfString(r.NUMERO || r.numero)
-            if (!numero) { facResult.skipped++; continue }
+        if (isCloud) {
+          const existingFacturas = await cloudApi.facturas.getAll()
+          const existingNumeros = new Set(existingFacturas.map((f: any) => f.numero))
+          const existingClientes = await cloudApi.clientes.getAll()
+          const impuestos = await cloudApi.impuestos.getAll()
 
-            const fullNumero = `${serie}${numero}`
+          // Helper to find or create cloud client
+          const clienteCache = new Map<string, number>()
+          for (const c of existingClientes) {
+            if (c.nif) clienteCache.set(`nif:${c.nif}`, c.id)
+            clienteCache.set(`name:${c.nombre}`, c.id)
+          }
 
-            // Skip duplicate invoices
-            const existing = await db.factura.findFirst({ where: { numero: fullNumero } })
-            if (existing) { facResult.skipped++; continue }
+          const findOrCreateCliente = async (nif: string | null, nombre: string | null): Promise<number> => {
+            if (nif && clienteCache.has(`nif:${nif}`)) return clienteCache.get(`nif:${nif}`)!
+            if (nombre && clienteCache.has(`name:${nombre}`)) return clienteCache.get(`name:${nombre}`)!
 
-            // Find or create client
-            let clienteId: number
-            const clientNif = decodeDbfString(r.CIFCLI || r.cifcli)
-            const clientName = decodeDbfString(r.NOMCLI || r.nomcli)
+            const newCli = await cloudApi.clientes.create({
+              nombre: nombre || 'Cliente importado',
+              nif,
+              activo: true,
+              pais: 'España',
+            })
+            if (nif) clienteCache.set(`nif:${nif}`, newCli.id)
+            clienteCache.set(`name:${newCli.nombre}`, newCli.id)
+            return newCli.id
+          }
 
-            if (clientNif) {
-              const existingClient = await db.cliente.findFirst({ where: { nif: clientNif } })
-              if (existingClient) {
-                clienteId = existingClient.id
-              } else {
-                const newClient = await db.cliente.create({
-                  data: { nombre: clientName || 'Cliente importado', nif: clientNif }
-                })
-                clienteId = newClient.id
+          for (let i = 0; i < allRecords.length; i++) {
+            try {
+              const r = allRecords[i]
+              const serie = decodeDbfString(r.SERIE || r.serie) || 'F'
+              const numero = decodeDbfString(r.NUMERO || r.numero)
+              if (!numero) { facResult.skipped++; continue }
+
+              const fullNumero = `${serie}${numero}`
+              if (existingNumeros.has(fullNumero)) { facResult.skipped++; continue }
+              existingNumeros.add(fullNumero)
+
+              const clientNif = decodeDbfString(r.CIFCLI || r.cifcli)
+              const clientName = decodeDbfString(r.NOMCLI || r.nomcli)
+              const clienteId = await findOrCreateCliente(clientNif, clientName || 'Cliente ClassicGes')
+
+              const fecha = (parseDbfDate(r.FECHA || r.fecha) || new Date()).toISOString()
+              const fechaVencimiento = parseDbfDate(r.FECHAVALOR || r.fechavalor)?.toISOString() || null
+              const cobrado = dbfNumber(r.COBRADO || r.cobrado)
+              const total = dbfNumber(r.IMPORTE || r.importe)
+              let estado = 'emitida'
+              if (cobrado >= total && total > 0) estado = 'pagada'
+
+              // Build lines for this invoice
+              const snKey = `${serie}${numero}`
+              let rawLines: any[] = linesBySN.get(snKey) || []
+              if (rawLines.length === 0) {
+                const clessionKey = String(r.CLESSION || r.clession || '').trim()
+                const codigoKey = String(r.CODIGO || r.codigo || '').trim()
+                for (const fk of [clessionKey, codigoKey, snKey].filter(k => k !== '')) {
+                  if (linesByCLAFAC.has(fk)) { rawLines = linesByCLAFAC.get(fk)!; break }
+                }
               }
-            } else if (clientName) {
-              const existingClient = await db.cliente.findFirst({ where: { nombre: clientName } })
-              if (existingClient) {
-                clienteId = existingClient.id
-              } else {
-                const newClient = await db.cliente.create({
-                  data: { nombre: clientName }
-                })
-                clienteId = newClient.id
-              }
-            } else {
-              // Create a generic client
-              let generic = await db.cliente.findFirst({ where: { nombre: 'Cliente ClassicGes' } })
-              if (!generic) {
-                generic = await db.cliente.create({ data: { nombre: 'Cliente ClassicGes' } })
-              }
-              clienteId = generic.id
-            }
 
-            const fecha = parseDbfDate(r.FECHA || r.fecha) || new Date()
-            const fechaVencimiento = parseDbfDate(r.FECHAVALOR || r.fechavalor) || null
+              const lineasData = rawLines.map(lr => {
+                const descripcion = decodeDbfString(lr.LINDESC || lr.lindesc) || 'Línea importada'
+                const cantidad = dbfNumber(lr.CANTIDAD || lr.cantidad) || 1
+                const precioUnit = dbfNumber(lr.PRECIO || lr.precio)
+                const descuento = dbfNumber(lr.DTO || lr.dto)
+                const ivaPercent = dbfNumber(lr.IVA || lr.iva)
+                let impuestoId: number | null = null
+                if (ivaPercent > 0) {
+                  const match = impuestos.find((imp: any) => imp.tipo === 'IVA' && Math.abs(imp.porcentaje - ivaPercent) < 0.01)
+                  if (match) impuestoId = match.id
+                }
+                const subtotal = cantidad * precioUnit * (1 - descuento / 100)
+                const totalImpuesto = impuestoId ? subtotal * ivaPercent / 100 : 0
+                return { descripcion, cantidad, precioUnit, descuento, impuestoId, subtotal, totalImpuesto, totalRetencion: 0, total: subtotal + totalImpuesto }
+              })
 
-            // Determine estado from COBRADO field
-            const cobrado = dbfNumber(r.COBRADO || r.cobrado)
-            const total = dbfNumber(r.IMPORTE || r.importe)
-            let estado = 'emitida'
-            if (cobrado >= total && total > 0) estado = 'pagada'
-
-            const factura = await db.factura.create({
-              data: {
+              // Create factura via cloudApi (creates header entity)
+              const factura = await cloudApi.facturas.create({
                 numero: fullNumero,
                 serie,
                 fecha,
@@ -5447,69 +5553,152 @@ ipcMain.handle('clasges:import', async (_, dirPath: string, entities: string[]) 
                 totalRetenciones: dbfNumber(r.RETENCION || r.retencion),
                 total,
                 estado,
-              }
-            })
+                lineas: lineasData,
+              })
 
-            // Import invoice lines - match by SERIE+NUMERO first, then CLAFAC
-            const snKey = `${serie}${numero}`
-            let lines: any[] = linesBySN.get(snKey) || []
-
-            // Fallback: try CLAFAC using possible invoice keys
-            if (lines.length === 0) {
-              const clessionKey = String(r.CLESSION || r.clession || '').trim()
-              const codigoKey = String(r.CODIGO || r.codigo || '').trim()
-              for (const fk of [clessionKey, codigoKey, snKey].filter(k => k !== '')) {
-                if (linesByCLAFAC.has(fk)) {
-                  lines = linesByCLAFAC.get(fk)!
-                  break
-                }
+              // Create line entities separately
+              if (lineasData.length > 0) {
+                await cloudApi.batchCreateEntities('lineaFactura', lineasData.map(l => ({ ...l, facturaId: factura.id })))
               }
+
+              facResult.imported++
+            } catch (e: any) {
+              facResult.errors.push(String(e))
             }
-
-            for (const lr of lines) {
-              try {
-                const descripcion = decodeDbfString(lr.LINDESC || lr.lindesc) || 'Línea importada'
-                const cantidad = dbfNumber(lr.CANTIDAD || lr.cantidad) || 1
-                const precioUnit = dbfNumber(lr.PRECIO || lr.precio)
-                const descuento = dbfNumber(lr.DTO || lr.dto)
-                const ivaPercent = dbfNumber(lr.IVA || lr.iva)
-
-                // Match IVA to existing Impuesto
-                let impuestoId: number | null = null
-                if (ivaPercent > 0) {
-                  const match = impuestos.find(imp => imp.tipo === 'IVA' && Math.abs(imp.porcentaje - ivaPercent) < 0.01)
-                  if (match) impuestoId = match.id
-                }
-
-                const subtotal = cantidad * precioUnit * (1 - descuento / 100)
-                const totalImpuesto = impuestoId ? subtotal * ivaPercent / 100 : 0
-                const lineTotal = subtotal + totalImpuesto
-
-                await db.lineaFactura.create({
-                  data: {
-                    facturaId: factura.id,
-                    descripcion,
-                    cantidad,
-                    precioUnit,
-                    descuento,
-                    impuestoId,
-                    subtotal,
-                    totalImpuesto,
-                    totalRetencion: 0,
-                    total: lineTotal,
-                  }
-                })
-              } catch {
-                // Don't fail the whole invoice for a line error
-              }
-            }
-
-            facResult.imported++
-          } catch (e: any) {
-            if (e.code === 'P2002') facResult.skipped++
-            else facResult.errors.push(String(e))
+            sendProgress('facturas', i + 1, allRecords.length, 'importing')
           }
-          sendProgress('facturas', i + 1, allRecords.length, 'importing')
+        } else {
+          // Get all impuestos for matching
+          const impuestos = await db!.impuesto.findMany({ where: { activo: true } })
+
+          for (let i = 0; i < allRecords.length; i++) {
+            try {
+              const r = allRecords[i]
+              const serie = decodeDbfString(r.SERIE || r.serie) || 'F'
+              const numero = decodeDbfString(r.NUMERO || r.numero)
+              if (!numero) { facResult.skipped++; continue }
+
+              const fullNumero = `${serie}${numero}`
+
+              // Skip duplicate invoices
+              const existing = await db!.factura.findFirst({ where: { numero: fullNumero } })
+              if (existing) { facResult.skipped++; continue }
+
+              // Find or create client
+              let clienteId: number
+              const clientNif = decodeDbfString(r.CIFCLI || r.cifcli)
+              const clientName = decodeDbfString(r.NOMCLI || r.nomcli)
+
+              if (clientNif) {
+                const existingClient = await db!.cliente.findFirst({ where: { nif: clientNif } })
+                if (existingClient) {
+                  clienteId = existingClient.id
+                } else {
+                  const newClient = await db!.cliente.create({
+                    data: { nombre: clientName || 'Cliente importado', nif: clientNif }
+                  })
+                  clienteId = newClient.id
+                }
+              } else if (clientName) {
+                const existingClient = await db!.cliente.findFirst({ where: { nombre: clientName } })
+                if (existingClient) {
+                  clienteId = existingClient.id
+                } else {
+                  const newClient = await db!.cliente.create({
+                    data: { nombre: clientName }
+                  })
+                  clienteId = newClient.id
+                }
+              } else {
+                let generic = await db!.cliente.findFirst({ where: { nombre: 'Cliente ClassicGes' } })
+                if (!generic) {
+                  generic = await db!.cliente.create({ data: { nombre: 'Cliente ClassicGes' } })
+                }
+                clienteId = generic.id
+              }
+
+              const fecha = parseDbfDate(r.FECHA || r.fecha) || new Date()
+              const fechaVencimiento = parseDbfDate(r.FECHAVALOR || r.fechavalor) || null
+
+              const cobrado = dbfNumber(r.COBRADO || r.cobrado)
+              const total = dbfNumber(r.IMPORTE || r.importe)
+              let estado = 'emitida'
+              if (cobrado >= total && total > 0) estado = 'pagada'
+
+              const factura = await db!.factura.create({
+                data: {
+                  numero: fullNumero,
+                  serie,
+                  fecha,
+                  fechaVencimiento,
+                  clienteId,
+                  subtotal: dbfNumber(r.BIMPO || r.bimpo),
+                  totalImpuestos: dbfNumber(r.ITEIVA || r.iteiva),
+                  totalRetenciones: dbfNumber(r.RETENCION || r.retencion),
+                  total,
+                  estado,
+                }
+              })
+
+              // Import invoice lines
+              const snKey = `${serie}${numero}`
+              let lines: any[] = linesBySN.get(snKey) || []
+
+              if (lines.length === 0) {
+                const clessionKey = String(r.CLESSION || r.clession || '').trim()
+                const codigoKey = String(r.CODIGO || r.codigo || '').trim()
+                for (const fk of [clessionKey, codigoKey, snKey].filter(k => k !== '')) {
+                  if (linesByCLAFAC.has(fk)) {
+                    lines = linesByCLAFAC.get(fk)!
+                    break
+                  }
+                }
+              }
+
+              for (const lr of lines) {
+                try {
+                  const descripcion = decodeDbfString(lr.LINDESC || lr.lindesc) || 'Línea importada'
+                  const cantidad = dbfNumber(lr.CANTIDAD || lr.cantidad) || 1
+                  const precioUnit = dbfNumber(lr.PRECIO || lr.precio)
+                  const descuento = dbfNumber(lr.DTO || lr.dto)
+                  const ivaPercent = dbfNumber(lr.IVA || lr.iva)
+
+                  let impuestoId: number | null = null
+                  if (ivaPercent > 0) {
+                    const match = impuestos.find(imp => imp.tipo === 'IVA' && Math.abs(imp.porcentaje - ivaPercent) < 0.01)
+                    if (match) impuestoId = match.id
+                  }
+
+                  const subtotal = cantidad * precioUnit * (1 - descuento / 100)
+                  const totalImpuesto = impuestoId ? subtotal * ivaPercent / 100 : 0
+                  const lineTotal = subtotal + totalImpuesto
+
+                  await db!.lineaFactura.create({
+                    data: {
+                      facturaId: factura.id,
+                      descripcion,
+                      cantidad,
+                      precioUnit,
+                      descuento,
+                      impuestoId,
+                      subtotal,
+                      totalImpuesto,
+                      totalRetencion: 0,
+                      total: lineTotal,
+                    }
+                  })
+                } catch {
+                  // Don't fail the whole invoice for a line error
+                }
+              }
+
+              facResult.imported++
+            } catch (e: any) {
+              if (e.code === 'P2002') facResult.skipped++
+              else facResult.errors.push(String(e))
+            }
+            sendProgress('facturas', i + 1, allRecords.length, 'importing')
+          }
         }
       }
       results.facturas = facResult
@@ -5521,56 +5710,102 @@ ipcMain.handle('clasges:import', async (_, dirPath: string, entities: string[]) 
       const gasResult = { imported: 0, skipped: 0, errors: [] as string[] }
       const dbf = await openDbfFile(dirPath, 'gastos.dbf')
       if (dbf) {
-        // Build category mapping from tipgast
-        const catMap = new Map<string, number>()
-        const allCats = await db.categoriaGasto.findMany()
-        // Also try to load tipgast for CLATIPG mapping
-        const dbfTipg = await openDbfFile(dirPath, 'tipgast.dbf')
-        if (dbfTipg) {
-          let idx = 0
-          for await (const tr of dbfTipg) {
-            const tipNombre = decodeDbfString(tr.NOMBRE || tr.nombre)
-            const tipKey = String(tr.CLATIPG || tr.clatipg || tr.CODIGO || tr.codigo || idx).trim()
-            const matchedCat = allCats.find(c => c.nombre === tipNombre)
-            if (matchedCat && tipKey) {
-              catMap.set(tipKey, matchedCat.id)
-            }
-            idx++
-          }
-        }
-
         const allRecords: any[] = []
         for await (const r of dbf) allRecords.push(r)
         sendProgress('gastos', 0, allRecords.length, 'importing')
 
-        for (let i = 0; i < allRecords.length; i++) {
-          try {
-            const r = allRecords[i]
+        if (isCloud) {
+          const existingCats = await cloudApi.categoriasGasto.getAll()
+          // Build category mapping from tipgast
+          const catMap = new Map<string, number>()
+          const dbfTipg = await openDbfFile(dirPath, 'tipgast.dbf')
+          if (dbfTipg) {
+            let idx = 0
+            for await (const tr of dbfTipg) {
+              const tipNombre = decodeDbfString(tr.NOMBRE || tr.nombre)
+              const tipKey = String(tr.CLATIPG || tr.clatipg || tr.CODIGO || tr.codigo || idx).trim()
+              const matchedCat = existingCats.find((c: any) => c.nombre === tipNombre)
+              if (matchedCat && tipKey) {
+                catMap.set(tipKey, matchedCat.id)
+              }
+              idx++
+            }
+          }
+
+          const toCreate: any[] = []
+          for (const r of allRecords) {
             const descripcion = decodeDbfString(r.DESCRIP || r.descrip)
             if (!descripcion) { gasResult.skipped++; continue }
-
             const catKey = String(r.CLATIPG || r.clatipg || '').trim()
             const categoriaId = catMap.get(catKey) || null
-
-            await db.gasto.create({
-              data: {
-                descripcion,
-                monto: dbfNumber(r.IMPORTE || r.importe),
-                fecha: parseDbfDate(r.FECHA || r.fecha) || new Date(),
-                proveedor: decodeDbfString(r.NOMPRO || r.nompro) || null,
-                numeroFactura: decodeDbfString(r.NUMFACPROV || r.numfacprov) || null,
-                categoriaId,
-              }
+            toCreate.push({
+              descripcion,
+              monto: dbfNumber(r.IMPORTE || r.importe),
+              fecha: (parseDbfDate(r.FECHA || r.fecha) || new Date()).toISOString(),
+              proveedor: decodeDbfString(r.NOMPRO || r.nompro) || null,
+              numeroFactura: decodeDbfString(r.NUMFACPROV || r.numfacprov) || null,
+              categoriaId,
             })
-            gasResult.imported++
-          } catch (e: any) {
-            gasResult.errors.push(String(e))
           }
-          sendProgress('gastos', i + 1, allRecords.length, 'importing')
+
+          if (toCreate.length > 0) {
+            await cloudApi.batchCreateEntities('gasto', toCreate, (cur, tot) => {
+              sendProgress('gastos', cur, tot, 'importing')
+            })
+            gasResult.imported = toCreate.length
+          }
+        } else {
+          // Build category mapping from tipgast
+          const catMap = new Map<string, number>()
+          const allCats = await db!.categoriaGasto.findMany()
+          const dbfTipg = await openDbfFile(dirPath, 'tipgast.dbf')
+          if (dbfTipg) {
+            let idx = 0
+            for await (const tr of dbfTipg) {
+              const tipNombre = decodeDbfString(tr.NOMBRE || tr.nombre)
+              const tipKey = String(tr.CLATIPG || tr.clatipg || tr.CODIGO || tr.codigo || idx).trim()
+              const matchedCat = allCats.find(c => c.nombre === tipNombre)
+              if (matchedCat && tipKey) {
+                catMap.set(tipKey, matchedCat.id)
+              }
+              idx++
+            }
+          }
+
+          for (let i = 0; i < allRecords.length; i++) {
+            try {
+              const r = allRecords[i]
+              const descripcion = decodeDbfString(r.DESCRIP || r.descrip)
+              if (!descripcion) { gasResult.skipped++; continue }
+
+              const catKey = String(r.CLATIPG || r.clatipg || '').trim()
+              const categoriaId = catMap.get(catKey) || null
+
+              await db!.gasto.create({
+                data: {
+                  descripcion,
+                  monto: dbfNumber(r.IMPORTE || r.importe),
+                  fecha: parseDbfDate(r.FECHA || r.fecha) || new Date(),
+                  proveedor: decodeDbfString(r.NOMPRO || r.nompro) || null,
+                  numeroFactura: decodeDbfString(r.NUMFACPROV || r.numfacprov) || null,
+                  categoriaId,
+                }
+              })
+              gasResult.imported++
+            } catch (e: any) {
+              gasResult.errors.push(String(e))
+            }
+            sendProgress('gastos', i + 1, allRecords.length, 'importing')
+          }
         }
       }
       results.gastos = gasResult
       sendProgress('gastos', gasResult.imported + gasResult.skipped, gasResult.imported + gasResult.skipped, 'done')
+    }
+
+    // Invalidate all caches after import
+    if (isCloud) {
+      cloudApi.invalidateCache()
     }
 
     return { success: true, data: results }
@@ -5624,7 +5859,12 @@ function holdedDate(val: any): Date {
 // Save Holded API key (encrypted)
 ipcMain.handle('holded:saveApiKey', async (_, apiKey: string) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.configuracion.set('holded.apiKey', apiKey)
+      return { success: true }
+    }
+    const db = ctx.db
     const encrypted = safeStorage.encryptString(apiKey).toString('base64')
     await db.$executeRawUnsafe(
       `INSERT OR REPLACE INTO Configuracion (clave, valor) VALUES ('holded.apiKey', ?)`,
@@ -5639,7 +5879,12 @@ ipcMain.handle('holded:saveApiKey', async (_, apiKey: string) => {
 // Get Holded API key (decrypted)
 ipcMain.handle('holded:getApiKey', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      const val = await cloudApi.configuracion.get('holded.apiKey')
+      return { success: true, data: val }
+    }
+    const db = ctx.db
     const rows: any[] = await db.$queryRawUnsafe(
       `SELECT valor FROM Configuracion WHERE clave = 'holded.apiKey'`
     )
@@ -5654,7 +5899,12 @@ ipcMain.handle('holded:getApiKey', async () => {
 // Delete Holded API key
 ipcMain.handle('holded:deleteApiKey', async () => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') {
+      await cloudApi.configuracion.delete('holded.apiKey')
+      return { success: true }
+    }
+    const db = ctx.db
     await db.$executeRawUnsafe(`DELETE FROM Configuracion WHERE clave = 'holded.apiKey'`)
     return { success: true }
   } catch (error) {
@@ -5760,7 +6010,9 @@ ipcMain.handle('holded:preview', async (_, apiKey: string, entity: string) => {
 // Import data from Holded
 ipcMain.handle('holded:import', async (_, apiKey: string, entities: string[]) => {
   try {
-    const db = requireAuth()
+    const ctx = requireAuthOrCloud()
+    const isCloud = ctx.mode === 'cloud'
+    const db = isCloud ? null : ctx.db
     const results: Record<string, { imported: number; skipped: number; errors: string[] }> = {}
 
     const sendProgress = (entity: string, current: number, total: number, status: string) => {
@@ -5768,7 +6020,9 @@ ipcMain.handle('holded:import', async (_, apiKey: string, entities: string[]) =>
     }
 
     // Get all impuestos for matching
-    const impuestos = await db.impuesto.findMany({ where: { activo: true } })
+    const impuestos = isCloud
+      ? await cloudApi.impuestos.getAll()
+      : await db!.impuesto.findMany({ where: { activo: true } })
 
     // 1. Import clients
     if (entities.includes('clientes')) {
@@ -5776,39 +6030,73 @@ ipcMain.handle('holded:import', async (_, apiKey: string, entities: string[]) =>
       const contacts = await holdedGetAll(apiKey, '/contacts')
       sendProgress('clientes', 0, contacts.length, 'importing')
 
-      for (let i = 0; i < contacts.length; i++) {
-        try {
-          const c = contacts[i]
+      if (isCloud) {
+        const existingClients = await cloudApi.clientes.getAll()
+        const existingNifs = new Set(existingClients.filter((c: any) => c.nif).map((c: any) => c.nif))
+        const toCreate: any[] = []
+
+        for (const c of contacts) {
           const nombre = holdedSafeString(c.name || c.tradeName)
           if (!nombre) { cliResult.skipped++; continue }
-
           const nif = holdedSafeString(c.code)
-          if (nif) {
-            const existing = await db.cliente.findFirst({ where: { nif } })
-            if (existing) { cliResult.skipped++; continue }
-          }
-
+          if (nif && existingNifs.has(nif)) { cliResult.skipped++; continue }
+          if (nif) existingNifs.add(nif)
           const addr = c.billAddress || {}
-          await db.cliente.create({
-            data: {
-              nombre,
-              nif,
-              email: holdedSafeString(c.email),
-              telefono: holdedSafeString(c.mobile || c.phone),
-              direccion: holdedSafeString(addr.address),
-              ciudad: holdedSafeString(addr.city),
-              codigoPostal: holdedSafeString(addr.postalCode),
-              provincia: holdedSafeString(addr.province),
-              pais: holdedSafeString(addr.country) || 'España',
-              activo: true,
-            }
+          toCreate.push({
+            nombre,
+            nif,
+            email: holdedSafeString(c.email),
+            telefono: holdedSafeString(c.mobile || c.phone),
+            direccion: holdedSafeString(addr.address),
+            ciudad: holdedSafeString(addr.city),
+            codigoPostal: holdedSafeString(addr.postalCode),
+            provincia: holdedSafeString(addr.province),
+            pais: holdedSafeString(addr.country) || 'España',
+            activo: true,
           })
-          cliResult.imported++
-        } catch (e: any) {
-          if (e.code === 'P2002') cliResult.skipped++
-          else cliResult.errors.push(String(e))
         }
-        sendProgress('clientes', i + 1, contacts.length, 'importing')
+
+        if (toCreate.length > 0) {
+          await cloudApi.batchCreateEntities('cliente', toCreate, (cur, tot) => {
+            sendProgress('clientes', cur, tot, 'importing')
+          })
+          cliResult.imported = toCreate.length
+        }
+      } else {
+        for (let i = 0; i < contacts.length; i++) {
+          try {
+            const c = contacts[i]
+            const nombre = holdedSafeString(c.name || c.tradeName)
+            if (!nombre) { cliResult.skipped++; continue }
+
+            const nif = holdedSafeString(c.code)
+            if (nif) {
+              const existing = await db!.cliente.findFirst({ where: { nif } })
+              if (existing) { cliResult.skipped++; continue }
+            }
+
+            const addr = c.billAddress || {}
+            await db!.cliente.create({
+              data: {
+                nombre,
+                nif,
+                email: holdedSafeString(c.email),
+                telefono: holdedSafeString(c.mobile || c.phone),
+                direccion: holdedSafeString(addr.address),
+                ciudad: holdedSafeString(addr.city),
+                codigoPostal: holdedSafeString(addr.postalCode),
+                provincia: holdedSafeString(addr.province),
+                pais: holdedSafeString(addr.country) || 'España',
+                activo: true,
+              }
+            })
+            cliResult.imported++
+          } catch (e: any) {
+            if (e.code === 'P2002') cliResult.skipped++
+            else cliResult.errors.push(String(e))
+          }
+          sendProgress('clientes', i + 1, contacts.length, 'importing')
+        }
       }
       results.clientes = cliResult
       sendProgress('clientes', contacts.length, contacts.length, 'done')
@@ -5820,43 +6108,66 @@ ipcMain.handle('holded:import', async (_, apiKey: string, entities: string[]) =>
       const products = await holdedGetAll(apiKey, '/products')
       sendProgress('productos', 0, products.length, 'importing')
 
-      for (let i = 0; i < products.length; i++) {
-        try {
-          const p = products[i]
+      if (isCloud) {
+        const existingProds = await cloudApi.productos.getAll()
+        const existingCodigos = new Set(existingProds.filter((p: any) => p.codigo).map((p: any) => p.codigo))
+        const toCreate: any[] = []
+
+        for (const p of products) {
           const nombre = holdedSafeString(p.name)
           if (!nombre) { prodResult.skipped++; continue }
-
           const codigo = holdedSafeString(p.sku) || holdedSafeString(p.id)
-          if (codigo) {
-            const existing = await db.producto.findFirst({ where: { codigo } })
-            if (existing) { prodResult.skipped++; continue }
-          }
+          if (codigo && existingCodigos.has(codigo)) { prodResult.skipped++; continue }
+          if (codigo) existingCodigos.add(codigo)
 
           const tipo = ['service', 'digital'].includes(p.kind) ? 'servicio' : 'producto'
           const taxPercent = holdedSafeNumber(p.tax)
           let impuestoId: number | null = null
           if (taxPercent > 0) {
-            const match = impuestos.find(imp => imp.tipo === 'IVA' && Math.abs(imp.porcentaje - taxPercent) < 0.01)
+            const match = impuestos.find((imp: any) => imp.tipo === 'IVA' && Math.abs(imp.porcentaje - taxPercent) < 0.01)
             if (match) impuestoId = match.id
           }
 
-          await db.producto.create({
-            data: {
-              codigo,
-              nombre,
-              descripcion: holdedSafeString(p.desc),
-              tipo,
-              precioBase: holdedSafeNumber(p.price),
-              impuestoId,
-              activo: true,
-            }
-          })
-          prodResult.imported++
-        } catch (e: any) {
-          if (e.code === 'P2002') prodResult.skipped++
-          else prodResult.errors.push(String(e))
+          toCreate.push({ codigo, nombre, descripcion: holdedSafeString(p.desc), tipo, precioBase: holdedSafeNumber(p.price), impuestoId, activo: true })
         }
-        sendProgress('productos', i + 1, products.length, 'importing')
+
+        if (toCreate.length > 0) {
+          await cloudApi.batchCreateEntities('producto', toCreate, (cur, tot) => {
+            sendProgress('productos', cur, tot, 'importing')
+          })
+          prodResult.imported = toCreate.length
+        }
+      } else {
+        for (let i = 0; i < products.length; i++) {
+          try {
+            const p = products[i]
+            const nombre = holdedSafeString(p.name)
+            if (!nombre) { prodResult.skipped++; continue }
+
+            const codigo = holdedSafeString(p.sku) || holdedSafeString(p.id)
+            if (codigo) {
+              const existing = await db!.producto.findFirst({ where: { codigo } })
+              if (existing) { prodResult.skipped++; continue }
+            }
+
+            const tipo = ['service', 'digital'].includes(p.kind) ? 'servicio' : 'producto'
+            const taxPercent = holdedSafeNumber(p.tax)
+            let impuestoId: number | null = null
+            if (taxPercent > 0) {
+              const match = impuestos.find((imp: any) => imp.tipo === 'IVA' && Math.abs(imp.porcentaje - taxPercent) < 0.01)
+              if (match) impuestoId = match.id
+            }
+
+            await db!.producto.create({
+              data: { codigo, nombre, descripcion: holdedSafeString(p.desc), tipo, precioBase: holdedSafeNumber(p.price), impuestoId, activo: true }
+            })
+            prodResult.imported++
+          } catch (e: any) {
+            if (e.code === 'P2002') prodResult.skipped++
+            else prodResult.errors.push(String(e))
+          }
+          sendProgress('productos', i + 1, products.length, 'importing')
+        }
       }
       results.productos = prodResult
       sendProgress('productos', products.length, products.length, 'done')
@@ -5868,99 +6179,150 @@ ipcMain.handle('holded:import', async (_, apiKey: string, entities: string[]) =>
       const invoices = await holdedGetAll(apiKey, '/documents/invoice')
       sendProgress('facturas', 0, invoices.length, 'importing')
 
-      for (let i = 0; i < invoices.length; i++) {
-        try {
-          const inv = invoices[i]
-          const docNumber = holdedSafeString(inv.docNumber)
-          if (!docNumber) { facResult.skipped++; continue }
+      if (isCloud) {
+        const existingFacturas = await cloudApi.facturas.getAll()
+        const existingNumeros = new Set(existingFacturas.map((f: any) => f.numero))
+        const existingClientes = await cloudApi.clientes.getAll()
+        const clienteCache = new Map<string, number>()
+        for (const c of existingClientes) {
+          clienteCache.set(`name:${c.nombre}`, c.id)
+        }
 
-          const numero = `H${docNumber}`
-          const existing = await db.factura.findFirst({ where: { numero } })
-          if (existing) { facResult.skipped++; continue }
+        for (let i = 0; i < invoices.length; i++) {
+          try {
+            const inv = invoices[i]
+            const docNumber = holdedSafeString(inv.docNumber)
+            if (!docNumber) { facResult.skipped++; continue }
 
-          // Find or create client
-          let clienteId: number
-          const contactName = holdedSafeString(inv.contactName)
-          if (contactName) {
-            const existingClient = await db.cliente.findFirst({ where: { nombre: contactName } })
-            if (existingClient) {
-              clienteId = existingClient.id
+            const numero = `H${docNumber}`
+            if (existingNumeros.has(numero)) { facResult.skipped++; continue }
+            existingNumeros.add(numero)
+
+            // Find or create client
+            let clienteId: number
+            const contactName = holdedSafeString(inv.contactName)
+            if (contactName && clienteCache.has(`name:${contactName}`)) {
+              clienteId = clienteCache.get(`name:${contactName}`)!
             } else {
-              const newClient = await db.cliente.create({ data: { nombre: contactName } })
-              clienteId = newClient.id
+              const newCli = await cloudApi.clientes.create({ nombre: contactName || 'Cliente Holded', activo: true, pais: 'España' })
+              clienteCache.set(`name:${newCli.nombre}`, newCli.id)
+              clienteId = newCli.id
             }
-          } else {
-            let generic = await db.cliente.findFirst({ where: { nombre: 'Cliente Holded' } })
-            if (!generic) {
-              generic = await db.cliente.create({ data: { nombre: 'Cliente Holded' } })
+
+            const statusMap: Record<number, string> = { 0: 'borrador', 1: 'emitida', 2: 'pagada', 3: 'anulada' }
+            const estado = statusMap[Number(inv.status)] || 'emitida'
+
+            // Build lines data
+            const lineasData = Array.isArray(inv.products) ? inv.products.map((line: any) => {
+              const descripcion = holdedSafeString(line.name) || 'Línea importada'
+              const cantidad = holdedSafeNumber(line.units) || 1
+              const precioUnit = holdedSafeNumber(line.price)
+              const descuento = holdedSafeNumber(line.discount)
+              const lineTaxPercent = holdedSafeNumber(line.tax)
+              let lineImpuestoId: number | null = null
+              if (lineTaxPercent > 0) {
+                const match = impuestos.find((imp: any) => imp.tipo === 'IVA' && Math.abs(imp.porcentaje - lineTaxPercent) < 0.01)
+                if (match) lineImpuestoId = match.id
+              }
+              const subtotal = cantidad * precioUnit * (1 - descuento / 100)
+              const totalImpuesto = lineImpuestoId ? subtotal * lineTaxPercent / 100 : 0
+              return { descripcion, cantidad, precioUnit, descuento, impuestoId: lineImpuestoId, subtotal, totalImpuesto, totalRetencion: 0, total: subtotal + totalImpuesto }
+            }) : []
+
+            const factura = await cloudApi.facturas.create({
+              numero, serie: 'H', fecha: holdedDate(inv.date).toISOString(), clienteId,
+              subtotal: holdedSafeNumber(inv.subtotal), totalImpuestos: holdedSafeNumber(inv.tax),
+              totalRetenciones: 0, total: holdedSafeNumber(inv.total), estado, lineas: lineasData,
+            })
+
+            if (lineasData.length > 0) {
+              await cloudApi.batchCreateEntities('lineaFactura', lineasData.map((l: any) => ({ ...l, facturaId: factura.id })))
             }
-            clienteId = generic.id
+
+            facResult.imported++
+          } catch (e: any) {
+            facResult.errors.push(String(e))
           }
+          sendProgress('facturas', i + 1, invoices.length, 'importing')
+        }
+      } else {
+        for (let i = 0; i < invoices.length; i++) {
+          try {
+            const inv = invoices[i]
+            const docNumber = holdedSafeString(inv.docNumber)
+            if (!docNumber) { facResult.skipped++; continue }
 
-          // Map status: 0=borrador, 1=emitida, 2=pagada, 3=anulada
-          const statusMap: Record<number, string> = { 0: 'borrador', 1: 'emitida', 2: 'pagada', 3: 'anulada' }
-          const estado = statusMap[Number(inv.status)] || 'emitida'
+            const numero = `H${docNumber}`
+            const existing = await db!.factura.findFirst({ where: { numero } })
+            if (existing) { facResult.skipped++; continue }
 
-          const factura = await db.factura.create({
-            data: {
-              numero,
-              serie: 'H',
-              fecha: holdedDate(inv.date),
-              clienteId,
-              subtotal: holdedSafeNumber(inv.subtotal),
-              totalImpuestos: holdedSafeNumber(inv.tax),
-              totalRetenciones: 0,
-              total: holdedSafeNumber(inv.total),
-              estado,
+            let clienteId: number
+            const contactName = holdedSafeString(inv.contactName)
+            if (contactName) {
+              const existingClient = await db!.cliente.findFirst({ where: { nombre: contactName } })
+              if (existingClient) {
+                clienteId = existingClient.id
+              } else {
+                const newClient = await db!.cliente.create({ data: { nombre: contactName } })
+                clienteId = newClient.id
+              }
+            } else {
+              let generic = await db!.cliente.findFirst({ where: { nombre: 'Cliente Holded' } })
+              if (!generic) {
+                generic = await db!.cliente.create({ data: { nombre: 'Cliente Holded' } })
+              }
+              clienteId = generic.id
             }
-          })
 
-          // Import invoice lines
-          if (Array.isArray(inv.products)) {
-            for (const line of inv.products) {
-              try {
-                const descripcion = holdedSafeString(line.name) || 'Línea importada'
-                const cantidad = holdedSafeNumber(line.units) || 1
-                const precioUnit = holdedSafeNumber(line.price)
-                const descuento = holdedSafeNumber(line.discount)
-                const lineTaxPercent = holdedSafeNumber(line.tax)
+            const statusMap: Record<number, string> = { 0: 'borrador', 1: 'emitida', 2: 'pagada', 3: 'anulada' }
+            const estado = statusMap[Number(inv.status)] || 'emitida'
 
-                let lineImpuestoId: number | null = null
-                if (lineTaxPercent > 0) {
-                  const match = impuestos.find(imp => imp.tipo === 'IVA' && Math.abs(imp.porcentaje - lineTaxPercent) < 0.01)
-                  if (match) lineImpuestoId = match.id
-                }
+            const factura = await db!.factura.create({
+              data: {
+                numero, serie: 'H', fecha: holdedDate(inv.date), clienteId,
+                subtotal: holdedSafeNumber(inv.subtotal), totalImpuestos: holdedSafeNumber(inv.tax),
+                totalRetenciones: 0, total: holdedSafeNumber(inv.total), estado,
+              }
+            })
 
-                const subtotal = cantidad * precioUnit * (1 - descuento / 100)
-                const totalImpuesto = lineImpuestoId ? subtotal * lineTaxPercent / 100 : 0
-                const lineTotal = subtotal + totalImpuesto
+            if (Array.isArray(inv.products)) {
+              for (const line of inv.products) {
+                try {
+                  const descripcion = holdedSafeString(line.name) || 'Línea importada'
+                  const cantidad = holdedSafeNumber(line.units) || 1
+                  const precioUnit = holdedSafeNumber(line.price)
+                  const descuento = holdedSafeNumber(line.discount)
+                  const lineTaxPercent = holdedSafeNumber(line.tax)
 
-                await db.lineaFactura.create({
-                  data: {
-                    facturaId: factura.id,
-                    descripcion,
-                    cantidad,
-                    precioUnit,
-                    descuento,
-                    impuestoId: lineImpuestoId,
-                    subtotal,
-                    totalImpuesto,
-                    totalRetencion: 0,
-                    total: lineTotal,
+                  let lineImpuestoId: number | null = null
+                  if (lineTaxPercent > 0) {
+                    const match = impuestos.find((imp: any) => imp.tipo === 'IVA' && Math.abs(imp.porcentaje - lineTaxPercent) < 0.01)
+                    if (match) lineImpuestoId = match.id
                   }
-                })
-              } catch {
-                // Don't fail the whole invoice for a line error
+
+                  const subtotal = cantidad * precioUnit * (1 - descuento / 100)
+                  const totalImpuesto = lineImpuestoId ? subtotal * lineTaxPercent / 100 : 0
+                  const lineTotal = subtotal + totalImpuesto
+
+                  await db!.lineaFactura.create({
+                    data: {
+                      facturaId: factura.id, descripcion, cantidad, precioUnit, descuento,
+                      impuestoId: lineImpuestoId, subtotal, totalImpuesto, totalRetencion: 0, total: lineTotal,
+                    }
+                  })
+                } catch {
+                  // Don't fail the whole invoice for a line error
+                }
               }
             }
-          }
 
-          facResult.imported++
-        } catch (e: any) {
-          if (e.code === 'P2002') facResult.skipped++
-          else facResult.errors.push(String(e))
+            facResult.imported++
+          } catch (e: any) {
+            if (e.code === 'P2002') facResult.skipped++
+            else facResult.errors.push(String(e))
+          }
+          sendProgress('facturas', i + 1, invoices.length, 'importing')
         }
-        sendProgress('facturas', i + 1, invoices.length, 'importing')
       }
       results.facturas = facResult
       sendProgress('facturas', invoices.length, invoices.length, 'done')
@@ -5972,52 +6334,95 @@ ipcMain.handle('holded:import', async (_, apiKey: string, entities: string[]) =>
       const purchases = await holdedGetAll(apiKey, '/documents/purchase')
       sendProgress('gastos', 0, purchases.length, 'importing')
 
-      // Find or create "Holded" category
-      let holdedCat = await db.categoriaGasto.findFirst({ where: { nombre: 'Holded' } })
-      if (!holdedCat) {
-        holdedCat = await db.categoriaGasto.create({
-          data: { nombre: 'Holded', color: '#0ea5e9', icono: 'cloud' }
-        })
-      }
+      if (isCloud) {
+        // Find or create "Holded" category
+        const existingCats = await cloudApi.categoriasGasto.getAll()
+        let holdedCat = existingCats.find((c: any) => c.nombre === 'Holded')
+        if (!holdedCat) {
+          holdedCat = await cloudApi.categoriasGasto.create({ nombre: 'Holded', color: '#0ea5e9', icono: 'cloud' })
+        }
 
-      for (let i = 0; i < purchases.length; i++) {
-        try {
-          const pur = purchases[i]
+        const existingGastos = await cloudApi.gastos.getAll()
+        const existingKeys = new Set(existingGastos.filter((g: any) => g.numeroFactura).map((g: any) => `${g.numeroFactura}|${g.proveedor || ''}`))
+        const toCreate: any[] = []
+
+        for (const pur of purchases) {
           const docNumber = holdedSafeString(pur.docNumber) || ''
           const proveedor = holdedSafeString(pur.contactName) || null
-
-          // Dedup by numeroFactura + proveedor
-          if (docNumber) {
-            const existing = await db.gasto.findFirst({
-              where: { numeroFactura: docNumber, proveedor: proveedor || undefined }
-            })
-            if (existing) { gasResult.skipped++; continue }
-          }
+          if (docNumber && existingKeys.has(`${docNumber}|${proveedor || ''}`)) { gasResult.skipped++; continue }
 
           const descripcion = Array.isArray(pur.products)
             ? pur.products.map((p: any) => p.name || '').filter(Boolean).join(', ') || 'Gasto importado de Holded'
             : 'Gasto importado de Holded'
 
-          await db.gasto.create({
-            data: {
-              descripcion: descripcion.substring(0, 500),
-              categoriaId: holdedCat.id,
-              monto: holdedSafeNumber(pur.total),
-              impuestoIncluido: true,
-              fecha: holdedDate(pur.date),
-              proveedor,
-              numeroFactura: docNumber || null,
-            }
+          toCreate.push({
+            descripcion: descripcion.substring(0, 500),
+            categoriaId: holdedCat.id,
+            monto: holdedSafeNumber(pur.total),
+            impuestoIncluido: true,
+            fecha: holdedDate(pur.date).toISOString(),
+            proveedor,
+            numeroFactura: docNumber || null,
           })
-          gasResult.imported++
-        } catch (e: any) {
-          if (e.code === 'P2002') gasResult.skipped++
-          else gasResult.errors.push(String(e))
         }
-        sendProgress('gastos', i + 1, purchases.length, 'importing')
+
+        if (toCreate.length > 0) {
+          await cloudApi.batchCreateEntities('gasto', toCreate, (cur, tot) => {
+            sendProgress('gastos', cur, tot, 'importing')
+          })
+          gasResult.imported = toCreate.length
+        }
+      } else {
+        let holdedCat = await db!.categoriaGasto.findFirst({ where: { nombre: 'Holded' } })
+        if (!holdedCat) {
+          holdedCat = await db!.categoriaGasto.create({
+            data: { nombre: 'Holded', color: '#0ea5e9', icono: 'cloud' }
+          })
+        }
+
+        for (let i = 0; i < purchases.length; i++) {
+          try {
+            const pur = purchases[i]
+            const docNumber = holdedSafeString(pur.docNumber) || ''
+            const proveedor = holdedSafeString(pur.contactName) || null
+
+            if (docNumber) {
+              const existing = await db!.gasto.findFirst({
+                where: { numeroFactura: docNumber, proveedor: proveedor || undefined }
+              })
+              if (existing) { gasResult.skipped++; continue }
+            }
+
+            const descripcion = Array.isArray(pur.products)
+              ? pur.products.map((p: any) => p.name || '').filter(Boolean).join(', ') || 'Gasto importado de Holded'
+              : 'Gasto importado de Holded'
+
+            await db!.gasto.create({
+              data: {
+                descripcion: descripcion.substring(0, 500),
+                categoriaId: holdedCat.id,
+                monto: holdedSafeNumber(pur.total),
+                impuestoIncluido: true,
+                fecha: holdedDate(pur.date),
+                proveedor,
+                numeroFactura: docNumber || null,
+              }
+            })
+            gasResult.imported++
+          } catch (e: any) {
+            if (e.code === 'P2002') gasResult.skipped++
+            else gasResult.errors.push(String(e))
+          }
+          sendProgress('gastos', i + 1, purchases.length, 'importing')
+        }
       }
       results.gastos = gasResult
       sendProgress('gastos', purchases.length, purchases.length, 'done')
+    }
+
+    // Invalidate all caches after import
+    if (isCloud) {
+      cloudApi.invalidateCache()
     }
 
     return { success: true, data: results }

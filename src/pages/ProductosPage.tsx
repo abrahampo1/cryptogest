@@ -168,6 +168,16 @@ export function ProductosPage({ onHelp, initialItemId }: { onHelp?: () => void; 
     loadData()
   }, [])
 
+  // Re-load when cloud entities update in background
+  useEffect(() => {
+    const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
+      if (['producto', 'impuesto'].includes(data.entityType)) {
+        loadData()
+      }
+    })
+    return () => { unsub?.() }
+  }, [])
+
   const loadData = async () => {
     setIsLoading(true)
     try {

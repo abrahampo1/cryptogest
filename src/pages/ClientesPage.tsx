@@ -97,6 +97,16 @@ export function ClientesPage({ onHelp, initialItemId }: { onHelp?: () => void; i
     loadClientes()
   }, [])
 
+  // Re-load when cloud entities update in background
+  useEffect(() => {
+    const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
+      if (['cliente', 'factura'].includes(data.entityType)) {
+        loadClientes()
+      }
+    })
+    return () => { unsub?.() }
+  }, [])
+
   const loadClientes = async () => {
     try {
       setIsLoading(true)

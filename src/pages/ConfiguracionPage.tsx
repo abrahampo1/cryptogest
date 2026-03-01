@@ -1928,7 +1928,6 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle, isCloud
           )}
 
           {/* Importar Datos Externos */}
-          {!isCloudEmpresa && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -1984,7 +1983,6 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle, isCloud
               </div>
             </CardContent>
           </Card>
-          )}
 
           {/* Ubicación de Datos */}
           {!isCloudEmpresa && (

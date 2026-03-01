@@ -102,6 +102,16 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
     loadEjercicios()
   }, [])
 
+  // Re-load when cloud entities update in background
+  useEffect(() => {
+    const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
+      if (['factura', 'gasto', 'impuesto'].includes(data.entityType)) {
+        loadEjercicios()
+      }
+    })
+    return () => { unsub?.() }
+  }, [])
+
   const loadEjercicios = async () => {
     setIsLoadingEjercicios(true)
     try {

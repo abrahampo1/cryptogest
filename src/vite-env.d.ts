@@ -654,6 +654,8 @@ interface ElectronAPI {
     sendEmail: (cuentaId: number, data: BuzonSendData) => Promise<ApiResponse<void>>
   }
 
+  onEntityUpdated: (callback: (data: { entityType: string }) => void) => () => void
+
   clasges: {
     selectFolder: () => Promise<ApiResponse<{ path: string }>>
     scan: (dirPath: string) => Promise<ApiResponse<Record<string, { found: boolean; count: number }>>>

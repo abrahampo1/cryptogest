@@ -150,6 +150,16 @@ export function FacturasPage({ onHelp, initialItemId }: { onHelp?: () => void; i
     loadData()
   }, [])
 
+  // Re-load when cloud entities update in background
+  useEffect(() => {
+    const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
+      if (['factura', 'cliente', 'lineaFactura', 'impuesto'].includes(data.entityType)) {
+        loadData()
+      }
+    })
+    return () => { unsub?.() }
+  }, [])
+
   const loadData = async () => {
     try {
       setIsLoading(true)

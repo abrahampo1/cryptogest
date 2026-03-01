@@ -167,6 +167,16 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
     loadInitialData()
   }, [])
 
+  // Re-load when cloud entities update in background
+  useEffect(() => {
+    const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
+      if (['asiento', 'lineaAsiento', 'cuentaContable', 'ejercicioFiscal'].includes(data.entityType)) {
+        loadInitialData()
+      }
+    })
+    return () => { unsub?.() }
+  }, [])
+
   const loadInitialData = async () => {
     try {
       setIsLoading(true)

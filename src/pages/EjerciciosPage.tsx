@@ -71,6 +71,16 @@ export function EjerciciosPage({ onHelp }: { onHelp?: () => void }) {
     loadEjercicios()
   }, [])
 
+  // Re-load when cloud entities update in background
+  useEffect(() => {
+    const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
+      if (data.entityType === 'ejercicioFiscal') {
+        loadEjercicios()
+      }
+    })
+    return () => { unsub?.() }
+  }, [])
+
   useEffect(() => {
     if (selectedEjercicioId) {
       loadStats(selectedEjercicioId)

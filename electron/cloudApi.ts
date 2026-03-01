@@ -1,4 +1,4 @@
-import { net } from 'electron'
+import { net, BrowserWindow } from 'electron'
 import * as nodeCrypto from 'crypto'
 
 // ============================================
@@ -104,6 +104,142 @@ const reverseIdMaps = new Map<string, Map<string, number>>()
 const idCounters = new Map<string, number>()
 
 // ============================================
+// Entity Cache
+// ============================================
+
+interface EntityCache {
+  entities: any[]
+  lastSyncAt: string
+  populated: boolean
+}
+
+const entityCaches = new Map<string, EntityCache>()
+const syncInProgress = new Set<string>()
+let _mainWindow: BrowserWindow | null = null
+let fullRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+const FULL_REFRESH_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
+
+export function setCacheMainWindow(win: BrowserWindow | null): void {
+  _mainWindow = win
+  if (win) {
+    // Start periodic full refresh timer
+    if (fullRefreshTimer) clearInterval(fullRefreshTimer)
+    fullRefreshTimer = setInterval(() => {
+      invalidateCache()
+    }, FULL_REFRESH_INTERVAL_MS)
+  } else {
+    if (fullRefreshTimer) {
+      clearInterval(fullRefreshTimer)
+      fullRefreshTimer = null
+    }
+  }
+}
+
+export function invalidateCache(entityType?: string): void {
+  if (entityType) {
+    entityCaches.delete(entityType)
+  } else {
+    entityCaches.clear()
+  }
+}
+
+function getCacheForType(entityType: string): EntityCache | undefined {
+  return entityCaches.get(entityType)
+}
+
+function setCacheForType(entityType: string, entities: any[]): void {
+  entityCaches.set(entityType, {
+    entities,
+    lastSyncAt: new Date().toISOString(),
+    populated: true,
+  })
+}
+
+function updateCacheEntity(entityType: string, entity: any): void {
+  const cache = entityCaches.get(entityType)
+  if (!cache || !cache.populated) return
+  const idx = cache.entities.findIndex((e: any) => e._uuid === entity._uuid)
+  if (idx >= 0) {
+    cache.entities[idx] = entity
+  } else {
+    cache.entities.push(entity)
+  }
+}
+
+function removeCacheEntity(entityType: string, uuid: string): void {
+  const cache = entityCaches.get(entityType)
+  if (!cache || !cache.populated) return
+  cache.entities = cache.entities.filter((e: any) => e._uuid !== uuid)
+}
+
+async function triggerBackgroundSync(entityType: string): Promise<void> {
+  if (!config) return
+  if (syncInProgress.has(entityType)) return
+
+  const cache = entityCaches.get(entityType)
+  if (!cache || !cache.populated) return
+
+  syncInProgress.add(entityType)
+  try {
+    const cfg = requireConfig()
+    const result = await makeRequest<{ data: ServerEntity[]; deleted?: string[] }>({
+      method: 'GET',
+      path: `/api/v1/empresas/${cfg.empresaId}/entities/sync?since=${encodeURIComponent(cache.lastSyncAt)}&type=${encodeURIComponent(entityType)}`,
+    })
+
+    let hasChanges = false
+
+    // Apply updated entities
+    if (result.data && result.data.length > 0) {
+      for (const serverEntity of result.data) {
+        const decrypted = decryptEntity({
+          encrypted_data: serverEntity.encrypted_data,
+          iv: serverEntity.iv,
+          auth_tag: serverEntity.auth_tag,
+        })
+        decrypted._uuid = serverEntity.entity_uuid
+
+        // Re-register ID mapping
+        if (decrypted.id) {
+          registerEntity(entityType, decrypted.id, decrypted._uuid)
+        }
+
+        updateCacheEntity(entityType, decrypted)
+      }
+      hasChanges = true
+    }
+
+    // Apply deletions
+    if (result.deleted && result.deleted.length > 0) {
+      for (const deletedUuid of result.deleted) {
+        // Clean up ID maps
+        const reverseMap = getReverseIdMap(entityType)
+        const localId = reverseMap.get(deletedUuid)
+        if (localId !== undefined) {
+          getIdMap(entityType).delete(localId)
+          reverseMap.delete(deletedUuid)
+        }
+        removeCacheEntity(entityType, deletedUuid)
+      }
+      hasChanges = true
+    }
+
+    // Update lastSyncAt
+    cache.lastSyncAt = new Date().toISOString()
+
+    // Notify renderer if changes
+    if (hasChanges && _mainWindow && !_mainWindow.isDestroyed()) {
+      _mainWindow.webContents.send('cloud:entity-updated', { entityType })
+    }
+  } catch {
+    // Silently fail background sync — next navigation will retry
+  } finally {
+    syncInProgress.delete(entityType)
+  }
+}
+
+// ============================================
 // Configuration
 // ============================================
 
@@ -125,6 +261,12 @@ export function clearCloudApiConfig(): void {
   idMaps.clear()
   reverseIdMaps.clear()
   idCounters.clear()
+  entityCaches.clear()
+  syncInProgress.clear()
+  if (fullRefreshTimer) {
+    clearInterval(fullRefreshTimer)
+    fullRefreshTimer = null
+  }
 }
 
 // ============================================
@@ -372,7 +514,7 @@ function buildIdMapsFromEntities(entityType: string, entities: any[]): void {
 // Generic Entity CRUD
 // ============================================
 
-async function getAllEntities(entityType: string): Promise<any[]> {
+async function fetchAllEntitiesFromServer(entityType: string): Promise<any[]> {
   const cfg = requireConfig()
   const result = await makeRequest<{ data: ServerEntity[] }>({
     method: 'GET',
@@ -393,7 +535,23 @@ async function getAllEntities(entityType: string): Promise<any[]> {
   // Rebuild ID maps from decrypted entities
   buildIdMapsFromEntities(entityType, entities)
 
+  // Update cache
+  setCacheForType(entityType, entities)
+
   return entities
+}
+
+async function getAllEntities(entityType: string): Promise<any[]> {
+  const cached = getCacheForType(entityType)
+
+  if (cached && cached.populated) {
+    // Return cached data immediately, trigger background sync
+    triggerBackgroundSync(entityType)
+    return [...cached.entities]
+  }
+
+  // No cache — full fetch
+  return fetchAllEntitiesFromServer(entityType)
 }
 
 async function getEntity(_entityType: string, uuid: string): Promise<any> {
@@ -433,6 +591,10 @@ async function createEntity(entityType: string, data: any): Promise<any> {
   })
 
   registerEntity(entityType, localId, uuid)
+
+  // Optimistic cache update
+  updateCacheEntity(entityType, entityData)
+
   return entityData
 }
 
@@ -441,8 +603,15 @@ async function updateEntity(entityType: string, localId: number, data: any): Pro
   const uuid = getUuidById(entityType, localId)
   if (!uuid) throw new Error(`Entity not found: ${entityType}#${localId}`)
 
-  // Fetch current data, merge with updates
-  const current = await getEntity(entityType, uuid)
+  // Fetch current data from cache first, fallback to server
+  const cache = getCacheForType(entityType)
+  let current: any
+  if (cache && cache.populated) {
+    current = cache.entities.find((e: any) => e._uuid === uuid)
+  }
+  if (!current) {
+    current = await getEntity(entityType, uuid)
+  }
   const updated = { ...current, ...data, id: localId, _uuid: uuid, updatedAt: new Date().toISOString() }
   const blob = encryptEntity(updated)
 
@@ -452,6 +621,9 @@ async function updateEntity(entityType: string, localId: number, data: any): Pro
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(blob),
   })
+
+  // Optimistic cache update
+  updateCacheEntity(entityType, updated)
 
   return updated
 }
@@ -468,6 +640,63 @@ async function deleteEntity(entityType: string, localId: number): Promise<void> 
 
   getIdMap(entityType).delete(localId)
   getReverseIdMap(entityType).delete(uuid)
+
+  // Optimistic cache update
+  removeCacheEntity(entityType, uuid)
+}
+
+// ============================================
+// Batch Create (for imports)
+// ============================================
+
+export async function batchCreateEntities(
+  entityType: string,
+  dataArray: any[],
+  onProgress?: (current: number, total: number) => void
+): Promise<any[]> {
+  const cfg = requireConfig()
+  const CHUNK_SIZE = 50
+  const allCreated: any[] = []
+
+  for (let i = 0; i < dataArray.length; i += CHUNK_SIZE) {
+    const chunk = dataArray.slice(i, i + CHUNK_SIZE)
+
+    const encryptedEntities = chunk.map((data) => {
+      const uuid = nodeCrypto.randomUUID()
+      const localId = getNextId(entityType)
+      const entityData = { ...data, id: localId, _uuid: uuid, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      const blob = encryptEntity(entityData)
+
+      registerEntity(entityType, localId, uuid)
+      allCreated.push(entityData)
+
+      return {
+        entity_type: entityType,
+        entity_uuid: uuid,
+        ...blob,
+      }
+    })
+
+    await makeRequest<any>({
+      method: 'POST',
+      path: `/api/v1/empresas/${cfg.empresaId}/entities/batch`,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entities: encryptedEntities }),
+      timeout: 60000,
+    })
+
+    if (onProgress) {
+      onProgress(Math.min(i + CHUNK_SIZE, dataArray.length), dataArray.length)
+    }
+  }
+
+  // Update cache with all created entities
+  const cache = getCacheForType(entityType)
+  if (cache && cache.populated) {
+    cache.entities.push(...allCreated)
+  }
+
+  return allCreated
 }
 
 // ============================================

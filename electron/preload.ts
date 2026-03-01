@@ -353,6 +353,12 @@ const electronAPI = {
     },
   },
 
+  // Cloud entity sync events
+  onEntityUpdated: (callback: (data: { entityType: string }) => void) => {
+    ipcRenderer.on('cloud:entity-updated', (_, data) => callback(data))
+    return () => { ipcRenderer.removeAllListeners('cloud:entity-updated') }
+  },
+
   // Buzón de Correo
   buzon: {
     addAccount: (data: any) => ipcRenderer.invoke('buzon:addAccount', data) as Promise<ApiResponse<any>>,

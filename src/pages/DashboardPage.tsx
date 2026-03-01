@@ -44,6 +44,16 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
     loadDashboardData()
   }, [])
 
+  // Re-load when cloud entities update in background
+  useEffect(() => {
+    const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
+      if (['cliente', 'factura', 'gasto'].includes(data.entityType)) {
+        loadDashboardData()
+      }
+    })
+    return () => { unsub?.() }
+  }, [])
+
   const loadDashboardData = async () => {
     setIsLoading(true)
     try {

@@ -160,6 +160,16 @@ export function GastosPage({ onHelp, initialItemId }: { onHelp?: () => void; ini
     loadData()
   }, [])
 
+  // Re-load when cloud entities update in background
+  useEffect(() => {
+    const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
+      if (['gasto', 'categoriaGasto', 'impuesto'].includes(data.entityType)) {
+        loadData()
+      }
+    })
+    return () => { unsub?.() }
+  }, [])
+
   const loadData = async () => {
     try {
       setIsLoading(true)
