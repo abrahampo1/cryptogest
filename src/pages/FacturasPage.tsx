@@ -154,15 +154,15 @@ export function FacturasPage({ onHelp, initialItemId }: { onHelp?: () => void; i
   useEffect(() => {
     const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
       if (['factura', 'cliente', 'lineaFactura', 'impuesto'].includes(data.entityType)) {
-        loadData()
+        loadData(false)
       }
     })
     return () => { unsub?.() }
   }, [])
 
-  const loadData = async () => {
+  const loadData = async (showLoading = true) => {
     try {
-      setIsLoading(true)
+      if (showLoading) setIsLoading(true)
       const [facturasRes, clientesRes, productosRes, impuestosRes] = await Promise.all([
         window.electronAPI?.facturas.getAll(),
         window.electronAPI?.clientes.getAll(),
@@ -209,8 +209,8 @@ export function FacturasPage({ onHelp, initialItemId }: { onHelp?: () => void; i
 
   const filteredFacturas = facturas.filter((factura) => {
     const matchesSearch =
-      factura.numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      factura.cliente?.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+      (factura.numero ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (factura.cliente?.nombre ?? '').toLowerCase().includes(searchTerm.toLowerCase())
     const matchesEstado = filterEstado === "todas" || factura.estado === filterEstado
     const matchesCliente = filterClienteId === "todos" || factura.clienteId === Number(filterClienteId)
     const facturaDate = new Date(factura.fecha)

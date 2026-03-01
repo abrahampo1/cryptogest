@@ -68,14 +68,14 @@ export function EjerciciosPage({ onHelp }: { onHelp?: () => void }) {
   const [error, setError] = useState("")
 
   useEffect(() => {
-    loadEjercicios()
+    initEjercicios()
   }, [])
 
   // Re-load when cloud entities update in background
   useEffect(() => {
     const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
       if (data.entityType === 'ejercicioFiscal') {
-        loadEjercicios()
+        loadEjercicios(false)
       }
     })
     return () => { unsub?.() }
@@ -89,11 +89,21 @@ export function EjerciciosPage({ onHelp }: { onHelp?: () => void }) {
     }
   }, [selectedEjercicioId])
 
-  const loadEjercicios = async () => {
+  const initEjercicios = async () => {
     try {
       setLoading(true)
-      // Asegurar que existe el ejercicio actual
       await window.electronAPI?.ejercicios.getOrCreateCurrent()
+      await loadEjercicios(false)
+    } catch (err) {
+      console.error("Error initializing ejercicios:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadEjercicios = async (showLoading = true) => {
+    try {
+      if (showLoading) setLoading(true)
       const result = await window.electronAPI?.ejercicios.getAll()
       if (result?.success && result.data) {
         setEjercicios(result.data)

@@ -99,25 +99,34 @@ export function ModelosHaciendaPage({ onHelp }: { onHelp?: () => void }) {
   const [error390, setError390] = useState<string | null>(null)
 
   useEffect(() => {
-    loadEjercicios()
+    initEjercicios()
   }, [])
 
   // Re-load when cloud entities update in background
   useEffect(() => {
     const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
       if (['factura', 'gasto', 'impuesto'].includes(data.entityType)) {
-        loadEjercicios()
+        loadEjercicios(false)
       }
     })
     return () => { unsub?.() }
   }, [])
 
-  const loadEjercicios = async () => {
-    setIsLoadingEjercicios(true)
+  const initEjercicios = async () => {
     try {
-      // Asegurar que existe el ejercicio actual
+      setIsLoadingEjercicios(true)
       await window.electronAPI?.ejercicios.getOrCreateCurrent()
+      await loadEjercicios(false)
+    } catch (err) {
+      console.error("Error initializing ejercicios:", err)
+    } finally {
+      setIsLoadingEjercicios(false)
+    }
+  }
 
+  const loadEjercicios = async (showLoading = true) => {
+    if (showLoading) setIsLoadingEjercicios(true)
+    try {
       const res = await window.electronAPI?.ejercicios.getAll()
       if (res?.success && res.data) {
         const sorted = [...res.data].sort((a, b) => b.anio - a.anio)

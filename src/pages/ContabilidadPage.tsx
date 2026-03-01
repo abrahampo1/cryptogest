@@ -171,7 +171,7 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
   useEffect(() => {
     const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
       if (['asiento', 'lineaAsiento', 'cuentaContable', 'ejercicioFiscal'].includes(data.entityType)) {
-        loadInitialData()
+        reloadData()
       }
     })
     return () => { unsub?.() }
@@ -184,25 +184,12 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
       // Seed PGC (idempotent) then load cuentas
       await window.electronAPI?.cuentas.seedPGC()
 
-      const [cuentasRes, ejerciciosRes] = await Promise.all([
-        window.electronAPI?.cuentas.getAll(),
-        window.electronAPI?.ejercicios.getAll(),
-      ])
-
-      if (cuentasRes?.success) setCuentas(cuentasRes.data || [])
-
-      if (ejerciciosRes?.success && ejerciciosRes.data) {
-        setEjercicios(ejerciciosRes.data)
-      }
-
       // Ensure current year ejercicio exists
       const currentRes = await window.electronAPI?.ejercicios.getOrCreateCurrent()
+
+      await reloadData()
+
       if (currentRes?.success && currentRes.data) {
-        // Refresh ejercicios list
-        const ejRes = await window.electronAPI?.ejercicios.getAll()
-        if (ejRes?.success) {
-          setEjercicios(ejRes.data || [])
-        }
         setSelectedEjercicioId(String(currentRes.data.id))
         setDiarioEjercicioId(String(currentRes.data.id))
         setMayorEjercicioId(String(currentRes.data.id))
@@ -211,6 +198,21 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
       console.error("Error loading contabilidad data:", err)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const reloadData = async () => {
+    try {
+      const [cuentasRes, ejerciciosRes] = await Promise.all([
+        window.electronAPI?.cuentas.getAll(),
+        window.electronAPI?.ejercicios.getAll(),
+      ])
+      if (cuentasRes?.success) setCuentas(cuentasRes.data || [])
+      if (ejerciciosRes?.success && ejerciciosRes.data) {
+        setEjercicios(ejerciciosRes.data)
+      }
+    } catch (err) {
+      console.error("Error reloading contabilidad data:", err)
     }
   }
 
@@ -247,8 +249,8 @@ export function ContabilidadPage({ onHelp }: { onHelp?: () => void }) {
 
   const filteredCuentas = cuentas.filter((cuenta) => {
     const matchesSearch =
-      cuenta.codigo.toLowerCase().includes(cuentaSearch.toLowerCase()) ||
-      cuenta.nombre.toLowerCase().includes(cuentaSearch.toLowerCase())
+      (cuenta.codigo ?? '').toLowerCase().includes(cuentaSearch.toLowerCase()) ||
+      (cuenta.nombre ?? '').toLowerCase().includes(cuentaSearch.toLowerCase())
     const matchesGrupo =
       cuentaFilterGrupo === "todos" || String(cuenta.grupo) === cuentaFilterGrupo
     return matchesSearch && matchesGrupo

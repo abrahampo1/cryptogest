@@ -101,15 +101,15 @@ export function ClientesPage({ onHelp, initialItemId }: { onHelp?: () => void; i
   useEffect(() => {
     const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
       if (['cliente', 'factura'].includes(data.entityType)) {
-        loadClientes()
+        loadClientes(false)
       }
     })
     return () => { unsub?.() }
   }, [])
 
-  const loadClientes = async () => {
+  const loadClientes = async (showLoading = true) => {
     try {
-      setIsLoading(true)
+      if (showLoading) setIsLoading(true)
       const response = await window.electronAPI?.clientes.getAll()
       if (response?.success && response.data) {
         setClientes(response.data)
@@ -132,9 +132,9 @@ export function ClientesPage({ onHelp, initialItemId }: { onHelp?: () => void; i
 
   const filteredClientes = clientes.filter((cliente) => {
     const matchesSearch =
-      cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cliente.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cliente.nif?.toLowerCase().includes(searchTerm.toLowerCase())
+      (cliente.nombre ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (cliente.email ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (cliente.nif ?? '').toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesStatus =
       filterStatus === "all" ||

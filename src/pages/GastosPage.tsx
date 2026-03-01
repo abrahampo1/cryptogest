@@ -164,15 +164,15 @@ export function GastosPage({ onHelp, initialItemId }: { onHelp?: () => void; ini
   useEffect(() => {
     const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
       if (['gasto', 'categoriaGasto', 'impuesto'].includes(data.entityType)) {
-        loadData()
+        loadData(false)
       }
     })
     return () => { unsub?.() }
   }, [])
 
-  const loadData = async () => {
+  const loadData = async (showLoading = true) => {
     try {
-      setIsLoading(true)
+      if (showLoading) setIsLoading(true)
       const [gastosRes, categoriasRes, impuestosRes] = await Promise.all([
         window.electronAPI?.gastos.getAll(),
         window.electronAPI?.categoriasGasto.getAll(),
@@ -234,7 +234,7 @@ export function GastosPage({ onHelp, initialItemId }: { onHelp?: () => void; ini
 
   const filteredGastos = gastos.filter((gasto) => {
     const matchesSearch =
-      gasto.descripcion.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (gasto.descripcion ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       gasto.proveedor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       gasto.numeroFactura?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategoria =

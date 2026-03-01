@@ -48,14 +48,14 @@ export function DashboardPage({ onNavigate, onHelp }: DashboardPageProps) {
   useEffect(() => {
     const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
       if (['cliente', 'factura', 'gasto'].includes(data.entityType)) {
-        loadDashboardData()
+        loadDashboardData(false)
       }
     })
     return () => { unsub?.() }
   }, [])
 
-  const loadDashboardData = async () => {
-    setIsLoading(true)
+  const loadDashboardData = async (showLoading = true) => {
+    if (showLoading) setIsLoading(true)
     try {
       const [statsRes, activitiesRes, pendingRes] = await Promise.all([
         window.electronAPI?.dashboard.getStats(),

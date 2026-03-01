@@ -172,14 +172,14 @@ export function ProductosPage({ onHelp, initialItemId }: { onHelp?: () => void; 
   useEffect(() => {
     const unsub = window.electronAPI?.onEntityUpdated?.((data) => {
       if (['producto', 'impuesto'].includes(data.entityType)) {
-        loadData()
+        loadData(false)
       }
     })
     return () => { unsub?.() }
   }, [])
 
-  const loadData = async () => {
-    setIsLoading(true)
+  const loadData = async (showLoading = true) => {
+    if (showLoading) setIsLoading(true)
     try {
       const [productosRes, impuestosRes] = await Promise.all([
         window.electronAPI?.productos.getAll(),
@@ -210,8 +210,8 @@ export function ProductosPage({ onHelp, initialItemId }: { onHelp?: () => void; 
 
   const filteredProductos = productos.filter((producto) => {
     const matchesSearch =
-      producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (producto.codigo?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
+      (producto.nombre ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (producto.codigo ?? '').toLowerCase().includes(searchTerm.toLowerCase())
     const matchesTipo = filterTipo === "all" || producto.tipo === filterTipo
     const matchesStatus =
       filterStatus === "all" ||
