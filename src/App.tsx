@@ -44,6 +44,7 @@ function App() {
   const [cloudAuthError, setCloudAuthError] = useState<string | null>(null)
   const [cloudAuthLoading, setCloudAuthLoading] = useState(false)
   const [cloudSession, setCloudSession] = useState<CloudSession | null>(null)
+  const [pendingInviteCode, setPendingInviteCode] = useState<string | null>(null)
 
   useEffect(() => {
     loadEmpresas()
@@ -75,6 +76,19 @@ function App() {
         // Only navigate to cloud page if authenticated (not on empresa-selector/setup)
         if (phase === 'authenticated') {
           setCurrentPage('cloud')
+        }
+      }
+    })
+    return () => cleanup?.()
+  }, [phase])
+
+  // Listen for invite deep link (cryptogest://invite?code=...)
+  useEffect(() => {
+    const cleanup = window.electronAPI?.cloud.onInviteDeepLink?.((data) => {
+      if (data.code) {
+        setPendingInviteCode(data.code)
+        if (phase !== 'empresa-selector') {
+          setPhase('empresa-selector' as AppPhase)
         }
       }
     })
@@ -275,6 +289,8 @@ function App() {
         onDeepLinkHandled={() => setDeepLinkResult(null)}
         cloudSession={cloudSession}
         onCloudSessionChange={handleCloudSessionChange}
+        pendingInviteCode={pendingInviteCode}
+        onInviteCodeHandled={() => setPendingInviteCode(null)}
       />
     )
   }

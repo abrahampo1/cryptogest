@@ -349,7 +349,7 @@ if (process.defaultApp) {
 }
 
 // Pending deep link data — processed after window loads + user authenticates
-let pendingDeepLinkData: { token: string; server: string } | null = null
+let pendingDeepLinkData: { type: 'connect'; token: string; server: string } | { type: 'invite'; code: string } | null = null
 let rendererReady = false
 
 // Windows/Linux: deep link arrives as argument on second-instance
@@ -378,11 +378,19 @@ function parseAndQueueDeepLink(url: string) {
     const parsed = new URL(url)
     if (parsed.protocol !== 'cryptogest:') return
 
-    if (parsed.hostname === 'connect' || parsed.pathname === '//connect') {
+    const hostname = parsed.hostname || parsed.pathname?.replace(/^\/\//, '')
+
+    if (hostname === 'connect') {
       const token = parsed.searchParams.get('token')
       const server = parsed.searchParams.get('server')
       if (token && server) {
-        pendingDeepLinkData = { token, server }
+        pendingDeepLinkData = { type: 'connect', token, server }
+        tryProcessDeepLink()
+      }
+    } else if (hostname === 'invite') {
+      const code = parsed.searchParams.get('code')
+      if (code) {
+        pendingDeepLinkData = { type: 'invite', code }
         tryProcessDeepLink()
       }
     }
@@ -397,6 +405,14 @@ async function tryProcessDeepLink() {
 
   const data = pendingDeepLinkData
   pendingDeepLinkData = null // Clear before async work to prevent double-processing
+
+  if (data.type === 'invite') {
+    console.log('[DeepLink] Invite deep link received, code:', data.code)
+    if (mainWindow) {
+      mainWindow.webContents.send('deep-link:invite', { code: data.code })
+    }
+    return
+  }
 
   try {
     console.log('[DeepLink] Confirming device link with server:', data.server)

@@ -122,5 +122,8 @@
   "connected": "Conectado",
   "cloudEmpresaInfo": "Los datos de esta empresa se almacenan cifrados en la nube",
   "noUsersYet": "No hay otros usuarios",
-  "you": "Tú"
+  "you": "Tú",
+  "inviteLink": "Enlace de invitación",
+  "copyLink": "Copiar enlace",
+  "linkCopied": "Enlace copiado"
 }

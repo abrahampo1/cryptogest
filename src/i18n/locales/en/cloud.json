@@ -61,5 +61,8 @@
   "connected": "Connected",
   "cloudEmpresaInfo": "This company's data is stored encrypted in the cloud",
   "noUsersYet": "No other users yet",
-  "you": "You"
+  "you": "You",
+  "inviteLink": "Invitation link",
+  "copyLink": "Copy link",
+  "linkCopied": "Link copied"
 }

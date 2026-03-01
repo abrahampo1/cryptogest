@@ -151,6 +151,8 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp, isCloudEm
   const [removeUserName, setRemoveUserName] = useState("")
   const [isRemovingUser, setIsRemovingUser] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   // ============================================
   // Load config on mount
@@ -232,10 +234,13 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp, isCloudEm
   const handleInviteUser = async () => {
     setInviteLoading(true)
     setInviteCode(null)
+    setInviteUrl(null)
+    setLinkCopied(false)
     try {
       const result = await window.electronAPI?.cloudEmpresa.inviteUser(inviteRole)
       if (result?.success && result.data?.code) {
         setInviteCode(result.data.code)
+        setInviteUrl(result.data.invite_url || null)
         setSuccessMessage(t('inviteGenerated'))
       } else {
         setErrorMessage(result?.error || "Error")
@@ -283,6 +288,14 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp, isCloudEm
       navigator.clipboard.writeText(inviteCode)
       setCodeCopied(true)
       setTimeout(() => setCodeCopied(false), 2000)
+    }
+  }
+
+  const copyInviteLink = () => {
+    if (inviteUrl) {
+      navigator.clipboard.writeText(inviteUrl)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
     }
   }
 
@@ -723,15 +736,30 @@ export function CloudPage({ deepLinkResult, onDeepLinkHandled, onHelp, isCloudEm
             </div>
 
             {inviteCode && (
-              <div className="flex items-center gap-3 p-3 border border-blue-200 bg-blue-50 rounded-lg">
-                <div className="flex-1">
-                  <p className="text-xs text-blue-600 font-medium mb-1">{t('inviteCode')}</p>
-                  <p className="font-mono text-lg font-bold text-blue-800 tracking-wider">{inviteCode}</p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 p-3 border border-blue-200 bg-blue-50 rounded-lg">
+                  <div className="flex-1">
+                    <p className="text-xs text-blue-600 font-medium mb-1">{t('inviteCode')}</p>
+                    <p className="font-mono text-lg font-bold text-blue-800 tracking-wider">{inviteCode}</p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={copyInviteCode} className="shrink-0">
+                    <Copy className="h-3.5 w-3.5 mr-1" />
+                    {codeCopied ? t('codeCopied') : t('copyCode')}
+                  </Button>
                 </div>
-                <Button variant="outline" size="sm" onClick={copyInviteCode} className="shrink-0">
-                  <Copy className="h-3.5 w-3.5 mr-1" />
-                  {codeCopied ? t('codeCopied') : t('copyCode')}
-                </Button>
+
+                {inviteUrl && (
+                  <div className="flex items-center gap-3 p-3 border border-blue-200 bg-blue-50 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-blue-600 font-medium mb-1">{t('inviteLink')}</p>
+                      <p className="text-sm text-blue-800 truncate">{inviteUrl}</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={copyInviteLink} className="shrink-0">
+                      <Copy className="h-3.5 w-3.5 mr-1" />
+                      {linkCopied ? t('linkCopied') : t('copyLink')}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

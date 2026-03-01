@@ -263,6 +263,11 @@ const electronAPI = {
       ipcRenderer.on('deep-link:connected', handler)
       return () => { ipcRenderer.removeListener('deep-link:connected', handler) }
     },
+    onInviteDeepLink: (callback: (data: { code: string }) => void) => {
+      const handler = (_: any, data: any) => callback(data)
+      ipcRenderer.on('deep-link:invite', handler)
+      return () => { ipcRenderer.removeListener('deep-link:invite', handler) }
+    },
   },
 
   // Cloud Session (program-level)
@@ -276,7 +281,7 @@ const electronAPI = {
     getUsers: () =>
       ipcRenderer.invoke('cloudEmpresa:getUsers') as Promise<ApiResponse<any[]>>,
     inviteUser: (role?: string) =>
-      ipcRenderer.invoke('cloudEmpresa:inviteUser', role) as Promise<ApiResponse<{ code: string; role: string; expires_at: string }>>,
+      ipcRenderer.invoke('cloudEmpresa:inviteUser', role) as Promise<ApiResponse<{ code: string; role: string; expires_at: string; invite_url?: string }>>,
     removeUser: (userId: number) =>
       ipcRenderer.invoke('cloudEmpresa:removeUser', userId) as Promise<ApiResponse<void>>,
     updateUserRole: (userId: number, role: string) =>

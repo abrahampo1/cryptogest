@@ -75,6 +75,8 @@ interface EmpresaSelectorPageProps {
   onDeepLinkHandled?: () => void
   cloudSession: CloudSession | null
   onCloudSessionChange: (session: CloudSession | null) => void
+  pendingInviteCode?: string | null
+  onInviteCodeHandled?: () => void
 }
 
 type CreationStep = "name" | "location"
@@ -86,7 +88,7 @@ interface VolumeInfo {
   available: boolean
 }
 
-export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCreated, deepLinkResult, onDeepLinkHandled, cloudSession, onCloudSessionChange }: EmpresaSelectorPageProps) {
+export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCreated, deepLinkResult, onDeepLinkHandled, cloudSession, onCloudSessionChange, pendingInviteCode, onInviteCodeHandled }: EmpresaSelectorPageProps) {
   const { t } = useTranslation(['auth', 'common'])
   const [isCreating, setIsCreating] = useState(false)
   const [newName, setNewName] = useState("")
@@ -170,6 +172,15 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
       onDeepLinkHandled?.()
     }
   }, [deepLinkResult, onDeepLinkHandled, onCloudSessionChange])
+
+  // Auto-fill join flow when invite deep link arrives
+  useEffect(() => {
+    if (pendingInviteCode) {
+      setIsJoining(true)
+      setJoinCode(pendingInviteCode)
+      onInviteCodeHandled?.()
+    }
+  }, [pendingInviteCode, onInviteCodeHandled])
 
   // Fetch cloud empresas when session changes
   const fetchCloudEmpresas = useCallback(async () => {
