@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { Page } from '@/components/layout/Sidebar'
@@ -45,6 +45,22 @@ function App() {
   const [cloudAuthLoading, setCloudAuthLoading] = useState(false)
   const [cloudSession, setCloudSession] = useState<CloudSession | null>(null)
   const [pendingInviteCode, setPendingInviteCode] = useState<string | null>(null)
+
+  // Page transition state
+  const [transitionAnim, setTransitionAnim] = useState<'' | 'exit-forward' | 'enter-forward' | 'exit-back' | 'enter-back'>('')
+  const transitionTimeout = useRef<ReturnType<typeof setTimeout>>()
+
+  const transitionTo = useCallback((nextPhase: AppPhase, direction: 'forward' | 'back') => {
+    if (transitionTimeout.current) clearTimeout(transitionTimeout.current)
+    setTransitionAnim(`exit-${direction}`)
+    transitionTimeout.current = setTimeout(() => {
+      setPhase(nextPhase)
+      setTransitionAnim(`enter-${direction}`)
+      transitionTimeout.current = setTimeout(() => {
+        setTransitionAnim('')
+      }, 360)
+    }, 290)
+  }, [])
 
   useEffect(() => {
     loadEmpresas()
@@ -129,10 +145,10 @@ function App() {
           setIsCloudEmpresa(true)
           setCloudPassphrase('')
           setCloudAuthError(null)
-          setPhase('cloud-auth')
+          transitionTo('cloud-auth', 'forward')
         } else {
           setIsCloudEmpresa(false)
-          setPhase('auth')
+          transitionTo('auth', 'forward')
         }
       }
     } catch (error) {
@@ -151,10 +167,23 @@ function App() {
       // empresa info is nice-to-have for the sidebar
     }
     setPhase('authenticated')
+    refreshEmpresas()
+  }
+
+  const refreshEmpresas = async () => {
+    try {
+      const result = await window.electronAPI?.empresa.list()
+      if (result?.success && result.data) {
+        setEmpresas(result.data.empresas)
+      }
+    } catch {
+      // silent
+    }
   }
 
   const handleAuthenticated = () => {
-    setPhase('authenticated')
+    transitionTo('authenticated', 'forward')
+    refreshEmpresas()
   }
 
   const handleLock = async () => {
@@ -162,10 +191,10 @@ function App() {
     try {
       const result = await window.electronAPI.auth.lock()
       if (result.success) {
-        setPhase(isCloudEmpresa ? 'cloud-auth' : 'auth')
         setCurrentPage('dashboard')
         setCloudPassphrase('')
         setCloudAuthError(null)
+        transitionTo(isCloudEmpresa ? 'cloud-auth' : 'auth', 'back')
       }
     } catch (error) {
       console.error('Error al bloquear:', error)
@@ -179,7 +208,8 @@ function App() {
     try {
       const result = await window.electronAPI?.auth.unlockCloud(cloudPassphrase)
       if (result?.success) {
-        setPhase('authenticated')
+        transitionTo('authenticated', 'forward')
+        refreshEmpresas()
       } else {
         setCloudAuthError(result?.error === 'passwordIncorrect' ? t('auth:passwordIncorrect', 'Incorrect passphrase') : result?.error || 'Error')
       }
@@ -209,12 +239,12 @@ function App() {
     } catch (error) {
       console.error('Error loading empresas:', error)
     }
-    setPhase('empresa-selector')
+    transitionTo('empresa-selector', 'back')
   }
 
   const handleBackFromAuth = async () => {
     setActiveEmpresa(null)
-    setPhase('empresa-selector')
+    transitionTo('empresa-selector', 'back')
   }
 
   const handleNavigateWithItem = (page: Page, itemId?: number) => {
@@ -257,7 +287,7 @@ function App() {
       case 'configuracion':
         return <ConfiguracionPage onHelp={() => navigateToManual('configuracion')} buzonEnabled={buzonEnabled} onBuzonToggle={(v) => { localStorage.setItem('beta.buzon', v ? 'true' : 'false'); setBuzonEnabled(v) }} isCloudEmpresa={isCloudEmpresa} />
       case 'manual':
-        return <ManualPage section={manualSection} />
+        return <ManualPage section={manualSection} onNavigateToPage={(page) => handlePageChange(page as Page)} />
       default:
         return <DashboardPage onNavigate={setCurrentPage} onHelp={() => navigateToManual('dashboard')} />
     }
@@ -278,36 +308,42 @@ function App() {
     return <SetupWizardPage onComplete={handleSetupComplete} />
   }
 
+  const transitionClass = transitionAnim ? `page-${transitionAnim} overflow-hidden` : ''
+
   if (phase === 'empresa-selector') {
     return (
-      <EmpresaSelectorPage
-        empresas={empresas}
-        ultimaEmpresaId={ultimaEmpresaId}
-        onSelect={handleSelectEmpresa}
-        onCreated={loadEmpresas}
-        deepLinkResult={deepLinkResult}
-        onDeepLinkHandled={() => setDeepLinkResult(null)}
-        cloudSession={cloudSession}
-        onCloudSessionChange={handleCloudSessionChange}
-        pendingInviteCode={pendingInviteCode}
-        onInviteCodeHandled={() => setPendingInviteCode(null)}
-      />
+      <div className={`min-h-screen bg-slate-950 ${transitionClass}`}>
+        <EmpresaSelectorPage
+          empresas={empresas}
+          ultimaEmpresaId={ultimaEmpresaId}
+          onSelect={handleSelectEmpresa}
+          onCreated={loadEmpresas}
+          deepLinkResult={deepLinkResult}
+          onDeepLinkHandled={() => setDeepLinkResult(null)}
+          cloudSession={cloudSession}
+          onCloudSessionChange={handleCloudSessionChange}
+          pendingInviteCode={pendingInviteCode}
+          onInviteCodeHandled={() => setPendingInviteCode(null)}
+        />
+      </div>
     )
   }
 
   if (phase === 'auth') {
     return (
-      <AuthPage
-        onAuthenticated={handleAuthenticated}
-        empresaNombre={activeEmpresa?.nombre}
-        onBack={handleBackFromAuth}
-      />
+      <div className={`min-h-screen bg-slate-950 ${transitionClass}`}>
+        <AuthPage
+          onAuthenticated={handleAuthenticated}
+          empresaNombre={activeEmpresa?.nombre}
+          onBack={handleBackFromAuth}
+        />
+      </div>
     )
   }
 
   if (phase === 'cloud-auth') {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className={`min-h-screen bg-slate-950 flex items-center justify-center ${transitionClass}`}>
         <div className="w-full max-w-md p-8">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-500/10 mb-4">
@@ -377,18 +413,23 @@ function App() {
   }
 
   return (
-    <DashboardLayout
-      currentPage={currentPage}
-      onPageChange={handlePageChange}
-      onLock={handleLock}
-      onSwitchEmpresa={handleSwitchEmpresa}
-      empresaNombre={activeEmpresa?.nombre}
-      buzonEnabled={buzonEnabled}
-      isCloudEmpresa={isCloudEmpresa}
-      cloudSession={cloudSession}
-    >
-      {renderPage()}
-    </DashboardLayout>
+    <div className={transitionClass}>
+      <DashboardLayout
+        currentPage={currentPage}
+        onPageChange={handlePageChange}
+        onLock={handleLock}
+        onSwitchEmpresa={handleSwitchEmpresa}
+        onSelectEmpresa={handleSelectEmpresa}
+        empresaNombre={activeEmpresa?.nombre}
+        empresas={empresas}
+        activeEmpresaId={activeEmpresa?.id}
+        buzonEnabled={buzonEnabled}
+        isCloudEmpresa={isCloudEmpresa}
+        cloudSession={cloudSession}
+      >
+        {renderPage()}
+      </DashboardLayout>
+    </div>
   )
 }
 

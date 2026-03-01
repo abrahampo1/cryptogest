@@ -463,10 +463,10 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
   const renderEmpresaRow = (empresa: EmpresaInfo) => (
     <div
       key={empresa.id}
-      className={`group relative flex items-center gap-3 p-4 rounded-lg border transition-colors cursor-pointer ${
+      className={`group relative flex items-center gap-3 p-4 rounded-lg border transition-all duration-200 cursor-pointer ${
         empresa.id === ultimaEmpresaId
-          ? "border-primary/50 bg-slate-800/80 hover:bg-slate-800"
-          : "border-slate-700 bg-slate-900/50 hover:bg-slate-800/50"
+          ? "border-primary/50 bg-slate-800/80 hover:bg-slate-800 hover:border-primary/70"
+          : "border-slate-700 bg-slate-900/50 hover:bg-slate-800/50 hover:border-slate-600"
       }`}
       onClick={() => {
         if (editingId !== empresa.id) onSelect(empresa.id)
@@ -601,7 +601,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
       {/* Left column - selector */}
       <div className="flex-1 max-w-lg">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 animate-slide-up-fade">
           <div className="flex items-center justify-center gap-3 mb-3">
             <img src="./assets/logo.png" alt="CryptoGest" className="h-10 w-10" />
             <h1 className="text-2xl font-bold text-white">CryptoGest</h1>
@@ -620,15 +620,19 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
         {(localEmpresas.length > 0 || !hasCloudSection) && (
           <div className="mb-4">
             {hasCloudSection && localEmpresas.length > 0 && (
-              <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
+              <h2 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2 animate-slide-up-fade">
                 {t('empresaSelector.localSection')}
               </h2>
             )}
             <div className="space-y-2">
-              {localEmpresas.map(renderEmpresaRow)}
+              {localEmpresas.map((empresa, idx) => (
+                <div key={empresa.id} className="animate-slide-up-fade" style={{ animationDelay: `${idx * 50}ms` }}>
+                  {renderEmpresaRow(empresa)}
+                </div>
+              ))}
 
               {empresas.length === 0 && !isCreating && !hasCloudSection && (
-                <div className="text-center py-12 text-slate-500">
+                <div className="text-center py-12 text-slate-500 animate-slide-up-fade">
                   <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
                   <p className="text-sm">{t('empresaSelector.noCompanies')}</p>
                   <p className="text-xs mt-1">{t('empresaSelector.createFirstCompany')}</p>
@@ -640,7 +644,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
 
         {/* Cloud Empresas Section */}
         {hasCloudSection && (
-          <div className="mb-4">
+          <div className="mb-4 animate-slide-up-fade">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
                 <Cloud className="h-3.5 w-3.5 text-blue-400" />
@@ -661,30 +665,33 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
             </div>
             <div className="space-y-2">
               {loadingCloudEmpresas ? (
-                <div className="flex items-center justify-center gap-2 py-6 text-slate-500">
+                <div className="flex items-center justify-center gap-2 py-6 text-slate-500 animate-slide-up-fade">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span className="text-xs">{t('empresaSelector.loadingCloudEmpresas')}</span>
                 </div>
               ) : cloudEmpresas.length === 0 ? (
-                <div className="text-center py-6 text-slate-500">
+                <div className="text-center py-6 text-slate-500 animate-slide-up-fade">
                   <Cloud className="h-8 w-8 mx-auto mb-2 opacity-20" />
                   <p className="text-xs">{t('empresaSelector.noCloudEmpresas')}</p>
                 </div>
               ) : (
-                cloudEmpresas.map((ce) => {
+                cloudEmpresas.map((ce, idx) => {
                   const localEmpresa = getLocalEmpresa(ce.id)
                   const isExpanded = joiningEmpresaId === ce.id
 
                   if (localEmpresa) {
-                    // Already set up locally — render as normal clickable row
-                    return renderEmpresaRow(localEmpresa)
+                    return (
+                      <div key={localEmpresa.id} className="animate-slide-up-fade" style={{ animationDelay: `${idx * 60}ms` }}>
+                        {renderEmpresaRow(localEmpresa)}
+                      </div>
+                    )
                   }
 
                   // Not set up locally
                   return (
-                    <div key={ce.id} className="rounded-lg border border-slate-700/50 bg-slate-900/30 overflow-hidden">
+                    <div key={ce.id} className="rounded-lg border border-slate-700/50 bg-slate-900/30 overflow-hidden animate-slide-up-fade transition-all duration-200" style={{ animationDelay: `${idx * 60}ms` }}>
                       <div
-                        className="flex items-center gap-3 p-4 cursor-pointer hover:bg-slate-800/30 transition-colors opacity-70 hover:opacity-100"
+                        className="flex items-center gap-3 p-4 cursor-pointer hover:bg-slate-800/30 transition-all duration-200 opacity-70 hover:opacity-100"
                         onClick={() => {
                           if (isExpanded) {
                             setJoiningEmpresaId(null)
@@ -712,17 +719,17 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                             {t('empresaSelector.notJoined')}
                           </p>
                         </div>
-                        <Download className="h-4 w-4 text-slate-500 shrink-0" />
+                        <Download className={`h-4 w-4 text-slate-500 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                       </div>
 
                       {isExpanded && (
-                        <div className="px-4 pb-4 pt-1 space-y-2 border-t border-slate-700/30">
+                        <div className="px-4 pb-4 pt-1 space-y-2 border-t border-slate-700/30 animate-expand">
                           <input
                             type="password"
                             value={addPassphrase}
                             onChange={(e) => setAddPassphrase(e.target.value)}
                             placeholder={t('empresaSelector.enterPassphraseToJoin')}
-                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors duration-150"
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && addPassphrase) handleAddCloudLocal(ce)
@@ -734,7 +741,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                               size="sm"
                               onClick={() => handleAddCloudLocal(ce)}
                               disabled={!addPassphrase || isSubmitting}
-                              className="flex-1 bg-blue-600 hover:bg-blue-700 text-xs"
+                              className="flex-1 bg-blue-600 hover:bg-blue-700 text-xs transition-colors duration-150"
                             >
                               {isSubmitting ? <Loader2 className="h-3 w-3 animate-spin mr-1.5" /> : <Download className="h-3 w-3 mr-1.5" />}
                               {t('empresaSelector.addToDevice')}
@@ -743,7 +750,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
                               size="sm"
                               variant="outline"
                               onClick={() => { setJoiningEmpresaId(null); setAddPassphrase("") }}
-                              className="border-slate-600 text-slate-300 hover:bg-slate-800 text-xs"
+                              className="border-slate-600 text-slate-300 hover:bg-slate-800 text-xs transition-colors duration-150"
                             >
                               {t('common:cancel')}
                             </Button>
@@ -760,10 +767,10 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
 
         {/* Cloud Login Button (when not connected) */}
         {!cloudSession && (
-          <div className="mb-4">
+          <div className="mb-4 animate-slide-up-fade" style={{ animationDelay: `${localEmpresas.length * 50 + 50}ms` }}>
             <Button
               variant="outline"
-              className="w-full border-blue-500/30 bg-blue-500/5 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300"
+              className="w-full border-blue-500/30 bg-blue-500/5 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 transition-colors duration-150"
               onClick={() => setShowCloudLogin(true)}
             >
               <Cloud className="h-4 w-4 mr-2" />
@@ -774,7 +781,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
 
         {/* Crear empresa */}
         {isCreating ? (
-          <div className="p-4 rounded-lg border border-slate-700 bg-slate-900/50 space-y-3">
+          <div className="p-4 rounded-lg border border-slate-700 bg-slate-900/50 space-y-3 animate-expand">
             {creationStep === "name" ? (
               <>
                 <Input
@@ -970,7 +977,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
           <div className="space-y-2">
             <Button
               variant="outline"
-              className="w-full border-slate-700 bg-slate-900/30 text-slate-300 hover:bg-slate-800 hover:text-white"
+              className="w-full border-slate-700 bg-slate-900/30 text-slate-300 hover:bg-slate-800 hover:text-white transition-colors duration-150"
               onClick={() => setIsCreating(true)}
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -981,14 +988,14 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
             {!isJoining ? (
               <Button
                 variant="outline"
-                className="w-full border-blue-500/30 bg-blue-500/5 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300"
+                className="w-full border-blue-500/30 bg-blue-500/5 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 transition-colors duration-150"
                 onClick={() => setIsJoining(true)}
               >
                 <Cloud className="h-4 w-4 mr-2" />
                 {t('empresaSelector.joinCloud')}
               </Button>
             ) : (
-              <div className="p-4 rounded-lg border border-blue-500/30 bg-slate-900/50 space-y-3">
+              <div className="p-4 rounded-lg border border-blue-500/30 bg-slate-900/50 space-y-3 animate-expand">
                 <div className="flex items-center gap-2 mb-1">
                   <Cloud className="h-4 w-4 text-blue-400" />
                   <span className="text-sm font-medium text-white">{t('empresaSelector.joinCloud')}</span>

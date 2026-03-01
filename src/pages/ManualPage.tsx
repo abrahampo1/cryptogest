@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -48,6 +48,12 @@ import {
   FolderOpen,
   HardDrive,
   Key,
+  ExternalLink,
+  Check,
+  RotateCcw,
+  Trophy,
+  Timer,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react"
 
@@ -55,6 +61,7 @@ import {
 
 interface ManualPageProps {
   section?: string
+  onNavigateToPage?: (page: string) => void
 }
 
 // ─── Section metadata ────────────────────────────────────────────────────────
@@ -104,6 +111,57 @@ function useGroupLabels() {
   }), [t])
 }
 
+// ─── Context & hooks ─────────────────────────────────────────────────────────
+
+interface ManualContextType {
+  onNavigateToPage?: (page: string) => void
+  readSections: Set<string>
+  totalSections: number
+}
+
+const ManualContext = createContext<ManualContextType>({ readSections: new Set(), totalSections: 0 })
+
+const READ_SECTIONS_KEY = "manual-read-sections"
+const CHECKLIST_PREFIX = "manual-check-"
+
+function useReadSections() {
+  const [readSections, setReadSections] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(READ_SECTIONS_KEY)
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch { return new Set() }
+  })
+
+  const markRead = useCallback((id: string) => {
+    setReadSections(prev => {
+      if (prev.has(id)) return prev
+      const next = new Set(prev)
+      next.add(id)
+      localStorage.setItem(READ_SECTIONS_KEY, JSON.stringify([...next]))
+      return next
+    })
+  }, [])
+
+  const resetProgress = useCallback(() => {
+    setReadSections(new Set())
+    localStorage.removeItem(READ_SECTIONS_KEY)
+    // Also clear checklists
+    Object.keys(localStorage).forEach(k => {
+      if (k.startsWith(CHECKLIST_PREFIX)) localStorage.removeItem(k)
+    })
+  }, [])
+
+  return { readSections, markRead, resetProgress }
+}
+
+// Estimated reading time in minutes per section
+const readingTimeMap: Record<string, number> = {
+  "inicio": 3, "primeros-pasos": 4, "dashboard": 3, "clientes": 3,
+  "productos": 3, "facturas": 5, "gastos": 4, "ejercicios": 3,
+  "contabilidad": 4, "modelos": 4, "plantillas": 3, "cloud": 5,
+  "configuracion": 4, "seguridad": 4, "glosario": 5,
+}
+
 // ─── Reusable components ─────────────────────────────────────────────────────
 
 function Tip({ children }: { children: React.ReactNode }) {
@@ -128,11 +186,23 @@ function Warning({ children }: { children: React.ReactNode }) {
   )
 }
 
-function Step({ n, children }: { n: number; children: React.ReactNode }) {
+function Step({ n, children, checkId }: { n: number; children: React.ReactNode; checkId?: string }) {
+  const [checked, setChecked] = useState(() => checkId ? localStorage.getItem(`${CHECKLIST_PREFIX}${checkId}`) === "1" : false)
+  const toggle = checkId ? () => {
+    const next = !checked
+    setChecked(next)
+    localStorage.setItem(`${CHECKLIST_PREFIX}${checkId}`, next ? "1" : "0")
+  } : undefined
   return (
-    <div className="flex gap-3 py-3 relative">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary border-2 border-primary/20 z-10">{n}</div>
-      <div className="text-sm text-muted-foreground pt-1 leading-relaxed">{children}</div>
+    <div className={`flex gap-3 py-3 relative transition-opacity duration-300 ${checked ? "opacity-50" : ""}`}>
+      {toggle ? (
+        <button onClick={toggle} className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold border-2 z-10 transition-all duration-300 ${checked ? "bg-emerald-100 border-emerald-300 scale-95" : "bg-primary/10 border-primary/20 hover:border-primary/40"}`}>
+          {checked ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <span className="text-primary">{n}</span>}
+        </button>
+      ) : (
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary border-2 border-primary/20 z-10">{n}</div>
+      )}
+      <div className={`text-sm text-muted-foreground pt-1 leading-relaxed transition-all duration-300 ${checked ? "line-through" : ""}`}>{children}</div>
     </div>
   )
 }
@@ -204,11 +274,59 @@ function QuickAction({ icon: Icon, color, bg, title, desc, onClick }: { icon: Lu
   )
 }
 
+function GoToPage({ page, icon: Icon, color, bg, label }: { page: string; icon: LucideIcon; color: string; bg: string; label: string }) {
+  const { t } = useTranslation('manual')
+  const { onNavigateToPage } = useContext(ManualContext)
+  if (!onNavigateToPage) return null
+  return (
+    <button
+      onClick={() => onNavigateToPage(page)}
+      className="mt-6 flex items-center gap-3 rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 p-4 text-left transition-all hover:border-primary/50 hover:bg-primary/10 hover:shadow-sm w-full group"
+    >
+      <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${bg}`}>
+        <Icon className={`h-4.5 w-4.5 ${color}`} />
+      </div>
+      <div className="flex-1">
+        <span className="text-sm font-medium">{label}</span>
+        <span className="text-[11px] text-muted-foreground block mt-0.5">{t('tryItNow')}</span>
+      </div>
+      <ExternalLink className="h-4 w-4 text-primary/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+    </button>
+  )
+}
+
+function ProgressSummary() {
+  const { t } = useTranslation('manual')
+  const { readSections, totalSections } = useContext(ManualContext)
+  const readCount = readSections.size
+  if (readCount === 0) return null
+  const pct = Math.round((readCount / totalSections) * 100)
+  const isComplete = readCount >= totalSections
+  return (
+    <div className={`mb-8 p-4 rounded-xl border transition-all ${isComplete ? "bg-gradient-to-r from-emerald-50 to-emerald-50/30 border-emerald-200" : "bg-gradient-to-r from-primary/5 to-transparent"}`}>
+      <div className="flex items-center gap-3">
+        <div className={`flex h-10 w-10 items-center justify-center rounded-full ${isComplete ? "bg-emerald-100" : "bg-primary/10"}`}>
+          {isComplete ? <Trophy className="h-5 w-5 text-emerald-600" /> : <Sparkles className="h-5 w-5 text-primary" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">{t('progressTitle')}</p>
+          <p className="text-xs text-muted-foreground">{t('sectionsRead', { count: readCount, total: totalSections })}</p>
+        </div>
+        <span className={`text-lg font-bold ${isComplete ? "text-emerald-600" : "text-primary"}`}>{pct}%</span>
+      </div>
+      <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-700 ease-out ${isComplete ? "bg-emerald-500" : "bg-primary"}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
+
 // ─── HOME PAGE ───────────────────────────────────────────────────────────────
 
 function InicioContent({ onNavigate }: { onNavigate: (id: string) => void }) {
   const { t } = useTranslation('manual')
   const sections = useSections()
+  const { readSections } = useContext(ManualContext)
   return <>
     {/* Hero */}
     <div className="text-center mb-8">
@@ -222,6 +340,9 @@ function InicioContent({ onNavigate }: { onNavigate: (id: string) => void }) {
         {t('inicio.welcomeDesc')}
       </p>
     </div>
+
+    {/* Progress summary */}
+    <ProgressSummary />
 
     {/* Quick start */}
     <div className="mb-8">
@@ -289,10 +410,11 @@ function InicioContent({ onNavigate }: { onNavigate: (id: string) => void }) {
               <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${s.bg}`}>
                 <Icon className={`h-3.5 w-3.5 ${s.color}`} />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <span className="text-xs font-medium block truncate">{s.title}</span>
                 <span className="text-[11px] text-muted-foreground truncate block">{s.desc}</span>
               </div>
+              {readSections.has(s.id) && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
             </button>
           )
         })}
@@ -310,11 +432,11 @@ function PrimerosPasosContent() {
 
     <SectionTitle>{t('primerosPasos.createCompany')}</SectionTitle>
     <P>{t('primerosPasos.createCompanyDesc')}</P>
-    <Step n={1}><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.step1') }} /></Step>
-    <Step n={2}><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.step2') }} /></Step>
-    <Step n={3}><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.step3') }} /></Step>
-    <Step n={4}>{t('primerosPasos.step4DataLocation')}<Ic icon={FolderOpen} className="text-slate-600" />{t('primerosPasos.step4Folder')}<Ic icon={HardDrive} className="text-slate-600" />{t('primerosPasos.step4Disk')}</Step>
-    <Step n={5}><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.step5') }} /></Step>
+    <Step n={1} checkId="setup-1"><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.step1') }} /></Step>
+    <Step n={2} checkId="setup-2"><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.step2') }} /></Step>
+    <Step n={3} checkId="setup-3"><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.step3') }} /></Step>
+    <Step n={4} checkId="setup-4">{t('primerosPasos.step4DataLocation')}<Ic icon={FolderOpen} className="text-slate-600" />{t('primerosPasos.step4Folder')}<Ic icon={HardDrive} className="text-slate-600" />{t('primerosPasos.step4Disk')}</Step>
+    <Step n={5} checkId="setup-5"><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.step5') }} /></Step>
 
     <Warning>
       <span dangerouslySetInnerHTML={{ __html: t('primerosPasos.passwordWarning') }} />
@@ -330,11 +452,11 @@ function PrimerosPasosContent() {
 
     <SectionTitle>{t('primerosPasos.whatNext')}</SectionTitle>
     <P>{t('primerosPasos.whatNextDesc')}</P>
-    <Step n={1}><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.nextStep1') }} /><Ic icon={Users} className="text-violet-600" />{t('primerosPasos.nextStep1Clients')}</Step>
-    <Step n={2}><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.nextStep2') }} /><Ic icon={Package} className="text-amber-600" />{t('primerosPasos.nextStep2Products')}</Step>
-    <Step n={3}><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.nextStep3') }} /><Ic icon={FileText} className="text-rose-600" />{t('primerosPasos.nextStep3Invoices')}</Step>
-    <Step n={4}><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.nextStep4') }} /><Ic icon={Receipt} className="text-orange-600" />{t('primerosPasos.nextStep4Expenses')}</Step>
-    <Step n={5}><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.nextStep5') }} /><Ic icon={LayoutDashboard} className="text-blue-600" />{t('primerosPasos.nextStep5Dashboard')}</Step>
+    <Step n={1} checkId="next-1"><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.nextStep1') }} /><Ic icon={Users} className="text-violet-600" />{t('primerosPasos.nextStep1Clients')}</Step>
+    <Step n={2} checkId="next-2"><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.nextStep2') }} /><Ic icon={Package} className="text-amber-600" />{t('primerosPasos.nextStep2Products')}</Step>
+    <Step n={3} checkId="next-3"><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.nextStep3') }} /><Ic icon={FileText} className="text-rose-600" />{t('primerosPasos.nextStep3Invoices')}</Step>
+    <Step n={4} checkId="next-4"><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.nextStep4') }} /><Ic icon={Receipt} className="text-orange-600" />{t('primerosPasos.nextStep4Expenses')}</Step>
+    <Step n={5} checkId="next-5"><span dangerouslySetInnerHTML={{ __html: t('primerosPasos.nextStep5') }} /><Ic icon={LayoutDashboard} className="text-blue-600" />{t('primerosPasos.nextStep5Dashboard')}</Step>
   </>
 }
 
@@ -361,6 +483,8 @@ function DashboardContent() {
     <P>{t('dashboard.recentActivityDesc')}</P>
 
     <Tip>{t('dashboard.emptyTip')}<Ic icon={Calendar} className="text-teal-600" />{t('dashboard.emptyTipEnd')}</Tip>
+
+    <GoToPage page="dashboard" icon={LayoutDashboard} color="text-blue-600" bg="bg-blue-50" label={t('sections.dashboard.title')} />
   </>
 }
 
@@ -391,6 +515,8 @@ function ClientesContent() {
     <Warning><span dangerouslySetInnerHTML={{ __html: t('clientes.deleteWarning') }} /></Warning>
 
     <Tip>{t('clientes.firstClientTip')}</Tip>
+
+    <GoToPage page="clientes" icon={Users} color="text-violet-600" bg="bg-violet-50" label={t('sections.clientes.title')} />
   </>
 }
 
@@ -418,6 +544,8 @@ function ProductosContent() {
     <P><span dangerouslySetInnerHTML={{ __html: t('productos.deactivateDesc') }} /></P>
 
     <Tip>{t('productos.priceTip')}</Tip>
+
+    <GoToPage page="productos" icon={Package} color="text-amber-600" bg="bg-amber-50" label={t('sections.productos.title')} />
   </>
 }
 
@@ -470,6 +598,8 @@ function FacturasContent() {
     <Warning><span dangerouslySetInnerHTML={{ __html: t('facturas.numberingWarning') }} /></Warning>
 
     <Tip>{t('facturas.autoEntryTip')}</Tip>
+
+    <GoToPage page="facturas" icon={FileText} color="text-rose-600" bg="bg-rose-50" label={t('sections.facturas.title')} />
   </>
 }
 
@@ -504,6 +634,8 @@ function GastosContent() {
 
     <SectionTitle>{t('gastos.accounting')}</SectionTitle>
     <P>{t('gastos.accountingDesc')}</P>
+
+    <GoToPage page="gastos" icon={Receipt} color="text-orange-600" bg="bg-orange-50" label={t('sections.gastos.title')} />
   </>
 }
 
@@ -528,6 +660,8 @@ function EjerciciosContent() {
     <Warning><span dangerouslySetInnerHTML={{ __html: t('ejercicios.dateWarning') }} /></Warning>
 
     <Tip>{t('ejercicios.newYearTip')}</Tip>
+
+    <GoToPage page="ejercicios" icon={Calendar} color="text-teal-600" bg="bg-teal-50" label={t('sections.ejercicios.title')} />
   </>
 }
 
@@ -563,6 +697,8 @@ function ContabilidadContent() {
     <Step n={4}><span dangerouslySetInnerHTML={{ __html: t('contabilidad.pgcGroup7') }} /></Step>
 
     <Tip>{t('contabilidad.autoTip')}</Tip>
+
+    <GoToPage page="contabilidad" icon={BookOpen} color="text-indigo-600" bg="bg-indigo-50" label={t('sections.contabilidad.title')} />
   </>
 }
 
@@ -597,6 +733,8 @@ function ModelosContent() {
     <Warning>{t('modelos.statusWarning')}</Warning>
 
     <Tip>{t('modelos.compareTip')}</Tip>
+
+    <GoToPage page="modelos" icon={FileBarChart} color="text-cyan-600" bg="bg-cyan-50" label={t('sections.modelos.title')} />
   </>
 }
 
@@ -616,6 +754,8 @@ function PlantillasContent() {
     <P>{t('plantillas.previewDesc')}</P>
 
     <Tip>{t('plantillas.professionalTip')}</Tip>
+
+    <GoToPage page="configuracion" icon={Palette} color="text-pink-600" bg="bg-pink-50" label={t('sections.plantillas.title')} />
   </>
 }
 
@@ -659,6 +799,8 @@ function CloudContent() {
     <P>{t('cloud.deleteBackupsDesc')}</P>
 
     <Tip>{t('cloud.backupTip')}</Tip>
+
+    <GoToPage page="cloud" icon={Cloud} color="text-sky-600" bg="bg-sky-50" label={t('sections.cloud.title')} />
   </>
 }
 
@@ -701,6 +843,8 @@ function ConfiguracionContent() {
     <Step n={3}><Ic icon={Palette} className="text-pink-600" /><span dangerouslySetInnerHTML={{ __html: t('configuracion.otherTabTemplates') }} /></Step>
 
     <Tip>{t('configuracion.addressTip')}</Tip>
+
+    <GoToPage page="configuracion" icon={Settings} color="text-slate-600" bg="bg-slate-50" label={t('sections.configuracion.title')} />
   </>
 }
 
@@ -739,6 +883,8 @@ function SeguridadContent() {
     <P>{t('seguridad.independentDesc')}</P>
 
     <Tip>{t('seguridad.passwordTip')}</Tip>
+
+    <GoToPage page="configuracion" icon={Shield} color="text-red-600" bg="bg-red-50" label={t('sections.seguridad.title')} />
   </>
 }
 
@@ -897,10 +1043,12 @@ const pageContent: Record<string, (props: { onNavigate: (id: string) => void }) 
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export function ManualPage({ section }: ManualPageProps) {
+export function ManualPage({ section, onNavigateToPage }: ManualPageProps) {
   const { t } = useTranslation('manual')
   const sections = useSections()
   const groupLabels = useGroupLabels()
+  const { readSections, markRead, resetProgress } = useReadSections()
+  const topRef = useRef<HTMLDivElement>(null)
 
   const sectionIds = useMemo(() => sectionDefs.map(d => d.id), [])
   const [activePage, setActivePage] = useState(section && sectionIds.includes(section) ? section : "inicio")
@@ -939,116 +1087,191 @@ export function ManualPage({ section }: ManualPageProps) {
     items: filteredSections.filter(s => s.group === g),
   })).filter(g => g.items.length > 0)
 
-  const navigate = (id: string) => {
+  const navigate = useCallback((id: string) => {
+    // Mark current section as read when leaving
+    if (activePage !== "inicio") {
+      markRead(activePage)
+    }
     setActivePage(id)
     setSearchTerm("")
-  }
+    // Scroll to top
+    setTimeout(() => topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50)
+  }, [activePage, markRead])
+
+  // Keyboard navigation: ← →
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === "ArrowLeft" && prevSection) navigate(prevSection.id)
+      if (e.key === "ArrowRight" && nextSection) navigate(nextSection.id)
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [prevSection, nextSection, navigate])
+
+  // Progress stats
+  const readCount = readSections.size
+  const totalSections = sections.length - 1 // exclude "inicio"
+  const progressPct = totalSections > 0 ? Math.round((readCount / totalSections) * 100) : 0
+
+  // Context value
+  const ctxValue = useMemo(() => ({
+    onNavigateToPage,
+    readSections,
+    totalSections,
+  }), [onNavigateToPage, readSections, totalSections])
 
   return (
-    <div className="flex gap-0 min-h-0 pb-4">
-      {/* Left nav */}
-      <div className="w-48 shrink-0 pr-4 border-r mr-5 space-y-2">
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            placeholder={t('searchPlaceholder')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-8 pl-8 text-xs"
-          />
+    <ManualContext.Provider value={ctxValue}>
+      <div className="flex gap-0 min-h-0 pb-4">
+        {/* Left nav */}
+        <div className="w-48 shrink-0 pr-4 border-r mr-5 space-y-2">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder={t('searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="h-8 pl-8 text-xs"
+            />
+          </div>
+
+          {/* Progress bar */}
+          {readCount > 0 && (
+            <div className="px-1 pt-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] text-muted-foreground">{progressPct}% {t('completed')}</span>
+                <button onClick={resetProgress} className="text-muted-foreground/40 hover:text-muted-foreground transition-colors" title={t('resetProgress')}>
+                  <RotateCcw className="h-2.5 w-2.5" />
+                </button>
+              </div>
+              <div className="h-1 bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-primary rounded-full transition-all duration-700 ease-out" style={{ width: `${progressPct}%` }} />
+              </div>
+            </div>
+          )}
+
+          {/* Section list grouped */}
+          <nav className="space-y-3 pt-1">
+            {groupedFiltered.map(({ group, label, items }) => (
+              <div key={group}>
+                {label && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 px-2 block mb-1">{label}</span>
+                )}
+                <div className="space-y-px">
+                  {items.map((s) => {
+                    const Icon = s.icon
+                    const isActive = s.id === activePage
+                    const isRead = readSections.has(s.id)
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => navigate(s.id)}
+                        className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+                          isActive
+                            ? "bg-primary/10 text-primary font-medium"
+                            : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                        }`}
+                      >
+                        <Icon className={`h-3.5 w-3.5 shrink-0 ${isActive ? s.color : ""}`} />
+                        <span className="truncate flex-1">{s.title}</span>
+                        {isActive ? (
+                          <CheckCircle2 className="h-3 w-3 shrink-0 ml-auto text-primary/50" />
+                        ) : isRead ? (
+                          <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0 ml-auto" />
+                        ) : null}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            {filteredSections.length === 0 && (
+              <p className="text-xs text-muted-foreground px-2 py-4 text-center">
+                {t('noResults', { term: searchTerm })}
+              </p>
+            )}
+          </nav>
+
+          {/* Keyboard hint */}
+          <div className="px-2 pt-2 border-t">
+            <span className="text-[10px] text-muted-foreground/40 flex items-center gap-1">
+              <kbd className="px-1 py-0.5 rounded bg-muted text-[9px] font-mono">&larr;</kbd>
+              <kbd className="px-1 py-0.5 rounded bg-muted text-[9px] font-mono">&rarr;</kbd>
+              <span className="ml-0.5">{t('keyboardHint')}</span>
+            </span>
+          </div>
         </div>
 
-        {/* Section list grouped */}
-        <nav className="space-y-3 pt-1">
-          {groupedFiltered.map(({ group, label, items }) => (
-            <div key={group}>
-              {label && (
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 px-2 block mb-1">{label}</span>
-              )}
-              <div className="space-y-px">
-                {items.map((s) => {
-                  const Icon = s.icon
-                  const isActive = s.id === activePage
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => navigate(s.id)}
-                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
-                        isActive
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                      }`}
-                    >
-                      <Icon className={`h-3.5 w-3.5 shrink-0 ${isActive ? s.color : ""}`} />
-                      <span className="truncate">{s.title}</span>
-                      {isActive && <CheckCircle2 className="h-3 w-3 shrink-0 ml-auto text-primary/50" />}
-                    </button>
-                  )
-                })}
+        {/* Content area */}
+        <div className="flex-1 min-w-0">
+          <div ref={topRef} />
+
+          {/* Page header */}
+          {!isHome && (
+            <div className={`border-b pb-4 mb-6 border-l-4 pl-4 ${currentSection.border}`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${currentSection.bg}`}>
+                  <SectionIcon className={`h-4 w-4 ${currentSection.color}`} />
+                </div>
+                <div className="flex-1">
+                  <h1 className="text-lg font-semibold">{currentSection.title}</h1>
+                  <p className="text-xs text-muted-foreground">{currentSection.desc} — {t('ofTotal', { current: currentIndex + 1, total: sections.length })}</p>
+                </div>
+                {readingTimeMap[activePage] && (
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground/60 shrink-0">
+                    <Timer className="h-3 w-3" />
+                    {readingTimeMap[activePage]} min
+                  </span>
+                )}
               </div>
             </div>
-          ))}
-          {filteredSections.length === 0 && (
-            <p className="text-xs text-muted-foreground px-2 py-4 text-center">
-              {t('noResults', { term: searchTerm })}
-            </p>
           )}
-        </nav>
-      </div>
 
-      {/* Content area */}
-      <div className="flex-1 min-w-0">
-        {/* Page header */}
-        {!isHome && (
-          <div className={`border-b pb-4 mb-6 border-l-4 pl-4 ${currentSection.border}`}>
-            <div className="flex items-center gap-2.5">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${currentSection.bg}`}>
-                <SectionIcon className={`h-4 w-4 ${currentSection.color}`} />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold">{currentSection.title}</h1>
-                <p className="text-xs text-muted-foreground">{currentSection.desc} — {t('ofTotal', { current: currentIndex + 1, total: sections.length })}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Page content */}
-        {isHome ? (
-          <ContentComponent onNavigate={navigate} />
-        ) : (
-          <Card>
-            <CardContent className="pt-6 pb-8 max-w-none">
+          {/* Page content with animation */}
+          <div key={activePage} className="animate-fade-in-up" style={{ animationDuration: "0.3s" }}>
+            {isHome ? (
               <ContentComponent onNavigate={navigate} />
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Pagination */}
-        {!isHome && (
-          <div className="flex items-center justify-between mt-6 pt-4 border-t">
-            {prevSection ? (
-              <button
-                onClick={() => navigate(prevSection.id)}
-                className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors group"
-              >
-                <ChevronLeft className="h-3.5 w-3.5 group-hover:-translate-x-0.5 transition-transform" />
-                <span>{prevSection.title}</span>
-              </button>
-            ) : <div />}
-            {nextSection ? (
-              <button
-                onClick={() => navigate(nextSection.id)}
-                className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors group"
-              >
-                <span>{nextSection.title}</span>
-                <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-            ) : <div />}
+            ) : (
+              <Card>
+                <CardContent className="pt-6 pb-8 max-w-none">
+                  <ContentComponent onNavigate={navigate} />
+                </CardContent>
+              </Card>
+            )}
           </div>
-        )}
+
+          {/* Pagination */}
+          {!isHome && (
+            <div className="flex items-center justify-between mt-6 pt-4 border-t">
+              {prevSection ? (
+                <button
+                  onClick={() => navigate(prevSection.id)}
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors group"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5 group-hover:-translate-x-0.5 transition-transform" />
+                  <span>{prevSection.title}</span>
+                </button>
+              ) : <div />}
+              <span className="text-[10px] text-muted-foreground/30">
+                <kbd className="px-1 py-0.5 rounded bg-muted/50 text-[9px] font-mono">&larr;</kbd>
+                {" "}{t('keyboardHint')}{" "}
+                <kbd className="px-1 py-0.5 rounded bg-muted/50 text-[9px] font-mono">&rarr;</kbd>
+              </span>
+              {nextSection ? (
+                <button
+                  onClick={() => navigate(nextSection.id)}
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors group"
+                >
+                  <span>{nextSection.title}</span>
+                  <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              ) : <div />}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </ManualContext.Provider>
   )
 }

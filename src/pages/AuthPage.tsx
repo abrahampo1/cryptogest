@@ -49,9 +49,13 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
   const [isImporting, setIsImporting] = useState(false)
   const [importSuccess, setImportSuccess] = useState<string | null>(null)
   const [configuringStep, setConfiguringStep] = useState(0)
+  const [appVersion, setAppVersion] = useState('')
 
   useEffect(() => {
     checkAuthStatus()
+    window.electronAPI?.updater.getVersion().then((r) => {
+      if (r.success && r.data) setAppVersion(r.data)
+    })
   }, [])
 
   const checkAuthStatus = async () => {
@@ -367,43 +371,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
   return (
     <div className="flex min-h-screen bg-slate-950">
-      {/* Panel izquierdo - Branding */}
-      <div className="hidden lg:flex lg:w-[480px] flex-col justify-between bg-slate-900 border-r border-slate-800 p-10">
-        <div>
-          <div className="flex items-center gap-3">
-            <img src="./assets/logo.png" alt="CryptoGest" className="h-9 w-9" />
-            <span className="text-lg font-semibold text-white tracking-tight">CryptoGest</span>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <h2 className="text-2xl font-semibold text-white leading-tight">
-            {t('secureAccounting')}
-          </h2>
-          <p className="text-sm text-slate-400 leading-relaxed">
-            {t('secureDescription')}
-          </p>
-
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center gap-3">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span className="text-xs text-slate-400">{t('endToEndEncryption')}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span className="text-xs text-slate-400">{t('localStorageOnly')}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span className="text-xs text-slate-400">{t('portableBackups')}</span>
-            </div>
-          </div>
-        </div>
-
-        <p className="text-[11px] text-slate-600">v1.0.0</p>
-      </div>
-
-      {/* Panel derecho - Formulario */}
+      {/* Panel izquierdo - Formulario */}
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
           {/* Logo mobile */}
@@ -658,6 +626,42 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
             </p>
           )}
         </div>
+      </div>
+
+      {/* Panel derecho - Branding */}
+      <div className="hidden lg:flex lg:w-[480px] flex-col justify-between bg-slate-900 border-l border-slate-800 p-10">
+        <div>
+          <div className="flex items-center gap-3">
+            <img src="./assets/logo.png" alt="CryptoGest" className="h-9 w-9" />
+            <span className="text-lg font-semibold text-white tracking-tight">CryptoGest</span>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <h2 className="text-2xl font-semibold text-white leading-tight">
+            {t('secureAccounting')}
+          </h2>
+          <p className="text-sm text-slate-400 leading-relaxed">
+            {t('secureDescription')}
+          </p>
+
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center gap-3">
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="text-xs text-slate-400">{t('endToEndEncryption')}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="text-xs text-slate-400">{t('localStorageOnly')}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="text-xs text-slate-400">{t('portableBackups')}</span>
+            </div>
+          </div>
+        </div>
+
+        {appVersion && <p className="text-[11px] text-slate-600">v{appVersion}</p>}
       </div>
     </div>
   )

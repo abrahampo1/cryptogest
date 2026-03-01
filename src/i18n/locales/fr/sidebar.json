@@ -18,5 +18,6 @@
   "manual": "Manuel d'Utilisation",
   "lockSystem": "Verrouiller le Système",
   "activeCompany": "Entreprise active",
-  "cloudUser": "Compte cloud"
+  "cloudUser": "Compte cloud",
+  "backToMenu": "Retour au menu"
 }

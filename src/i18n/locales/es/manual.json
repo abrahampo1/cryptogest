@@ -6,6 +6,12 @@
   "readGuide": "Leer guía",
   "noResults": "Sin resultados para \"{{term}}\"",
   "ofTotal": "{{current}} de {{total}}",
+  "completed": "completado",
+  "resetProgress": "Reiniciar progreso",
+  "keyboardHint": "para navegar",
+  "tryItNow": "Pruébalo ahora",
+  "progressTitle": "Tu progreso",
+  "sectionsRead": "{{count}} de {{total}} secciones leídas",
   "sections": {
     "inicio": {
       "title": "Inicio",

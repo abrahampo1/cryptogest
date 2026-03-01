@@ -665,10 +665,41 @@ app.on('before-quit', async () => {
 ipcMain.handle('empresa:list', async () => {
   try {
     const { migrated, config } = crypto.checkAndMigrateLegacy()
+
+    // Filter cloud empresas based on session & server validity
+    const hasCloudEmpresas = config.empresas.some(e => e.tipo === 'cloud')
+    let returnEmpresas = config.empresas
+    if (hasCloudEmpresas) {
+      const session = crypto.loadCloudSession()
+      if (!session) {
+        // No cloud session: hide cloud empresas (can't use them anyway)
+        returnEmpresas = config.empresas.filter(e => e.tipo !== 'cloud')
+      } else {
+        // Cloud session active: validate against server, clean orphans
+        try {
+          cloudApi.setCloudApiConfig(session.serverUrl, session.token, 0)
+          const serverEmpresas = await cloudApi.empresaCloud.list()
+          cloudApi.clearCloudApiConfig()
+          const validIds = new Set(serverEmpresas.map((e: any) => e.id))
+          returnEmpresas = config.empresas.filter(e => {
+            if (e.tipo !== 'cloud') return true
+            return e.cloudConfig?.empresaId != null && validIds.has(e.cloudConfig.empresaId)
+          })
+          // Persist cleanup of orphaned entries
+          if (returnEmpresas.length !== config.empresas.length) {
+            config.empresas = returnEmpresas
+            crypto.saveEmpresasConfig(config)
+          }
+        } catch {
+          // API error: return all as-is (best-effort)
+        }
+      }
+    }
+
     return {
       success: true,
       data: {
-        empresas: config.empresas,
+        empresas: returnEmpresas,
         ultimaEmpresaId: config.ultimaEmpresaId,
         needsMigration: migrated,
       }

@@ -3,6 +3,13 @@ import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   LayoutDashboard,
   Users,
   FileText,
@@ -19,6 +26,9 @@ import {
   Cloud,
   HelpCircle,
   Mail,
+  ChevronsUpDown,
+  Check,
+  ArrowLeft,
 } from "lucide-react"
 
 export type Page = "dashboard" | "clientes" | "productos" | "facturas" | "gastos" | "ejercicios" | "contabilidad" | "modelos" | "buzon" | "cloud" | "configuracion" | "manual"
@@ -34,7 +44,10 @@ interface SidebarProps {
   onPageChange: (page: Page) => void
   onLock?: () => Promise<void>
   onSwitchEmpresa?: () => Promise<void>
+  onSelectEmpresa?: (id: string) => void
   empresaNombre?: string
+  empresas?: EmpresaInfo[]
+  activeEmpresaId?: string
   buzonEnabled?: boolean
   isCloudEmpresa?: boolean
   cloudSession?: CloudSession | null
@@ -67,7 +80,7 @@ const helpItems = [
   { id: "manual" as Page, labelKey: "manual", icon: HelpCircle },
 ]
 
-export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, empresaNombre, buzonEnabled, isCloudEmpresa, cloudSession }: SidebarProps) {
+export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, onSelectEmpresa, empresaNombre, empresas, activeEmpresaId, buzonEnabled, isCloudEmpresa, cloudSession }: SidebarProps) {
   const { t } = useTranslation(['sidebar', 'common'])
   const [isLocking, setIsLocking] = useState(false)
 
@@ -256,20 +269,49 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, em
 
       {/* Footer - Empresa activa */}
       <div className="border-t border-slate-700 px-3 py-2">
-        <button
-          onClick={onSwitchEmpresa}
-          className="w-full flex items-center gap-2 text-left hover:bg-slate-800/50 rounded px-1.5 py-1.5 transition-colors"
-        >
-          <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] text-slate-500 block leading-tight">{t('activeCompany')}</span>
-            <span className="text-[11px] text-slate-300 truncate block leading-tight flex items-center gap-1">
-              {empresaNombre || t('common:noCompany')}
-              {isCloudEmpresa && <Cloud className="h-3 w-3 text-blue-400 shrink-0" />}
-            </span>
-          </div>
-          <ChevronRight className="h-3 w-3 text-slate-600 shrink-0" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="w-full flex items-center gap-2 text-left hover:bg-slate-800/50 rounded px-1.5 py-1.5 transition-colors"
+            >
+              <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] text-slate-500 block leading-tight">{t('activeCompany')}</span>
+                <span className="text-[11px] text-slate-300 truncate block leading-tight flex items-center gap-1">
+                  {empresaNombre || t('common:noCompany')}
+                  {isCloudEmpresa && <Cloud className="h-3 w-3 text-blue-400 shrink-0" />}
+                </span>
+              </div>
+              <ChevronsUpDown className="h-3 w-3 text-slate-600 shrink-0" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-52 bg-slate-900 border-slate-700">
+            {empresas?.map((empresa) => (
+              <DropdownMenuItem
+                key={empresa.id}
+                className="flex items-center gap-2 text-slate-300 focus:bg-slate-800 focus:text-white cursor-pointer"
+                onClick={() => {
+                  if (empresa.id !== activeEmpresaId) {
+                    onSelectEmpresa?.(empresa.id)
+                  }
+                }}
+              >
+                <Building2 className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+                <span className="truncate text-xs flex-1">{empresa.nombre}</span>
+                {empresa.tipo === 'cloud' && <Cloud className="h-3 w-3 text-blue-400 shrink-0" />}
+                {empresa.id === activeEmpresaId && <Check className="h-3 w-3 text-primary shrink-0" />}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator className="bg-slate-700" />
+            <DropdownMenuItem
+              className="flex items-center gap-2 text-slate-400 focus:bg-slate-800 focus:text-white cursor-pointer"
+              onClick={() => onSwitchEmpresa?.()}
+            >
+              <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+              <span className="text-xs">{t('backToMenu')}</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         {cloudSession && (
           <div className="flex items-center gap-1.5 px-1.5 pt-1">
             <Cloud className="h-3 w-3 text-blue-400 shrink-0" />

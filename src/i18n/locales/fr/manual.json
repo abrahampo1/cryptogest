@@ -25,5 +25,14 @@
   "steps": "Étapes",
   "faq": "Questions Fréquentes",
   "concepts": "Concepts Clés",
-  "quickActions": "Actions Rapides"
+  "quickActions": "Actions Rapides",
+  "completed": "terminé",
+  "resetProgress": "Réinitialiser la progression",
+  "keyboardHint": "pour naviguer",
+  "tryItNow": "Essayez maintenant",
+  "progressTitle": "Votre progression",
+  "sectionsRead": "{{count}} sur {{total}} sections lues",
+  "noResults": "Aucun résultat pour \"{{term}}\"",
+  "ofTotal": "{{current}} sur {{total}}",
+  "readGuide": "Lire le guide"
 }
