@@ -318,6 +318,7 @@ const electronAPI = {
     downloadUpdate: () => ipcRenderer.invoke('updater:downloadUpdate') as Promise<ApiResponse<void>>,
     quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall') as Promise<ApiResponse<void>>,
     getVersion: () => ipcRenderer.invoke('updater:getVersion') as Promise<ApiResponse<string>>,
+    getReleases: (lang?: string) => ipcRenderer.invoke('updater:getReleases', lang) as Promise<ApiResponse<Array<{ tag: string; name: string; body: string; date: string; prerelease: boolean }>>>,
     onChecking: (callback: () => void) => {
       ipcRenderer.on('updater:checking', callback)
       return () => { ipcRenderer.removeAllListeners('updater:checking') }

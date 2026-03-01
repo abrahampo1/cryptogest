@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, net } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import os from 'os'
@@ -541,6 +541,40 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('updater:getVersion', () => {
     return { success: true, data: app.getVersion() }
+  })
+  ipcMain.handle('updater:getReleases', async (_event: any, targetLang?: string) => {
+    try {
+      const resp = await net.fetch('https://api.github.com/repos/abrahampo1/cryptogest/releases?per_page=10')
+      if (!resp.ok) return { success: true, data: [] }
+      const data = await resp.json()
+      let releases = data.map((r: any) => ({
+        tag: r.tag_name,
+        name: r.name,
+        body: r.body,
+        date: r.published_at,
+        prerelease: r.prerelease,
+      }))
+      // Auto-translate if target language is not Spanish (releases are written in ES)
+      if (targetLang && targetLang !== 'es') {
+        const translateText = async (text: string, tl: string): Promise<string> => {
+          try {
+            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=es&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(text)}`
+            const r = await net.fetch(url)
+            if (!r.ok) return text
+            const json = await r.json()
+            return (json[0] as any[]).map((s: any) => s[0]).join('')
+          } catch { return text }
+        }
+        releases = await Promise.all(releases.map(async (rel: any) => ({
+          ...rel,
+          name: rel.name ? await translateText(rel.name, targetLang) : rel.name,
+          body: rel.body ? await translateText(rel.body, targetLang) : rel.body,
+        })))
+      }
+      return { success: true, data: releases }
+    } catch {
+      return { success: true, data: [] }
+    }
   })
 
   // ============================================

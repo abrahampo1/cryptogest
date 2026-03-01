@@ -21,6 +21,9 @@ import {
   Cloud,
   LogOut,
   Download,
+  Sparkles,
+  Tag,
+  Calendar,
 } from "lucide-react"
 import {
   AlertDialog,
@@ -89,7 +92,7 @@ interface VolumeInfo {
 }
 
 export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCreated, deepLinkResult, onDeepLinkHandled, cloudSession, onCloudSessionChange, pendingInviteCode, onInviteCodeHandled }: EmpresaSelectorPageProps) {
-  const { t } = useTranslation(['auth', 'common'])
+  const { t, i18n } = useTranslation(['auth', 'common'])
   const [isCreating, setIsCreating] = useState(false)
   const [newName, setNewName] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -131,6 +134,11 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
   const [loadingCloudEmpresas, setLoadingCloudEmpresas] = useState(false)
   const [joiningEmpresaId, setJoiningEmpresaId] = useState<number | null>(null)
   const [addPassphrase, setAddPassphrase] = useState("")
+
+  // Changelog / releases
+  const [releases, setReleases] = useState<Array<{ tag: string; name: string; body: string; date: string; prerelease: boolean }>>([])
+  const [releasesLoading, setReleasesLoading] = useState(true)
+  const [currentVersion, setCurrentVersion] = useState("")
 
   const loadLocationData = useCallback(async () => {
     setLoadingVolumes(true)
@@ -204,6 +212,17 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
   useEffect(() => {
     fetchCloudEmpresas()
   }, [fetchCloudEmpresas])
+
+  // Fetch releases + version on mount (translated to current language)
+  useEffect(() => {
+    window.electronAPI?.updater.getVersion().then((r) => {
+      if (r?.success && r.data) setCurrentVersion(r.data)
+    })
+    setReleasesLoading(true)
+    window.electronAPI?.updater.getReleases(i18n.language).then((r) => {
+      if (r?.success && r.data) setReleases(r.data)
+    }).finally(() => setReleasesLoading(false))
+  }, [i18n.language])
 
   const handleCloudLogout = async () => {
     await window.electronAPI?.cloudSession.logout()
@@ -558,10 +577,29 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
     )
   }
 
+  // Inline markdown formatter: **bold**, `code`, [link](url)
+  const formatInlineMarkdown = (text: string) => {
+    const parts: (string | JSX.Element)[] = []
+    const regex = /(\*\*(.+?)\*\*)|(`(.+?)`)|(\[(.+?)\]\((.+?)\))/g
+    let last = 0
+    let match: RegExpExecArray | null
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > last) parts.push(text.slice(last, match.index))
+      if (match[1]) parts.push(<strong key={match.index} className="text-slate-300 font-medium">{match[2]}</strong>)
+      else if (match[3]) parts.push(<code key={match.index} className="bg-slate-800 text-slate-300 px-1 rounded text-[10px]">{match[4]}</code>)
+      else if (match[5]) parts.push(<a key={match.index} className="text-blue-400 hover:underline" href={match[7]} target="_blank" rel="noopener noreferrer">{match[6]}</a>)
+      last = match.index + match[0].length
+    }
+    if (last < text.length) parts.push(text.slice(last))
+    return <>{parts}</>
+  }
+
   // ========== MAIN SELECTOR ==========
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg">
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+      <div className="w-full max-w-5xl flex gap-8 items-start justify-center">
+      {/* Left column - selector */}
+      <div className="flex-1 max-w-lg">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-3">
@@ -1069,6 +1107,101 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      </div>
+
+      {/* Right column - changelog */}
+      <div className="w-96 shrink-0 hidden lg:block">
+        <div className="rounded-lg border border-slate-800 bg-slate-900/50 overflow-hidden">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-slate-800 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-amber-400" />
+            <h2 className="text-sm font-semibold text-white">{t('empresaSelector.changelog', { defaultValue: 'Novedades' })}</h2>
+            {currentVersion && (
+              <span className="ml-auto text-[10px] bg-slate-800 text-slate-400 rounded-full px-2 py-0.5">
+                v{currentVersion}
+              </span>
+            )}
+          </div>
+
+          {/* Release list */}
+          <div className="max-h-[70vh] overflow-y-auto scrollbar-hide">
+            {releasesLoading ? (
+              <div className="p-4 space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="animate-pulse space-y-2">
+                    <div className="h-3 w-24 bg-slate-800 rounded" />
+                    <div className="h-2 w-full bg-slate-800/60 rounded" />
+                    <div className="h-2 w-3/4 bg-slate-800/60 rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : releases.length === 0 ? (
+              <div className="p-6 text-center text-slate-500 text-xs">
+                {t('empresaSelector.noReleases', { defaultValue: 'No hay novedades disponibles' })}
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-800/50">
+                {releases.map((release, idx) => (
+                  <div key={release.tag} className={`px-4 py-3 ${idx === 0 ? 'bg-amber-500/5' : ''}`}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Tag className="h-3 w-3 text-slate-500" />
+                      <span className="text-xs font-medium text-slate-300">{release.tag}</span>
+                      {release.prerelease && (
+                        <span className="text-[9px] bg-amber-500/20 text-amber-400 rounded px-1 py-0.5 leading-none">pre</span>
+                      )}
+                      {idx === 0 && currentVersion && release.tag === `v${currentVersion}` && (
+                        <span className="text-[9px] bg-emerald-500/20 text-emerald-400 rounded px-1 py-0.5 leading-none">
+                          {t('empresaSelector.currentVersion', { defaultValue: 'actual' })}
+                        </span>
+                      )}
+                    </div>
+                    {release.name && release.name !== release.tag && (
+                      <p className="text-xs font-medium text-slate-200 mb-1">{release.name}</p>
+                    )}
+                    {release.body && (
+                      <div className="text-[11px] text-slate-400 leading-relaxed space-y-0.5">
+                        {release.body.split('\n').map((line: string, li: number) => {
+                          if (!line.trim()) return null
+                          // Markdown headers
+                          const headerMatch = line.match(/^(#{1,3})\s+(.+)/)
+                          if (headerMatch) {
+                            const level = headerMatch[1].length
+                            return (
+                              <p key={li} className={`font-medium text-slate-300 ${level === 1 ? 'text-xs mt-2' : level === 2 ? 'text-[11px] mt-1.5' : 'text-[11px] mt-1'}`}>
+                                {formatInlineMarkdown(headerMatch[2])}
+                              </p>
+                            )
+                          }
+                          // Bullet points (- or *)
+                          const bulletMatch = line.match(/^[\s]*[-*]\s+(.+)/)
+                          if (bulletMatch) {
+                            return (
+                              <p key={li} className="flex gap-1.5 pl-1">
+                                <span className="text-slate-600 shrink-0">&#8226;</span>
+                                <span>{formatInlineMarkdown(bulletMatch[1])}</span>
+                              </p>
+                            )
+                          }
+                          // Regular line
+                          return <p key={li}>{formatInlineMarkdown(line)}</p>
+                        })}
+                      </div>
+                    )}
+                    {release.date && (
+                      <div className="flex items-center gap-1 mt-2">
+                        <Calendar className="h-2.5 w-2.5 text-slate-600" />
+                        <span className="text-[10px] text-slate-600">
+                          {new Date(release.date).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
       </div>
     </div>
   )

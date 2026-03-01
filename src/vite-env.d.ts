@@ -701,6 +701,7 @@ interface ElectronAPI {
     downloadUpdate: () => Promise<ApiResponse<void>>
     quitAndInstall: () => Promise<ApiResponse<void>>
     getVersion: () => Promise<ApiResponse<string>>
+    getReleases: (lang?: string) => Promise<ApiResponse<Array<{ tag: string; name: string; body: string; date: string; prerelease: boolean }>>>
     onChecking: (callback: () => void) => () => void
     onAvailable: (callback: (info: { version: string; releaseDate?: string }) => void) => () => void
     onNotAvailable: (callback: () => void) => () => void
