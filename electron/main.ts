@@ -3205,6 +3205,21 @@ ipcMain.handle('cloud:plan', async () => {
   }
 })
 
+// Get plan info (lightweight, no local DB required — for empresa selector)
+ipcMain.handle('cloud:planCheck', async () => {
+  try {
+    const session = crypto.loadCloudSession()
+    if (!session) {
+      return { success: false, error: 'No cloud session' }
+    }
+    cloud.setCloudConfig(session.serverUrl, session.token)
+    const result = await cloud.getAccountPlan()
+    return { success: true, data: result }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
 // Create license checkout session and open in browser
 ipcMain.handle('cloud:licenseCheckout', async () => {
   try {
@@ -3220,7 +3235,13 @@ ipcMain.handle('cloud:licenseCheckout', async () => {
 // Create subscription checkout or upgrade plan
 ipcMain.handle('cloud:subscriptionCheckout', async (_, plan: string) => {
   try {
-    requireAuth()
+    // Only need cloud session, not local empresa auth
+    const session = crypto.loadCloudSession()
+    if (!session) {
+      return { success: false, error: 'No cloud session' }
+    }
+    cloud.setCloudConfig(session.serverUrl, session.token)
+
     const result = await cloud.createSubscriptionCheckout(plan)
 
     // If it returned a checkout URL, open it in the browser

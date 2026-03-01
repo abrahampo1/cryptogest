@@ -620,6 +620,7 @@ interface ElectronAPI {
     plan: () => Promise<ApiResponse<{ plan: CloudPlan; usage: CloudUsage; license: CloudLicense }>>
     licenseCheckout: () => Promise<ApiResponse<{ checkout_url: string }>>
     subscriptionCheckout: (plan: string) => Promise<ApiResponse<{ checkout_url?: string; upgraded?: boolean }>>
+    planCheck: () => Promise<ApiResponse<{ plan: CloudPlan; usage: CloudUsage; license: CloudLicense }>>
     onUploadProgress: (callback: (percent: number) => void) => () => void
     onDownloadProgress: (callback: (percent: number) => void) => () => void
     confirmDeviceLink: (data: { token: string; server: string; deviceName?: string }) => Promise<ApiResponse<any>>

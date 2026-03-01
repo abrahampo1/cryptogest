@@ -318,7 +318,7 @@ export function EmpresaSelectorPage({ empresas, ultimaEmpresaId, onSelect, onCre
     if (!isPollingSubscription) return
     const interval = setInterval(async () => {
       try {
-        const result = await window.electronAPI?.cloud.plan()
+        const result = await window.electronAPI?.cloud.planCheck()
         if (result?.success && result.data?.plan) {
           const plan = result.data.plan
           // Check if plan has changed from free (subscription activated)

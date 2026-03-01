@@ -244,6 +244,8 @@ const electronAPI = {
       ipcRenderer.invoke('cloud:licenseCheckout') as Promise<ApiResponse<{ checkout_url: string }>>,
     subscriptionCheckout: (plan: string) =>
       ipcRenderer.invoke('cloud:subscriptionCheckout', plan) as Promise<ApiResponse<{ checkout_url?: string; upgraded?: boolean }>>,
+    planCheck: () =>
+      ipcRenderer.invoke('cloud:planCheck') as Promise<ApiResponse<any>>,
     onUploadProgress: (callback: (percent: number) => void) => {
       ipcRenderer.on('cloud:upload-progress', (_, percent) => callback(percent))
       return () => { ipcRenderer.removeAllListeners('cloud:upload-progress') }
