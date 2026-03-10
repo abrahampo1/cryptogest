@@ -1668,6 +1668,351 @@ export const logo = {
 }
 
 // ============================================
+// RRHH: Departamentos
+// ============================================
+
+export const departamentos = {
+  getAll: async (): Promise<any[]> => {
+    const all = await getAllEntities('departamento')
+    const empleados = await getAllEntities('empleado')
+    return all.map(d => ({
+      ...d,
+      activo: d.activo ?? true,
+      _count: { empleados: empleados.filter((e: any) => e.departamentoId === d.id).length },
+    })).sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || ''))
+  },
+  create: async (data: any): Promise<any> => {
+    return await createEntity('departamento', { nombre: data.nombre, activo: data.activo ?? true })
+  },
+  update: async (id: number, data: any): Promise<any> => {
+    return await updateEntity('departamento', id, data)
+  },
+  delete: async (id: number): Promise<void> => {
+    await deleteEntity('departamento', id)
+  },
+}
+
+// ============================================
+// RRHH: Empleados
+// ============================================
+
+export const empleados = {
+  getAll: async (): Promise<any[]> => {
+    const all = await getAllEntities('empleado')
+    const deptos = await getAllEntities('departamento')
+    const contratos = await getAllEntities('contrato')
+    const deptoMap = new Map(deptos.map((d: any) => [d.id, d]))
+    return all.map(e => ({
+      ...e,
+      activo: e.activo ?? true,
+      departamento: e.departamentoId ? deptoMap.get(e.departamentoId) || null : null,
+      contratos: contratos.filter((c: any) => c.empleadoId === e.id && c.activo).slice(0, 1),
+    })).sort((a: any, b: any) => (a.apellidos || '').localeCompare(b.apellidos || '') || (a.nombre || '').localeCompare(b.nombre || ''))
+  },
+  getById: async (id: number): Promise<any> => {
+    const uuid = getUuidById('empleado', id)
+    if (!uuid) { await getAllEntities('empleado') }
+    const finalUuid = getUuidById('empleado', id)
+    if (!finalUuid) throw new Error('Empleado not found')
+    const empleado = await getEntity('empleado', finalUuid)
+    const deptos = await getAllEntities('departamento')
+    const contratos = await getAllEntities('contrato')
+    const nominas = await getAllEntities('nomina')
+    const ausencias = await getAllEntities('ausencia')
+    const tiposAusencia = await getAllEntities('tipoAusencia')
+    const tipoMap = new Map(tiposAusencia.map((t: any) => [t.id, t]))
+    const deptoMap = new Map(deptos.map((d: any) => [d.id, d]))
+    return {
+      ...empleado,
+      departamento: empleado.departamentoId ? deptoMap.get(empleado.departamentoId) || null : null,
+      contratos: contratos.filter((c: any) => c.empleadoId === id).sort((a: any, b: any) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime()),
+      nominas: nominas.filter((n: any) => n.empleadoId === id).sort((a: any, b: any) => b.anio - a.anio || b.mes - a.mes).slice(0, 12),
+      ausencias: ausencias.filter((a: any) => a.empleadoId === id).map((a: any) => ({ ...a, tipoAusencia: tipoMap.get(a.tipoAusenciaId) || null })).sort((a: any, b: any) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime()).slice(0, 10),
+    }
+  },
+  create: async (data: any): Promise<any> => {
+    const entity = await createEntity('empleado', {
+      ...data, activo: data.activo ?? true, pais: data.pais || 'España',
+      grupoCotizacion: data.grupoCotizacion || 1, porcentajeIRPF: data.porcentajeIRPF || 0,
+      diasVacacionesAnuales: data.diasVacacionesAnuales || 30,
+      fechaAlta: data.fechaAlta || new Date().toISOString(),
+    })
+    const deptos = await getAllEntities('departamento')
+    const deptoMap = new Map(deptos.map((d: any) => [d.id, d]))
+    return { ...entity, departamento: entity.departamentoId ? deptoMap.get(entity.departamentoId) || null : null, contratos: [] }
+  },
+  update: async (id: number, data: any): Promise<any> => {
+    const updated = await updateEntity('empleado', id, data)
+    const deptos = await getAllEntities('departamento')
+    const deptoMap = new Map(deptos.map((d: any) => [d.id, d]))
+    return { ...updated, departamento: updated.departamentoId ? deptoMap.get(updated.departamentoId) || null : null }
+  },
+  delete: async (id: number): Promise<void> => {
+    // Also delete related contratos, nominas, ausencias, jornada
+    const contratos = await getAllEntities('contrato')
+    const nominas = await getAllEntities('nomina')
+    const ausencias = await getAllEntities('ausencia')
+    const jornadas = await getAllEntities('registroJornada')
+    for (const c of contratos.filter((c: any) => c.empleadoId === id)) await deleteEntity('contrato', c.id)
+    for (const n of nominas.filter((n: any) => n.empleadoId === id)) await deleteEntity('nomina', n.id)
+    for (const a of ausencias.filter((a: any) => a.empleadoId === id)) await deleteEntity('ausencia', a.id)
+    for (const j of jornadas.filter((j: any) => j.empleadoId === id)) await deleteEntity('registroJornada', j.id)
+    await deleteEntity('empleado', id)
+  },
+}
+
+// ============================================
+// RRHH: Contratos
+// ============================================
+
+export const contratos = {
+  getByEmpleado: async (empleadoId: number): Promise<any[]> => {
+    const all = await getAllEntities('contrato')
+    return all.filter((c: any) => c.empleadoId === empleadoId).sort((a: any, b: any) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime())
+  },
+  create: async (data: any): Promise<any> => {
+    return await createEntity('contrato', {
+      ...data, activo: data.activo ?? true, tipoContrato: data.tipoContrato || 'indefinido',
+      jornada: data.jornada || 'completa', horasSemanales: data.horasSemanales || 40,
+      numPagasExtra: data.numPagasExtra ?? 2, pagasProrrateadas: data.pagasProrrateadas ?? false,
+      porcentajeATEP: data.porcentajeATEP ?? 1.50,
+    })
+  },
+  update: async (id: number, data: any): Promise<any> => {
+    return await updateEntity('contrato', id, data)
+  },
+  delete: async (id: number): Promise<void> => {
+    await deleteEntity('contrato', id)
+  },
+}
+
+// ============================================
+// RRHH: Nóminas
+// ============================================
+
+export const nominas = {
+  getAll: async (filters?: { empleadoId?: number; mes?: number; anio?: number; estado?: string }): Promise<any[]> => {
+    const all = await getAllEntities('nomina')
+    const empleadosAll = await getAllEntities('empleado')
+    const lineasAll = await getAllEntities('lineaNomina')
+    const empMap = new Map(empleadosAll.map((e: any) => [e.id, { id: e.id, nombre: e.nombre, apellidos: e.apellidos, nif: e.nif }]))
+    let filtered = all
+    if (filters?.empleadoId) filtered = filtered.filter((n: any) => n.empleadoId === filters.empleadoId)
+    if (filters?.mes) filtered = filtered.filter((n: any) => n.mes === filters.mes)
+    if (filters?.anio) filtered = filtered.filter((n: any) => n.anio === filters.anio)
+    if (filters?.estado) filtered = filtered.filter((n: any) => n.estado === filters.estado)
+    return filtered.map(n => ({
+      ...n,
+      empleado: empMap.get(n.empleadoId) || null,
+      lineas: lineasAll.filter((l: any) => l.nominaId === n.id).sort((a: any, b: any) => (a.orden || 0) - (b.orden || 0)),
+    })).sort((a: any, b: any) => b.anio - a.anio || b.mes - a.mes)
+  },
+  getById: async (id: number): Promise<any> => {
+    const uuid = getUuidById('nomina', id)
+    if (!uuid) { await getAllEntities('nomina') }
+    const finalUuid = getUuidById('nomina', id)
+    if (!finalUuid) throw new Error('Nomina not found')
+    const nomina = await getEntity('nomina', finalUuid)
+    const empleadosAll = await getAllEntities('empleado')
+    const lineasAll = await getAllEntities('lineaNomina')
+    const emp = empleadosAll.find((e: any) => e.id === nomina.empleadoId)
+    return {
+      ...nomina,
+      empleado: emp || null,
+      lineas: lineasAll.filter((l: any) => l.nominaId === id).sort((a: any, b: any) => (a.orden || 0) - (b.orden || 0)),
+    }
+  },
+  create: async (data: any): Promise<any> => {
+    const lineas = data.lineas || []
+    const nominaData = { ...data, estado: 'borrador' }
+    delete nominaData.lineas
+    const nomina = await createEntity('nomina', nominaData)
+    // Create lineas
+    for (const l of lineas) {
+      await createEntity('lineaNomina', { ...l, nominaId: nomina.id })
+    }
+    const empleadosAll = await getAllEntities('empleado')
+    const emp = empleadosAll.find((e: any) => e.id === nomina.empleadoId)
+    return { ...nomina, empleado: emp || null, lineas }
+  },
+  confirmar: async (id: number): Promise<any> => {
+    return await updateEntity('nomina', id, { estado: 'confirmada' })
+  },
+  marcarPagada: async (id: number): Promise<any> => {
+    return await updateEntity('nomina', id, { estado: 'pagada', fechaPago: new Date().toISOString() })
+  },
+  delete: async (id: number): Promise<void> => {
+    // Delete related lineas first
+    const lineasAll = await getAllEntities('lineaNomina')
+    for (const l of lineasAll.filter((l: any) => l.nominaId === id)) {
+      await deleteEntity('lineaNomina', l.id)
+    }
+    await deleteEntity('nomina', id)
+  },
+}
+
+// ============================================
+// RRHH: SEPA
+// ============================================
+
+export const sepa = {
+  getLotes: async (): Promise<any[]> => {
+    const all = await getAllEntities('loteSEPA')
+    return all.sort((a: any, b: any) => new Date(b.fechaCreacion || b.createdAt).getTime() - new Date(a.fechaCreacion || a.createdAt).getTime())
+  },
+  createLote: async (data: any): Promise<any> => {
+    return await createEntity('loteSEPA', data)
+  },
+  updateEstado: async (id: number, estado: string): Promise<any> => {
+    return await updateEntity('loteSEPA', id, { estado })
+  },
+  deleteLote: async (id: number): Promise<void> => {
+    await deleteEntity('loteSEPA', id)
+  },
+}
+
+// ============================================
+// RRHH: Tipos de Ausencia
+// ============================================
+
+export const tiposAusencia = {
+  getAll: async (): Promise<any[]> => {
+    const all = await getAllEntities('tipoAusencia')
+    return all.sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || ''))
+  },
+  create: async (data: any): Promise<any> => {
+    return await createEntity('tipoAusencia', {
+      nombre: data.nombre, codigo: data.codigo,
+      descontaSalario: data.descontaSalario ?? false,
+      requiereAprobacion: data.requiereAprobacion ?? true,
+      color: data.color || '#3B82F6', activo: data.activo ?? true,
+    })
+  },
+  update: async (id: number, data: any): Promise<any> => {
+    return await updateEntity('tipoAusencia', id, data)
+  },
+  delete: async (id: number): Promise<void> => {
+    await deleteEntity('tipoAusencia', id)
+  },
+}
+
+// ============================================
+// RRHH: Ausencias
+// ============================================
+
+export const ausencias = {
+  getAll: async (filters?: { empleadoId?: number; estado?: string; fechaDesde?: string; fechaHasta?: string }): Promise<any[]> => {
+    const all = await getAllEntities('ausencia')
+    const empleadosAll = await getAllEntities('empleado')
+    const tiposAll = await getAllEntities('tipoAusencia')
+    const empMap = new Map(empleadosAll.map((e: any) => [e.id, { id: e.id, nombre: e.nombre, apellidos: e.apellidos }]))
+    const tipoMap = new Map(tiposAll.map((t: any) => [t.id, t]))
+    let filtered = all
+    if (filters?.empleadoId) filtered = filtered.filter((a: any) => a.empleadoId === filters.empleadoId)
+    if (filters?.estado) filtered = filtered.filter((a: any) => a.estado === filters.estado)
+    if (filters?.fechaDesde) filtered = filtered.filter((a: any) => new Date(a.fechaInicio) >= new Date(filters.fechaDesde!))
+    if (filters?.fechaHasta) filtered = filtered.filter((a: any) => new Date(a.fechaInicio) <= new Date(filters.fechaHasta!))
+    return filtered.map(a => ({
+      ...a,
+      empleado: empMap.get(a.empleadoId) || null,
+      tipoAusencia: tipoMap.get(a.tipoAusenciaId) || null,
+    })).sort((a: any, b: any) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime())
+  },
+  create: async (data: any): Promise<any> => {
+    const ausencia = await createEntity('ausencia', {
+      ...data, estado: data.estado || 'pendiente',
+    })
+    const empleadosAll = await getAllEntities('empleado')
+    const tiposAll = await getAllEntities('tipoAusencia')
+    const emp = empleadosAll.find((e: any) => e.id === ausencia.empleadoId)
+    const tipo = tiposAll.find((t: any) => t.id === ausencia.tipoAusenciaId)
+    return { ...ausencia, empleado: emp ? { id: emp.id, nombre: emp.nombre, apellidos: emp.apellidos } : null, tipoAusencia: tipo || null }
+  },
+  updateEstado: async (id: number, estado: string): Promise<any> => {
+    const updated = await updateEntity('ausencia', id, { estado })
+    const empleadosAll = await getAllEntities('empleado')
+    const tiposAll = await getAllEntities('tipoAusencia')
+    const emp = empleadosAll.find((e: any) => e.id === updated.empleadoId)
+    const tipo = tiposAll.find((t: any) => t.id === updated.tipoAusenciaId)
+    return { ...updated, empleado: emp ? { id: emp.id, nombre: emp.nombre, apellidos: emp.apellidos } : null, tipoAusencia: tipo || null }
+  },
+  delete: async (id: number): Promise<void> => {
+    await deleteEntity('ausencia', id)
+  },
+}
+
+// ============================================
+// RRHH: Control de Jornada
+// ============================================
+
+export const jornada = {
+  getAll: async (filters?: { empleadoId?: number; fechaDesde?: string; fechaHasta?: string }): Promise<any[]> => {
+    const all = await getAllEntities('registroJornada')
+    const empleadosAll = await getAllEntities('empleado')
+    const empMap = new Map(empleadosAll.map((e: any) => [e.id, { id: e.id, nombre: e.nombre, apellidos: e.apellidos }]))
+    let filtered = all
+    if (filters?.empleadoId) filtered = filtered.filter((r: any) => r.empleadoId === filters.empleadoId)
+    if (filters?.fechaDesde) filtered = filtered.filter((r: any) => new Date(r.fecha) >= new Date(filters.fechaDesde!))
+    if (filters?.fechaHasta) filtered = filtered.filter((r: any) => new Date(r.fecha) <= new Date(filters.fechaHasta!))
+    return filtered.map(r => ({
+      ...r,
+      empleado: empMap.get(r.empleadoId) || null,
+    })).sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+  },
+  fichar: async (data: { empleadoId: number; tipo: 'entrada' | 'salida' }): Promise<any> => {
+    const all = await getAllEntities('registroJornada')
+    const now = new Date()
+    const todayStr = now.toISOString().split('T')[0]
+    let registro = all.find((r: any) => r.empleadoId === data.empleadoId && (r.fecha || '').startsWith(todayStr))
+
+    if (data.tipo === 'entrada') {
+      if (registro) {
+        return await updateEntity('registroJornada', registro.id, { horaEntrada: now.toISOString() })
+      } else {
+        return await createEntity('registroJornada', { empleadoId: data.empleadoId, fecha: todayStr, horaEntrada: now.toISOString(), horasTrabajadas: 0, horasExtra: 0, pausaMinutos: 0 })
+      }
+    } else {
+      if (!registro) throw new Error('noEntryToday')
+      const horaEntrada = registro.horaEntrada ? new Date(registro.horaEntrada) : null
+      let horasTrabajadas = 0
+      if (horaEntrada) {
+        horasTrabajadas = Math.round(((now.getTime() - horaEntrada.getTime()) / 3600000 - (registro.pausaMinutos || 0) / 60) * 100) / 100
+      }
+      const horasExtra = Math.max(0, Math.round((horasTrabajadas - 8) * 100) / 100)
+      return await updateEntity('registroJornada', registro.id, { horaSalida: now.toISOString(), horasTrabajadas, horasExtra })
+    }
+  },
+  update: async (id: number, data: any): Promise<any> => {
+    return await updateEntity('registroJornada', id, data)
+  },
+  delete: async (id: number): Promise<void> => {
+    await deleteEntity('registroJornada', id)
+  },
+  resumenMensual: async (params: { mes: number; anio: number }): Promise<any[]> => {
+    const empleadosAll = await getAllEntities('empleado')
+    const registrosAll = await getAllEntities('registroJornada')
+    const activos = empleadosAll.filter((e: any) => e.activo !== false)
+    const fechaDesde = new Date(params.anio, params.mes - 1, 1)
+    const fechaHasta = new Date(params.anio, params.mes, 0, 23, 59, 59)
+    const registrosMes = registrosAll.filter((r: any) => {
+      const f = new Date(r.fecha)
+      return f >= fechaDesde && f <= fechaHasta
+    })
+    return activos.map((emp: any) => {
+      const regs = registrosMes.filter((r: any) => r.empleadoId === emp.id)
+      const totalHoras = regs.reduce((s: number, r: any) => s + (r.horasTrabajadas || 0), 0)
+      const totalExtra = regs.reduce((s: number, r: any) => s + (r.horasExtra || 0), 0)
+      return {
+        empleadoId: emp.id, nombre: `${emp.apellidos}, ${emp.nombre}`,
+        diasTrabajados: regs.filter((r: any) => (r.horasTrabajadas || 0) > 0).length,
+        totalHoras: Math.round(totalHoras * 100) / 100,
+        totalHorasExtra: Math.round(totalExtra * 100) / 100,
+      }
+    }).sort((a: any, b: any) => a.nombre.localeCompare(b.nombre))
+  },
+}
+
+// ============================================
 // Empresa Management
 // ============================================
 

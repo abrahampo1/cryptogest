@@ -6891,7 +6891,10 @@ ipcMain.handle('holded:import', async (_, apiKey: string, entities: string[]) =>
 ipcMain.handle('departamentos:getAll', async () => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    if (ctx.mode === 'cloud') {
+      const data = await cloudApi.departamentos.getAll()
+      return { success: true, data }
+    }
     const db = ctx.db
     const departamentos = await db.departamento.findMany({
       orderBy: { nombre: 'asc' },
@@ -6906,7 +6909,10 @@ ipcMain.handle('departamentos:getAll', async () => {
 ipcMain.handle('departamentos:create', async (_, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const departamento = await cloudApi.departamentos.create(data)
+      return { success: true, data: departamento }
+    }
     const db = ctx.db
     const departamento = await db.departamento.create({ data: { nombre: data.nombre, activo: data.activo ?? true } })
     return { success: true, data: departamento }
@@ -6919,7 +6925,10 @@ ipcMain.handle('departamentos:create', async (_, data: any) => {
 ipcMain.handle('departamentos:update', async (_, id: number, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const departamento = await cloudApi.departamentos.update(id, data)
+      return { success: true, data: departamento }
+    }
     const db = ctx.db
     const departamento = await db.departamento.update({ where: { id }, data: { nombre: data.nombre, activo: data.activo } })
     return { success: true, data: departamento }
@@ -6932,7 +6941,10 @@ ipcMain.handle('departamentos:update', async (_, id: number, data: any) => {
 ipcMain.handle('departamentos:delete', async (_, id: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      await cloudApi.departamentos.delete(id)
+      return { success: true }
+    }
     const db = ctx.db
     await db.departamento.delete({ where: { id } })
     return { success: true }
@@ -6948,7 +6960,10 @@ ipcMain.handle('departamentos:delete', async (_, id: number) => {
 ipcMain.handle('empleados:getAll', async () => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    if (ctx.mode === 'cloud') {
+      const data = await cloudApi.empleados.getAll()
+      return { success: true, data }
+    }
     const db = ctx.db
     const empleados = await db.empleado.findMany({
       orderBy: [{ apellidos: 'asc' }, { nombre: 'asc' }],
@@ -6963,7 +6978,10 @@ ipcMain.handle('empleados:getAll', async () => {
 ipcMain.handle('empleados:getById', async (_, id: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const empleado = await cloudApi.empleados.getById(id)
+      return { success: true, data: empleado }
+    }
     const db = ctx.db
     const empleado = await db.empleado.findUnique({
       where: { id },
@@ -6979,7 +6997,10 @@ ipcMain.handle('empleados:getById', async (_, id: number) => {
 ipcMain.handle('empleados:create', async (_, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const empleado = await cloudApi.empleados.create(data)
+      return { success: true, data: empleado }
+    }
     const db = ctx.db
     const empleado = await db.empleado.create({
       data: {
@@ -7012,7 +7033,10 @@ ipcMain.handle('empleados:create', async (_, data: any) => {
 ipcMain.handle('empleados:update', async (_, id: number, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const empleado = await cloudApi.empleados.update(id, data)
+      return { success: true, data: empleado }
+    }
     const db = ctx.db
     const empleado = await db.empleado.update({
       where: { id },
@@ -7046,7 +7070,10 @@ ipcMain.handle('empleados:update', async (_, id: number, data: any) => {
 ipcMain.handle('empleados:delete', async (_, id: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      await cloudApi.empleados.delete(id)
+      return { success: true }
+    }
     const db = ctx.db
     await db.empleado.delete({ where: { id } })
     return { success: true }
@@ -7062,7 +7089,10 @@ ipcMain.handle('empleados:delete', async (_, id: number) => {
 ipcMain.handle('contratos:getByEmpleado', async (_, empleadoId: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    if (ctx.mode === 'cloud') {
+      const data = await cloudApi.contratos.getByEmpleado(empleadoId)
+      return { success: true, data }
+    }
     const db = ctx.db
     const contratos = await db.contrato.findMany({ where: { empleadoId }, orderBy: { fechaInicio: 'desc' } })
     return { success: true, data: contratos }
@@ -7074,7 +7104,10 @@ ipcMain.handle('contratos:getByEmpleado', async (_, empleadoId: number) => {
 ipcMain.handle('contratos:create', async (_, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const contrato = await cloudApi.contratos.create(data)
+      return { success: true, data: contrato }
+    }
     const db = ctx.db
     const contrato = await db.contrato.create({
       data: {
@@ -7099,7 +7132,10 @@ ipcMain.handle('contratos:create', async (_, data: any) => {
 ipcMain.handle('contratos:update', async (_, id: number, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const contrato = await cloudApi.contratos.update(id, data)
+      return { success: true, data: contrato }
+    }
     const db = ctx.db
     const contrato = await db.contrato.update({
       where: { id },
@@ -7123,7 +7159,10 @@ ipcMain.handle('contratos:update', async (_, id: number, data: any) => {
 ipcMain.handle('contratos:delete', async (_, id: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      await cloudApi.contratos.delete(id)
+      return { success: true }
+    }
     const db = ctx.db
     await db.contrato.delete({ where: { id } })
     return { success: true }
@@ -7139,7 +7178,10 @@ ipcMain.handle('contratos:delete', async (_, id: number) => {
 ipcMain.handle('nominas:getAll', async (_, filters?: { empleadoId?: number; mes?: number; anio?: number; estado?: string }) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    if (ctx.mode === 'cloud') {
+      const data = await cloudApi.nominas.getAll(filters)
+      return { success: true, data }
+    }
     const db = ctx.db
     const where: any = {}
     if (filters?.empleadoId) where.empleadoId = filters.empleadoId
@@ -7159,7 +7201,10 @@ ipcMain.handle('nominas:getAll', async (_, filters?: { empleadoId?: number; mes?
 ipcMain.handle('nominas:getById', async (_, id: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const nomina = await cloudApi.nominas.getById(id)
+      return { success: true, data: nomina }
+    }
     const db = ctx.db
     const nomina = await db.nomina.findUnique({
       where: { id },
@@ -7175,7 +7220,60 @@ ipcMain.handle('nominas:getById', async (_, id: number) => {
 ipcMain.handle('nominas:calcular', async (_, data: { empleadoId: number; mes: number; anio: number; complementos?: number; horasExtraImporte?: number; otrosDevengos?: number }) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      // In cloud mode, do payroll calculation using cloud entities
+      const empleadosAll = await cloudApi.empleados.getAll()
+      const empleado = empleadosAll.find((e: any) => e.id === data.empleadoId)
+      if (!empleado) return { success: false, error: 'empleadoNotFound' }
+      const contratosAll = await cloudApi.contratos.getByEmpleado(data.empleadoId)
+      const contrato = contratosAll.find((c: any) => c.activo)
+      if (!contrato) return { success: false, error: 'noActiveContract' }
+
+      const salarioBase = contrato.salarioBrutoMensual
+      const prorrataPagasExtra = contrato.pagasProrrateadas ? (contrato.salarioBrutoAnual / 12 - contrato.salarioBrutoMensual) : 0
+      const complementos = data.complementos || 0
+      const horasExtraImporte = data.horasExtraImporte || 0
+      const otrosDevengos = data.otrosDevengos || 0
+      const totalDevengado = salarioBase + prorrataPagasExtra + complementos + horasExtraImporte + otrosDevengos
+      const baseCotizacionCC = salarioBase + complementos + prorrataPagasExtra
+      const baseCotizacionCP = baseCotizacionCC + horasExtraImporte
+      const isTemporary = contrato.tipoContrato === 'temporal'
+      const ccTrab = Math.round(baseCotizacionCC * 0.047 * 100) / 100
+      const desempleoTrab = Math.round(baseCotizacionCP * (isTemporary ? 0.016 : 0.0155) * 100) / 100
+      const fpTrab = Math.round(baseCotizacionCP * 0.001 * 100) / 100
+      const irpfImporte = Math.round(totalDevengado * ((empleado.porcentajeIRPF || 0) / 100) * 100) / 100
+      const totalDeducciones = Math.round((ccTrab + desempleoTrab + fpTrab + irpfImporte) * 100) / 100
+      const liquidoPercibir = Math.round((totalDevengado - totalDeducciones) * 100) / 100
+      const ccEmp = Math.round(baseCotizacionCC * 0.236 * 100) / 100
+      const desempleoEmp = Math.round(baseCotizacionCP * (isTemporary ? 0.067 : 0.055) * 100) / 100
+      const fogasaEmp = Math.round(baseCotizacionCP * 0.002 * 100) / 100
+      const fpEmp = Math.round(baseCotizacionCP * 0.006 * 100) / 100
+      const atepEmp = Math.round(baseCotizacionCP * ((contrato.porcentajeATEP || 1.5) / 100) * 100) / 100
+      const totalCosteSS = Math.round((ccEmp + desempleoEmp + fogasaEmp + fpEmp + atepEmp) * 100) / 100
+      const costeTotal = Math.round((totalDevengado + totalCosteSS) * 100) / 100
+      const lineas = [
+        { tipo: 'devengo', concepto: 'Salario base', base: salarioBase, porcentaje: 0, importe: salarioBase, orden: 1 },
+        ...(prorrataPagasExtra > 0 ? [{ tipo: 'devengo', concepto: 'Prorrata pagas extra', base: prorrataPagasExtra, porcentaje: 0, importe: prorrataPagasExtra, orden: 2 }] : []),
+        ...(complementos > 0 ? [{ tipo: 'devengo', concepto: 'Complementos', base: complementos, porcentaje: 0, importe: complementos, orden: 3 }] : []),
+        ...(horasExtraImporte > 0 ? [{ tipo: 'devengo', concepto: 'Horas extra', base: horasExtraImporte, porcentaje: 0, importe: horasExtraImporte, orden: 4 }] : []),
+        ...(otrosDevengos > 0 ? [{ tipo: 'devengo', concepto: 'Otros devengos', base: otrosDevengos, porcentaje: 0, importe: otrosDevengos, orden: 5 }] : []),
+        { tipo: 'deduccion', concepto: 'Contingencias comunes', base: baseCotizacionCC, porcentaje: 4.70, importe: ccTrab, orden: 10 },
+        { tipo: 'deduccion', concepto: 'Desempleo', base: baseCotizacionCP, porcentaje: isTemporary ? 1.60 : 1.55, importe: desempleoTrab, orden: 11 },
+        { tipo: 'deduccion', concepto: 'Formación profesional', base: baseCotizacionCP, porcentaje: 0.10, importe: fpTrab, orden: 12 },
+        { tipo: 'deduccion', concepto: 'IRPF', base: totalDevengado, porcentaje: empleado.porcentajeIRPF || 0, importe: irpfImporte, orden: 13 },
+      ]
+      return {
+        success: true,
+        data: {
+          salarioBase, prorrataPagasExtra, complementos, horasExtraImporte, otrosDevengos,
+          totalDevengado, baseCotizacionCC, baseCotizacionCP,
+          ccTrabajador: ccTrab, desempleoTrabajador: desempleoTrab, fpTrabajador: fpTrab,
+          irpfImporte, porcentajeIRPF: empleado.porcentajeIRPF || 0, totalDeducciones, liquidoPercibir,
+          ccEmpresa: ccEmp, desempleoEmpresa: desempleoEmp, fogasaEmpresa: fogasaEmp,
+          fpEmpresa: fpEmp, atepEmpresa: atepEmp, totalCosteSS, costeTotal, lineas,
+        }
+      }
+    }
     const db = ctx.db
 
     const empleado = await db.empleado.findUnique({ where: { id: data.empleadoId } })
@@ -7241,7 +7339,10 @@ ipcMain.handle('nominas:calcular', async (_, data: { empleadoId: number; mes: nu
 ipcMain.handle('nominas:create', async (_, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const nomina = await cloudApi.nominas.create(data)
+      return { success: true, data: nomina }
+    }
     const db = ctx.db
     const nomina = await db.nomina.create({
       data: {
@@ -7272,7 +7373,10 @@ ipcMain.handle('nominas:create', async (_, data: any) => {
 ipcMain.handle('nominas:confirmar', async (_, id: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const nomina = await cloudApi.nominas.confirmar(id)
+      return { success: true, data: nomina }
+    }
     const db = ctx.db
 
     const nomina = await db.nomina.findUnique({ where: { id }, include: { empleado: true, asiento: true } })
@@ -7334,7 +7438,10 @@ ipcMain.handle('nominas:confirmar', async (_, id: number) => {
 ipcMain.handle('nominas:marcarPagada', async (_, id: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const nomina = await cloudApi.nominas.marcarPagada(id)
+      return { success: true, data: nomina }
+    }
     const db = ctx.db
     const nomina = await db.nomina.update({ where: { id }, data: { estado: 'pagada', fechaPago: new Date() } })
     return { success: true, data: nomina }
@@ -7346,7 +7453,10 @@ ipcMain.handle('nominas:marcarPagada', async (_, id: number) => {
 ipcMain.handle('nominas:delete', async (_, id: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      await cloudApi.nominas.delete(id)
+      return { success: true }
+    }
     const db = ctx.db
     const nomina = await db.nomina.findUnique({ where: { id }, include: { asiento: true } })
     if (!nomina) return { success: false, error: 'notFound' }
@@ -7365,7 +7475,10 @@ ipcMain.handle('nominas:delete', async (_, id: number) => {
 ipcMain.handle('sepa:getLotes', async () => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    if (ctx.mode === 'cloud') {
+      const data = await cloudApi.sepa.getLotes()
+      return { success: true, data }
+    }
     const db = ctx.db
     const lotes = await db.loteSEPA.findMany({ orderBy: { fechaCreacion: 'desc' } })
     return { success: true, data: lotes }
@@ -7377,7 +7490,10 @@ ipcMain.handle('sepa:getLotes', async () => {
 ipcMain.handle('sepa:createLote', async (_, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const lote = await cloudApi.sepa.createLote(data)
+      return { success: true, data: lote }
+    }
     const db = ctx.db
     const lote = await db.loteSEPA.create({
       data: {
@@ -7400,7 +7516,10 @@ ipcMain.handle('sepa:createLote', async (_, data: any) => {
 ipcMain.handle('sepa:updateEstado', async (_, id: number, estado: string) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const lote = await cloudApi.sepa.updateEstado(id, estado)
+      return { success: true, data: lote }
+    }
     const db = ctx.db
     const lote = await db.loteSEPA.update({ where: { id }, data: { estado } })
     return { success: true, data: lote }
@@ -7412,7 +7531,10 @@ ipcMain.handle('sepa:updateEstado', async (_, id: number, estado: string) => {
 ipcMain.handle('sepa:deleteLote', async (_, id: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      await cloudApi.sepa.deleteLote(id)
+      return { success: true }
+    }
     const db = ctx.db
     await db.loteSEPA.delete({ where: { id } })
     return { success: true }
@@ -7428,7 +7550,10 @@ ipcMain.handle('sepa:deleteLote', async (_, id: number) => {
 ipcMain.handle('tiposAusencia:getAll', async () => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    if (ctx.mode === 'cloud') {
+      const data = await cloudApi.tiposAusencia.getAll()
+      return { success: true, data }
+    }
     const db = ctx.db
     const tipos = await db.tipoAusencia.findMany({ orderBy: { nombre: 'asc' } })
     return { success: true, data: tipos }
@@ -7440,7 +7565,10 @@ ipcMain.handle('tiposAusencia:getAll', async () => {
 ipcMain.handle('tiposAusencia:create', async (_, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const tipo = await cloudApi.tiposAusencia.create(data)
+      return { success: true, data: tipo }
+    }
     const db = ctx.db
     const tipo = await db.tipoAusencia.create({
       data: {
@@ -7460,7 +7588,10 @@ ipcMain.handle('tiposAusencia:create', async (_, data: any) => {
 ipcMain.handle('tiposAusencia:update', async (_, id: number, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const tipo = await cloudApi.tiposAusencia.update(id, data)
+      return { success: true, data: tipo }
+    }
     const db = ctx.db
     const tipo = await db.tipoAusencia.update({
       where: { id },
@@ -7476,7 +7607,10 @@ ipcMain.handle('tiposAusencia:update', async (_, id: number, data: any) => {
 ipcMain.handle('tiposAusencia:delete', async (_, id: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      await cloudApi.tiposAusencia.delete(id)
+      return { success: true }
+    }
     const db = ctx.db
     await db.tipoAusencia.delete({ where: { id } })
     return { success: true }
@@ -7488,7 +7622,10 @@ ipcMain.handle('tiposAusencia:delete', async (_, id: number) => {
 ipcMain.handle('ausencias:getAll', async (_, filters?: { empleadoId?: number; estado?: string; fechaDesde?: string; fechaHasta?: string }) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    if (ctx.mode === 'cloud') {
+      const data = await cloudApi.ausencias.getAll(filters)
+      return { success: true, data }
+    }
     const db = ctx.db
     const where: any = {}
     if (filters?.empleadoId) where.empleadoId = filters.empleadoId
@@ -7511,7 +7648,10 @@ ipcMain.handle('ausencias:getAll', async (_, filters?: { empleadoId?: number; es
 ipcMain.handle('ausencias:create', async (_, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const ausencia = await cloudApi.ausencias.create(data)
+      return { success: true, data: ausencia }
+    }
     const db = ctx.db
     const ausencia = await db.ausencia.create({
       data: {
@@ -7531,7 +7671,10 @@ ipcMain.handle('ausencias:create', async (_, data: any) => {
 ipcMain.handle('ausencias:updateEstado', async (_, id: number, estado: string) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const ausencia = await cloudApi.ausencias.updateEstado(id, estado)
+      return { success: true, data: ausencia }
+    }
     const db = ctx.db
     const ausencia = await db.ausencia.update({
       where: { id }, data: { estado },
@@ -7546,7 +7689,10 @@ ipcMain.handle('ausencias:updateEstado', async (_, id: number, estado: string) =
 ipcMain.handle('ausencias:delete', async (_, id: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      await cloudApi.ausencias.delete(id)
+      return { success: true }
+    }
     const db = ctx.db
     await db.ausencia.delete({ where: { id } })
     return { success: true }
@@ -7562,7 +7708,10 @@ ipcMain.handle('ausencias:delete', async (_, id: number) => {
 ipcMain.handle('jornada:getAll', async (_, filters?: { empleadoId?: number; fechaDesde?: string; fechaHasta?: string }) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    if (ctx.mode === 'cloud') {
+      const data = await cloudApi.jornada.getAll(filters)
+      return { success: true, data }
+    }
     const db = ctx.db
     const where: any = {}
     if (filters?.empleadoId) where.empleadoId = filters.empleadoId
@@ -7584,7 +7733,10 @@ ipcMain.handle('jornada:getAll', async (_, filters?: { empleadoId?: number; fech
 ipcMain.handle('jornada:fichar', async (_, data: { empleadoId: number; tipo: 'entrada' | 'salida' }) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const registro = await cloudApi.jornada.fichar(data)
+      return { success: true, data: registro }
+    }
     const db = ctx.db
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -7616,7 +7768,10 @@ ipcMain.handle('jornada:fichar', async (_, data: { empleadoId: number; tipo: 'en
 ipcMain.handle('jornada:update', async (_, id: number, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      const registro = await cloudApi.jornada.update(id, data)
+      return { success: true, data: registro }
+    }
     const db = ctx.db
     const registro = await db.registroJornada.update({
       where: { id },
@@ -7636,7 +7791,10 @@ ipcMain.handle('jornada:update', async (_, id: number, data: any) => {
 ipcMain.handle('jornada:delete', async (_, id: number) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    if (ctx.mode === 'cloud') {
+      await cloudApi.jornada.delete(id)
+      return { success: true }
+    }
     const db = ctx.db
     await db.registroJornada.delete({ where: { id } })
     return { success: true }
@@ -7648,7 +7806,10 @@ ipcMain.handle('jornada:delete', async (_, id: number) => {
 ipcMain.handle('jornada:resumenMensual', async (_, params: { mes: number; anio: number }) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    if (ctx.mode === 'cloud') {
+      const data = await cloudApi.jornada.resumenMensual(params)
+      return { success: true, data }
+    }
     const db = ctx.db
     const fechaDesde = new Date(params.anio, params.mes - 1, 1)
     const fechaHasta = new Date(params.anio, params.mes, 0, 23, 59, 59)
