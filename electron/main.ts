@@ -7192,6 +7192,120 @@ ipcMain.handle('contratos:delete', async (_, id: number) => {
 })
 
 // ============================================
+// Helper: Payroll calculation
+// ============================================
+
+interface PayrollInput {
+  empleadoId: number
+  mes: number
+  anio: number
+  complementos?: number
+  horasExtraImporte?: number
+  otrosDevengos?: number
+}
+
+async function calculatePayroll(input: PayrollInput, ctx: { mode: 'local'; db: PrismaClient } | { mode: 'cloud' }) {
+  let empleado: any, contrato: any
+  if (ctx.mode === 'cloud') {
+    const empleadosAll = await cloudApi.empleados.getAll()
+    empleado = empleadosAll.find((e: any) => e.id === input.empleadoId)
+    if (!empleado) throw new Error('empleadoNotFound')
+    const contratosAll = await cloudApi.contratos.getByEmpleado(input.empleadoId)
+    contrato = contratosAll.find((c: any) => c.activo)
+  } else {
+    empleado = await ctx.db.empleado.findUnique({ where: { id: input.empleadoId } })
+    if (!empleado) throw new Error('empleadoNotFound')
+    contrato = await ctx.db.contrato.findFirst({ where: { empleadoId: input.empleadoId, activo: true }, orderBy: { fechaInicio: 'desc' } })
+  }
+  if (!contrato) throw new Error('noActiveContract')
+
+  const salarioBase = contrato.salarioBrutoMensual
+  const prorrataPagasExtra = contrato.pagasProrrateadas ? (contrato.salarioBrutoAnual / 12 - contrato.salarioBrutoMensual) : 0
+  const complementos = input.complementos || 0
+  const horasExtraImporte = input.horasExtraImporte || 0
+  const otrosDevengos = input.otrosDevengos || 0
+  const totalDevengado = salarioBase + prorrataPagasExtra + complementos + horasExtraImporte + otrosDevengos
+  const baseCotizacionCC = salarioBase + complementos + prorrataPagasExtra
+  const baseCotizacionCP = baseCotizacionCC + horasExtraImporte
+  const isTemporary = contrato.tipoContrato === 'temporal'
+  const ccTrab = Math.round(baseCotizacionCC * 0.047 * 100) / 100
+  const desempleoTrab = Math.round(baseCotizacionCP * (isTemporary ? 0.016 : 0.0155) * 100) / 100
+  const fpTrab = Math.round(baseCotizacionCP * 0.001 * 100) / 100
+  const irpfImporte = Math.round(totalDevengado * ((empleado.porcentajeIRPF || 0) / 100) * 100) / 100
+  const totalDeducciones = Math.round((ccTrab + desempleoTrab + fpTrab + irpfImporte) * 100) / 100
+  const liquidoPercibir = Math.round((totalDevengado - totalDeducciones) * 100) / 100
+  const ccEmp = Math.round(baseCotizacionCC * 0.236 * 100) / 100
+  const desempleoEmp = Math.round(baseCotizacionCP * (isTemporary ? 0.067 : 0.055) * 100) / 100
+  const fogasaEmp = Math.round(baseCotizacionCP * 0.002 * 100) / 100
+  const fpEmp = Math.round(baseCotizacionCP * 0.006 * 100) / 100
+  const atepEmp = Math.round(baseCotizacionCP * ((contrato.porcentajeATEP || 1.5) / 100) * 100) / 100
+  const totalCosteSS = Math.round((ccEmp + desempleoEmp + fogasaEmp + fpEmp + atepEmp) * 100) / 100
+  const costeTotal = Math.round((totalDevengado + totalCosteSS) * 100) / 100
+
+  const lineas = [
+    { tipo: 'devengo', concepto: 'Salario base', base: salarioBase, porcentaje: 0, importe: salarioBase, orden: 1 },
+    ...(prorrataPagasExtra > 0 ? [{ tipo: 'devengo', concepto: 'Prorrata pagas extra', base: prorrataPagasExtra, porcentaje: 0, importe: prorrataPagasExtra, orden: 2 }] : []),
+    ...(complementos > 0 ? [{ tipo: 'devengo', concepto: 'Complementos', base: complementos, porcentaje: 0, importe: complementos, orden: 3 }] : []),
+    ...(horasExtraImporte > 0 ? [{ tipo: 'devengo', concepto: 'Horas extra', base: horasExtraImporte, porcentaje: 0, importe: horasExtraImporte, orden: 4 }] : []),
+    ...(otrosDevengos > 0 ? [{ tipo: 'devengo', concepto: 'Otros devengos', base: otrosDevengos, porcentaje: 0, importe: otrosDevengos, orden: 5 }] : []),
+    { tipo: 'deduccion', concepto: 'Contingencias comunes', base: baseCotizacionCC, porcentaje: 4.70, importe: ccTrab, orden: 10 },
+    { tipo: 'deduccion', concepto: 'Desempleo', base: baseCotizacionCP, porcentaje: isTemporary ? 1.60 : 1.55, importe: desempleoTrab, orden: 11 },
+    { tipo: 'deduccion', concepto: 'Formación profesional', base: baseCotizacionCP, porcentaje: 0.10, importe: fpTrab, orden: 12 },
+    { tipo: 'deduccion', concepto: 'IRPF', base: totalDevengado, porcentaje: empleado.porcentajeIRPF || 0, importe: irpfImporte, orden: 13 },
+  ]
+
+  // Frontend format (nested, for display)
+  const frontend = {
+    devengos: { salarioBase, prorrataPagas: prorrataPagasExtra, complementos, horasExtra: horasExtraImporte, otrosDevengos },
+    deducciones: { contingenciasComunes: ccTrab, desempleoTrabajador: desempleoTrab, formacionProfesional: fpTrab, irpf: irpfImporte },
+    costesEmpresa: { contingenciasComunesEmpresa: ccEmp, desempleoEmpresa: desempleoEmp, fogasa: fogasaEmp, formacionProfesionalEmpresa: fpEmp, atEp: atepEmp },
+    totalDevengado, totalDeducciones, liquido: liquidoPercibir,
+  }
+
+  // DB format (flat, for storage)
+  const db = {
+    empleadoId: input.empleadoId, mes: input.mes, anio: input.anio,
+    salarioBase, prorrataPagasExtra, complementos, horasExtraImporte, otrosDevengos,
+    totalDevengado, baseCotizacionCC, baseCotizacionCP,
+    ccTrabajador: ccTrab, desempleoTrabajador: desempleoTrab, fpTrabajador: fpTrab,
+    irpfImporte, porcentajeIRPF: empleado.porcentajeIRPF || 0, totalDeducciones,
+    liquidoPercibir, ccEmpresa: ccEmp, desempleoEmpresa: desempleoEmp,
+    fogasaEmpresa: fogasaEmp, fpEmpresa: fpEmp, atepEmpresa: atepEmp,
+    totalCosteSS, costeTotal, lineas,
+  }
+
+  return { frontend, db }
+}
+
+// Helper: Transform DB nomina to frontend format
+function transformNomina(n: any): any {
+  return {
+    ...n,
+    devengos: {
+      salarioBase: n.salarioBase || 0,
+      prorrataPagas: n.prorrataPagasExtra || 0,
+      complementos: n.complementos || 0,
+      horasExtra: n.horasExtraImporte || 0,
+      otrosDevengos: n.otrosDevengos || 0,
+    },
+    deducciones: {
+      contingenciasComunes: n.ccTrabajador || 0,
+      desempleoTrabajador: n.desempleoTrabajador || 0,
+      formacionProfesional: n.fpTrabajador || 0,
+      irpf: n.irpfImporte || 0,
+    },
+    costesEmpresa: {
+      contingenciasComunesEmpresa: n.ccEmpresa || 0,
+      desempleoEmpresa: n.desempleoEmpresa || 0,
+      fogasa: n.fogasaEmpresa || 0,
+      formacionProfesionalEmpresa: n.fpEmpresa || 0,
+      atEp: n.atepEmpresa || 0,
+    },
+    liquido: n.liquidoPercibir || 0,
+  }
+}
+
+// ============================================
 // IPC Handlers - RRHH: Nóminas
 // ============================================
 
@@ -7200,7 +7314,7 @@ ipcMain.handle('nominas:getAll', async (_, filters?: { empleadoId?: number; mes?
     const ctx = requireAuthOrCloud()
     if (ctx.mode === 'cloud') {
       const data = await cloudApi.nominas.getAll(filters)
-      return { success: true, data }
+      return { success: true, data: data.map(transformNomina) }
     }
     const db = ctx.db
     const where: any = {}
@@ -7212,7 +7326,7 @@ ipcMain.handle('nominas:getAll', async (_, filters?: { empleadoId?: number; mes?
       where, orderBy: [{ anio: 'desc' }, { mes: 'desc' }],
       include: { empleado: { select: { id: true, nombre: true, apellidos: true, nif: true } }, lineas: { orderBy: { orden: 'asc' } } }
     })
-    return { success: true, data: nominas }
+    return { success: true, data: nominas.map(transformNomina) }
   } catch (error) {
     return { success: false, error: String(error) }
   }
@@ -7223,7 +7337,7 @@ ipcMain.handle('nominas:getById', async (_, id: number) => {
     const ctx = requireAuthOrCloud()
     if (ctx.mode === 'cloud') {
       const nomina = await cloudApi.nominas.getById(id)
-      return { success: true, data: nomina }
+      return { success: true, data: transformNomina(nomina) }
     }
     const db = ctx.db
     const nomina = await db.nomina.findUnique({
@@ -7231,126 +7345,17 @@ ipcMain.handle('nominas:getById', async (_, id: number) => {
       include: { empleado: { include: { departamento: true, contratos: { where: { activo: true }, take: 1 } } }, lineas: { orderBy: { orden: 'asc' } }, asiento: true }
     })
     if (!nomina) return { success: false, error: 'notFound' }
-    return { success: true, data: nomina }
+    return { success: true, data: transformNomina(nomina) }
   } catch (error) {
     return { success: false, error: String(error) }
   }
 })
 
-ipcMain.handle('nominas:calcular', async (_, data: { empleadoId: number; mes: number; anio: number; complementos?: number; horasExtraImporte?: number; otrosDevengos?: number }) => {
+ipcMain.handle('nominas:calcular', async (_, data: PayrollInput) => {
   try {
     const ctx = requireAuthOrCloud()
-    if (ctx.mode === 'cloud') {
-      // In cloud mode, do payroll calculation using cloud entities
-      const empleadosAll = await cloudApi.empleados.getAll()
-      const empleado = empleadosAll.find((e: any) => e.id === data.empleadoId)
-      if (!empleado) return { success: false, error: 'empleadoNotFound' }
-      const contratosAll = await cloudApi.contratos.getByEmpleado(data.empleadoId)
-      const contrato = contratosAll.find((c: any) => c.activo)
-      if (!contrato) return { success: false, error: 'noActiveContract' }
-
-      const salarioBase = contrato.salarioBrutoMensual
-      const prorrataPagasExtra = contrato.pagasProrrateadas ? (contrato.salarioBrutoAnual / 12 - contrato.salarioBrutoMensual) : 0
-      const complementos = data.complementos || 0
-      const horasExtraImporte = data.horasExtraImporte || 0
-      const otrosDevengos = data.otrosDevengos || 0
-      const totalDevengado = salarioBase + prorrataPagasExtra + complementos + horasExtraImporte + otrosDevengos
-      const baseCotizacionCC = salarioBase + complementos + prorrataPagasExtra
-      const baseCotizacionCP = baseCotizacionCC + horasExtraImporte
-      const isTemporary = contrato.tipoContrato === 'temporal'
-      const ccTrab = Math.round(baseCotizacionCC * 0.047 * 100) / 100
-      const desempleoTrab = Math.round(baseCotizacionCP * (isTemporary ? 0.016 : 0.0155) * 100) / 100
-      const fpTrab = Math.round(baseCotizacionCP * 0.001 * 100) / 100
-      const irpfImporte = Math.round(totalDevengado * ((empleado.porcentajeIRPF || 0) / 100) * 100) / 100
-      const totalDeducciones = Math.round((ccTrab + desempleoTrab + fpTrab + irpfImporte) * 100) / 100
-      const liquidoPercibir = Math.round((totalDevengado - totalDeducciones) * 100) / 100
-      const ccEmp = Math.round(baseCotizacionCC * 0.236 * 100) / 100
-      const desempleoEmp = Math.round(baseCotizacionCP * (isTemporary ? 0.067 : 0.055) * 100) / 100
-      const fogasaEmp = Math.round(baseCotizacionCP * 0.002 * 100) / 100
-      const fpEmp = Math.round(baseCotizacionCP * 0.006 * 100) / 100
-      const atepEmp = Math.round(baseCotizacionCP * ((contrato.porcentajeATEP || 1.5) / 100) * 100) / 100
-      const totalCosteSS = Math.round((ccEmp + desempleoEmp + fogasaEmp + fpEmp + atepEmp) * 100) / 100
-      const costeTotal = Math.round((totalDevengado + totalCosteSS) * 100) / 100
-      const lineas = [
-        { tipo: 'devengo', concepto: 'Salario base', base: salarioBase, porcentaje: 0, importe: salarioBase, orden: 1 },
-        ...(prorrataPagasExtra > 0 ? [{ tipo: 'devengo', concepto: 'Prorrata pagas extra', base: prorrataPagasExtra, porcentaje: 0, importe: prorrataPagasExtra, orden: 2 }] : []),
-        ...(complementos > 0 ? [{ tipo: 'devengo', concepto: 'Complementos', base: complementos, porcentaje: 0, importe: complementos, orden: 3 }] : []),
-        ...(horasExtraImporte > 0 ? [{ tipo: 'devengo', concepto: 'Horas extra', base: horasExtraImporte, porcentaje: 0, importe: horasExtraImporte, orden: 4 }] : []),
-        ...(otrosDevengos > 0 ? [{ tipo: 'devengo', concepto: 'Otros devengos', base: otrosDevengos, porcentaje: 0, importe: otrosDevengos, orden: 5 }] : []),
-        { tipo: 'deduccion', concepto: 'Contingencias comunes', base: baseCotizacionCC, porcentaje: 4.70, importe: ccTrab, orden: 10 },
-        { tipo: 'deduccion', concepto: 'Desempleo', base: baseCotizacionCP, porcentaje: isTemporary ? 1.60 : 1.55, importe: desempleoTrab, orden: 11 },
-        { tipo: 'deduccion', concepto: 'Formación profesional', base: baseCotizacionCP, porcentaje: 0.10, importe: fpTrab, orden: 12 },
-        { tipo: 'deduccion', concepto: 'IRPF', base: totalDevengado, porcentaje: empleado.porcentajeIRPF || 0, importe: irpfImporte, orden: 13 },
-      ]
-      return {
-        success: true,
-        data: {
-          salarioBase, prorrataPagasExtra, complementos, horasExtraImporte, otrosDevengos,
-          totalDevengado, baseCotizacionCC, baseCotizacionCP,
-          ccTrabajador: ccTrab, desempleoTrabajador: desempleoTrab, fpTrabajador: fpTrab,
-          irpfImporte, porcentajeIRPF: empleado.porcentajeIRPF || 0, totalDeducciones, liquidoPercibir,
-          ccEmpresa: ccEmp, desempleoEmpresa: desempleoEmp, fogasaEmpresa: fogasaEmp,
-          fpEmpresa: fpEmp, atepEmpresa: atepEmp, totalCosteSS, costeTotal, lineas,
-        }
-      }
-    }
-    const db = ctx.db
-
-    const empleado = await db.empleado.findUnique({ where: { id: data.empleadoId } })
-    if (!empleado) return { success: false, error: 'empleadoNotFound' }
-
-    const contrato = await db.contrato.findFirst({ where: { empleadoId: data.empleadoId, activo: true }, orderBy: { fechaInicio: 'desc' } })
-    if (!contrato) return { success: false, error: 'noActiveContract' }
-
-    const salarioBase = contrato.salarioBrutoMensual
-    const prorrataPagasExtra = contrato.pagasProrrateadas ? (contrato.salarioBrutoAnual / 12 - contrato.salarioBrutoMensual) : 0
-    const complementos = data.complementos || 0
-    const horasExtraImporte = data.horasExtraImporte || 0
-    const otrosDevengos = data.otrosDevengos || 0
-
-    const totalDevengado = salarioBase + prorrataPagasExtra + complementos + horasExtraImporte + otrosDevengos
-    const baseCotizacionCC = salarioBase + complementos + prorrataPagasExtra
-    const baseCotizacionCP = baseCotizacionCC + horasExtraImporte
-
-    const isTemporary = contrato.tipoContrato === 'temporal'
-    const ccTrab = Math.round(baseCotizacionCC * 0.047 * 100) / 100
-    const desempleoTrab = Math.round(baseCotizacionCP * (isTemporary ? 0.016 : 0.0155) * 100) / 100
-    const fpTrab = Math.round(baseCotizacionCP * 0.001 * 100) / 100
-    const irpfImporte = Math.round(totalDevengado * (empleado.porcentajeIRPF / 100) * 100) / 100
-    const totalDeducciones = Math.round((ccTrab + desempleoTrab + fpTrab + irpfImporte) * 100) / 100
-    const liquidoPercibir = Math.round((totalDevengado - totalDeducciones) * 100) / 100
-
-    const ccEmp = Math.round(baseCotizacionCC * 0.236 * 100) / 100
-    const desempleoEmp = Math.round(baseCotizacionCP * (isTemporary ? 0.067 : 0.055) * 100) / 100
-    const fogasaEmp = Math.round(baseCotizacionCP * 0.002 * 100) / 100
-    const fpEmp = Math.round(baseCotizacionCP * 0.006 * 100) / 100
-    const atepEmp = Math.round(baseCotizacionCP * (contrato.porcentajeATEP / 100) * 100) / 100
-    const totalCosteSS = Math.round((ccEmp + desempleoEmp + fogasaEmp + fpEmp + atepEmp) * 100) / 100
-    const costeTotal = Math.round((totalDevengado + totalCosteSS) * 100) / 100
-
-    const lineas = [
-      { tipo: 'devengo', concepto: 'Salario base', base: salarioBase, porcentaje: 0, importe: salarioBase, orden: 1 },
-      ...(prorrataPagasExtra > 0 ? [{ tipo: 'devengo', concepto: 'Prorrata pagas extra', base: prorrataPagasExtra, porcentaje: 0, importe: prorrataPagasExtra, orden: 2 }] : []),
-      ...(complementos > 0 ? [{ tipo: 'devengo', concepto: 'Complementos', base: complementos, porcentaje: 0, importe: complementos, orden: 3 }] : []),
-      ...(horasExtraImporte > 0 ? [{ tipo: 'devengo', concepto: 'Horas extra', base: horasExtraImporte, porcentaje: 0, importe: horasExtraImporte, orden: 4 }] : []),
-      ...(otrosDevengos > 0 ? [{ tipo: 'devengo', concepto: 'Otros devengos', base: otrosDevengos, porcentaje: 0, importe: otrosDevengos, orden: 5 }] : []),
-      { tipo: 'deduccion', concepto: 'Contingencias comunes', base: baseCotizacionCC, porcentaje: 4.70, importe: ccTrab, orden: 10 },
-      { tipo: 'deduccion', concepto: 'Desempleo', base: baseCotizacionCP, porcentaje: isTemporary ? 1.60 : 1.55, importe: desempleoTrab, orden: 11 },
-      { tipo: 'deduccion', concepto: 'Formación profesional', base: baseCotizacionCP, porcentaje: 0.10, importe: fpTrab, orden: 12 },
-      { tipo: 'deduccion', concepto: 'IRPF', base: totalDevengado, porcentaje: empleado.porcentajeIRPF, importe: irpfImporte, orden: 13 },
-    ]
-
-    return {
-      success: true,
-      data: {
-        salarioBase, prorrataPagasExtra, complementos, horasExtraImporte, otrosDevengos,
-        totalDevengado, baseCotizacionCC, baseCotizacionCP,
-        ccTrabajador: ccTrab, desempleoTrabajador: desempleoTrab, fpTrabajador: fpTrab,
-        irpfImporte, porcentajeIRPF: empleado.porcentajeIRPF, totalDeducciones, liquidoPercibir,
-        ccEmpresa: ccEmp, desempleoEmpresa: desempleoEmp, fogasaEmpresa: fogasaEmp,
-        fpEmpresa: fpEmp, atepEmpresa: atepEmp, totalCosteSS, costeTotal, lineas,
-      }
-    }
+    const result = await calculatePayroll(data, ctx)
+    return { success: true, data: result.frontend }
   } catch (error) {
     return { success: false, error: String(error) }
   }
@@ -7359,27 +7364,39 @@ ipcMain.handle('nominas:calcular', async (_, data: { empleadoId: number; mes: nu
 ipcMain.handle('nominas:create', async (_, data: any) => {
   try {
     const ctx = requireAuthOrCloud()
+
+    // Auto-calculate payroll from basic params
+    const result = await calculatePayroll({
+      empleadoId: data.empleadoId,
+      mes: data.mes,
+      anio: data.anio,
+      complementos: data.complementos,
+      horasExtraImporte: data.horasExtraImporte,
+      otrosDevengos: data.otrosDevengos,
+    }, ctx)
+    const calc = result.db
+
     if (ctx.mode === 'cloud') {
-      const nomina = await cloudApi.nominas.create(data)
+      const nomina = await cloudApi.nominas.create({ ...calc, notas: data.notas || null })
       return { success: true, data: nomina }
     }
     const db = ctx.db
     const nomina = await db.nomina.create({
       data: {
-        empleadoId: data.empleadoId, mes: data.mes, anio: data.anio,
-        salarioBase: data.salarioBase, prorrataPagasExtra: data.prorrataPagasExtra,
-        complementos: data.complementos, horasExtraImporte: data.horasExtraImporte,
-        otrosDevengos: data.otrosDevengos, totalDevengado: data.totalDevengado,
-        baseCotizacionCC: data.baseCotizacionCC, baseCotizacionCP: data.baseCotizacionCP,
-        ccTrabajador: data.ccTrabajador, desempleoTrabajador: data.desempleoTrabajador,
-        fpTrabajador: data.fpTrabajador, irpfImporte: data.irpfImporte,
-        porcentajeIRPF: data.porcentajeIRPF, totalDeducciones: data.totalDeducciones,
-        liquidoPercibir: data.liquidoPercibir, ccEmpresa: data.ccEmpresa,
-        desempleoEmpresa: data.desempleoEmpresa, fogasaEmpresa: data.fogasaEmpresa,
-        fpEmpresa: data.fpEmpresa, atepEmpresa: data.atepEmpresa,
-        totalCosteSS: data.totalCosteSS, costeTotal: data.costeTotal,
+        empleadoId: calc.empleadoId, mes: calc.mes, anio: calc.anio,
+        salarioBase: calc.salarioBase, prorrataPagasExtra: calc.prorrataPagasExtra,
+        complementos: calc.complementos, horasExtraImporte: calc.horasExtraImporte,
+        otrosDevengos: calc.otrosDevengos, totalDevengado: calc.totalDevengado,
+        baseCotizacionCC: calc.baseCotizacionCC, baseCotizacionCP: calc.baseCotizacionCP,
+        ccTrabajador: calc.ccTrabajador, desempleoTrabajador: calc.desempleoTrabajador,
+        fpTrabajador: calc.fpTrabajador, irpfImporte: calc.irpfImporte,
+        porcentajeIRPF: calc.porcentajeIRPF, totalDeducciones: calc.totalDeducciones,
+        liquidoPercibir: calc.liquidoPercibir, ccEmpresa: calc.ccEmpresa,
+        desempleoEmpresa: calc.desempleoEmpresa, fogasaEmpresa: calc.fogasaEmpresa,
+        fpEmpresa: calc.fpEmpresa, atepEmpresa: calc.atepEmpresa,
+        totalCosteSS: calc.totalCosteSS, costeTotal: calc.costeTotal,
         estado: 'borrador', notas: data.notas || null,
-        lineas: { create: data.lineas || [] }
+        lineas: { create: calc.lineas }
       },
       include: { empleado: true, lineas: { orderBy: { orden: 'asc' } } }
     })
