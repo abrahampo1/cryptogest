@@ -1,24 +1,70 @@
 {
   "title": "Control Horario",
-  "tabs": { "fichar": "Fichaje", "historial": "Historial", "resumen": "Resumen Mensual" },
-  "empleado": "Empleado",
-  "fecha": "Fecha",
-  "horaEntrada": "Hora Entrada",
-  "horaSalida": "Hora Salida",
-  "pausaMinutos": "Pausa (min)",
-  "horasTrabajadas": "Horas Trabajadas",
-  "horasExtra": "Horas Extra",
-  "tipoHorasExtra": "Tipo H. Extra",
-  "notas": "Notas",
-  "ficharEntrada": "Fichar Entrada",
-  "ficharSalida": "Fichar Salida",
-  "selectEmpleado": "Selecciona un empleado",
-  "noRegistros": "No hay registros de jornada",
-  "mes": "Mes",
-  "anio": "Año",
-  "diasTrabajados": "Días Trabajados",
-  "totalHoras": "Total Horas",
-  "totalHorasExtra": "Total H. Extra",
-  "tiposExtra": { "normal": "Normal", "fuerza_mayor": "Fuerza Mayor" },
-  "deleteConfirm": "¿Eliminar este registro de jornada?"
+  "subtitle": "Gestiona los fichajes y el control de jornada laboral",
+  "tabs": {
+    "fichaje": "Fichaje",
+    "historial": "Historial",
+    "resumen": "Resumen Mensual"
+  },
+  "fichaje": {
+    "title": "Fichar Entrada / Salida",
+    "employee": "Empleado",
+    "selectEmployee": "Seleccionar empleado...",
+    "clockedSince": "Fichado desde",
+    "alreadyClockedOut": "Jornada completada hoy",
+    "clockIn": "Fichar Entrada",
+    "clockOut": "Fichar Salida",
+    "todayRecords": "Registros de hoy",
+    "inProgress": "En curso",
+    "noRecordsToday": "Sin registros hoy",
+    "selectEmployeePrompt": "Selecciona un empleado para fichar"
+  },
+  "table": {
+    "employee": "Empleado",
+    "date": "Fecha",
+    "entry": "Entrada",
+    "exit": "Salida",
+    "pause": "Pausa (min)",
+    "hoursWorked": "Horas Trabajadas",
+    "overtime": "Horas Extra",
+    "notes": "Notas"
+  },
+  "historial": {
+    "filters": "Filtros",
+    "employee": "Empleado",
+    "dateFrom": "Desde",
+    "dateTo": "Hasta",
+    "records": "Registros de jornada",
+    "recordsCount": "registros",
+    "noRecords": "No hay registros para los filtros seleccionados"
+  },
+  "resumen": {
+    "title": "Resumen Mensual",
+    "month": "Mes",
+    "year": "Año",
+    "daysWorked": "Días Trabajados",
+    "totalHours": "Total Horas",
+    "totalOvertime": "Total Horas Extra",
+    "totals": "Totales",
+    "noData": "No hay datos para el periodo seleccionado"
+  },
+  "months": {
+    "january": "Enero",
+    "february": "Febrero",
+    "march": "Marzo",
+    "april": "Abril",
+    "may": "Mayo",
+    "june": "Junio",
+    "july": "Julio",
+    "august": "Agosto",
+    "september": "Septiembre",
+    "october": "Octubre",
+    "november": "Noviembre",
+    "december": "Diciembre"
+  },
+  "deleteDialog": {
+    "title": "Eliminar registro",
+    "description": "Esta acción eliminará el registro de jornada de forma permanente. ¿Estás seguro?"
+  },
+  "tiposExtra": { "normal": "Normal", "fuerza_mayor": "Fuerza Mayor" }
 }

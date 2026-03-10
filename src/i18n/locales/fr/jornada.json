@@ -1,13 +1,70 @@
 {
   "title": "Pointage",
-  "tabs": { "fichar": "Pointer", "historial": "Historique", "resumen": "Résumé Mensuel" },
-  "empleado": "Employé", "fecha": "Date", "horaEntrada": "Entrée", "horaSalida": "Sortie",
-  "pausaMinutos": "Pause (min)", "horasTrabajadas": "Heures Travaillées", "horasExtra": "Heures Sup.",
-  "tipoHorasExtra": "Type H. Sup.", "notas": "Notes",
-  "ficharEntrada": "Pointer Entrée", "ficharSalida": "Pointer Sortie",
-  "selectEmpleado": "Sélectionnez un employé", "noRegistros": "Aucun enregistrement",
-  "mes": "Mois", "anio": "Année", "diasTrabajados": "Jours Travaillés",
-  "totalHoras": "Total Heures", "totalHorasExtra": "Total H. Sup.",
-  "tiposExtra": { "normal": "Normal", "fuerza_mayor": "Force Majeure" },
-  "deleteConfirm": "Supprimer cet enregistrement ?"
+  "subtitle": "Gérez les pointages et le suivi du temps de travail",
+  "tabs": {
+    "fichaje": "Pointer",
+    "historial": "Historique",
+    "resumen": "Résumé Mensuel"
+  },
+  "fichaje": {
+    "title": "Pointer Entrée / Sortie",
+    "employee": "Employé",
+    "selectEmployee": "Sélectionner un employé...",
+    "clockedSince": "Pointé depuis",
+    "alreadyClockedOut": "Journée terminée",
+    "clockIn": "Pointer Entrée",
+    "clockOut": "Pointer Sortie",
+    "todayRecords": "Enregistrements du jour",
+    "inProgress": "En cours",
+    "noRecordsToday": "Aucun enregistrement aujourd'hui",
+    "selectEmployeePrompt": "Sélectionnez un employé pour pointer"
+  },
+  "table": {
+    "employee": "Employé",
+    "date": "Date",
+    "entry": "Entrée",
+    "exit": "Sortie",
+    "pause": "Pause (min)",
+    "hoursWorked": "Heures Travaillées",
+    "overtime": "Heures Sup.",
+    "notes": "Notes"
+  },
+  "historial": {
+    "filters": "Filtres",
+    "employee": "Employé",
+    "dateFrom": "Du",
+    "dateTo": "Au",
+    "records": "Enregistrements de temps",
+    "recordsCount": "enregistrements",
+    "noRecords": "Aucun enregistrement pour les filtres sélectionnés"
+  },
+  "resumen": {
+    "title": "Résumé Mensuel",
+    "month": "Mois",
+    "year": "Année",
+    "daysWorked": "Jours Travaillés",
+    "totalHours": "Total Heures",
+    "totalOvertime": "Total Heures Sup.",
+    "totals": "Totaux",
+    "noData": "Aucune donnée pour la période sélectionnée"
+  },
+  "months": {
+    "january": "Janvier",
+    "february": "Février",
+    "march": "Mars",
+    "april": "Avril",
+    "may": "Mai",
+    "june": "Juin",
+    "july": "Juillet",
+    "august": "Août",
+    "september": "Septembre",
+    "october": "Octobre",
+    "november": "Novembre",
+    "december": "Décembre"
+  },
+  "deleteDialog": {
+    "title": "Supprimer l'enregistrement",
+    "description": "Cette action supprimera définitivement cet enregistrement de temps. Êtes-vous sûr ?"
+  },
+  "tiposExtra": { "normal": "Normal", "fuerza_mayor": "Force Majeure" }
 }

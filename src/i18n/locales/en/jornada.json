@@ -1,13 +1,70 @@
 {
   "title": "Time Tracking",
-  "tabs": { "fichar": "Clock In/Out", "historial": "History", "resumen": "Monthly Summary" },
-  "empleado": "Employee", "fecha": "Date", "horaEntrada": "Clock In", "horaSalida": "Clock Out",
-  "pausaMinutos": "Break (min)", "horasTrabajadas": "Hours Worked", "horasExtra": "Overtime",
-  "tipoHorasExtra": "Overtime Type", "notas": "Notes",
-  "ficharEntrada": "Clock In", "ficharSalida": "Clock Out",
-  "selectEmpleado": "Select an employee", "noRegistros": "No time records",
-  "mes": "Month", "anio": "Year", "diasTrabajados": "Days Worked",
-  "totalHoras": "Total Hours", "totalHorasExtra": "Total Overtime",
-  "tiposExtra": { "normal": "Normal", "fuerza_mayor": "Force Majeure" },
-  "deleteConfirm": "Delete this time record?"
+  "subtitle": "Manage clock-ins and working time tracking",
+  "tabs": {
+    "fichaje": "Clock In/Out",
+    "historial": "History",
+    "resumen": "Monthly Summary"
+  },
+  "fichaje": {
+    "title": "Clock In / Clock Out",
+    "employee": "Employee",
+    "selectEmployee": "Select employee...",
+    "clockedSince": "Clocked in since",
+    "alreadyClockedOut": "Shift completed today",
+    "clockIn": "Clock In",
+    "clockOut": "Clock Out",
+    "todayRecords": "Today's records",
+    "inProgress": "In progress",
+    "noRecordsToday": "No records today",
+    "selectEmployeePrompt": "Select an employee to clock in"
+  },
+  "table": {
+    "employee": "Employee",
+    "date": "Date",
+    "entry": "Clock In",
+    "exit": "Clock Out",
+    "pause": "Break (min)",
+    "hoursWorked": "Hours Worked",
+    "overtime": "Overtime",
+    "notes": "Notes"
+  },
+  "historial": {
+    "filters": "Filters",
+    "employee": "Employee",
+    "dateFrom": "From",
+    "dateTo": "To",
+    "records": "Time records",
+    "recordsCount": "records",
+    "noRecords": "No records for the selected filters"
+  },
+  "resumen": {
+    "title": "Monthly Summary",
+    "month": "Month",
+    "year": "Year",
+    "daysWorked": "Days Worked",
+    "totalHours": "Total Hours",
+    "totalOvertime": "Total Overtime",
+    "totals": "Totals",
+    "noData": "No data for the selected period"
+  },
+  "months": {
+    "january": "January",
+    "february": "February",
+    "march": "March",
+    "april": "April",
+    "may": "May",
+    "june": "June",
+    "july": "July",
+    "august": "August",
+    "september": "September",
+    "october": "October",
+    "november": "November",
+    "december": "December"
+  },
+  "deleteDialog": {
+    "title": "Delete record",
+    "description": "This will permanently delete this time record. Are you sure?"
+  },
+  "tiposExtra": { "normal": "Normal", "fuerza_mayor": "Force Majeure" }
 }

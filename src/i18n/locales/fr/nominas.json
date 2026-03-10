@@ -11,7 +11,7 @@
   "estado": "Statut",
   "salarioBase": "Salaire de Base",
   "complementos": "Compléments",
-  "horasExtra": "Heures Sup.",
+  "horasExtra": "Heures Supplémentaires",
   "otrosDevengos": "Autres Revenus",
   "prorrataPagas": "Prorata Primes",
   "totalDevengado": "Total Brut",
@@ -19,9 +19,9 @@
   "deducciones": "Déductions",
   "baseCotizacionCC": "Base Cotisation CC",
   "baseCotizacionCP": "Base Cotisation CP",
-  "ccTrabajador": "Cotisations (4,70%)",
+  "ccTrabajador": "Cotisations Communes (4,70%)",
   "desempleoTrabajador": "Chômage",
-  "fpTrabajador": "Formation (0,10%)",
+  "fpTrabajador": "Formation Professionnelle (0,10%)",
   "irpf": "Impôt sur le Revenu",
   "totalDeducciones": "Total Déductions",
   "liquidoPercibir": "Net à Payer",
@@ -33,11 +33,25 @@
   "atepEmpresa": "Risque Professionnel",
   "totalCosteSS": "Total Charges SS",
   "costeTotal": "Coût Total Employeur",
-  "estados": { "borrador": "Brouillon", "confirmada": "Confirmée", "pagada": "Payée" },
-  "meses": { "1": "Janvier", "2": "Février", "3": "Mars", "4": "Avril", "5": "Mai", "6": "Juin", "7": "Juillet", "8": "Août", "9": "Septembre", "10": "Octobre", "11": "Novembre", "12": "Décembre" },
+  "estados": {
+    "borrador": "Brouillon",
+    "confirmada": "Confirmée",
+    "pagada": "Payée"
+  },
+  "meses": {
+    "1": "Janvier", "2": "Février", "3": "Mars", "4": "Avril",
+    "5": "Mai", "6": "Juin", "7": "Juillet", "8": "Août",
+    "9": "Septembre", "10": "Octobre", "11": "Novembre", "12": "Décembre"
+  },
   "noNominas": "Aucune fiche de paie",
   "selectEmpleado": "Sélectionnez un employé",
   "confirmConfirm": "Confirmer cette fiche de paie ? Une écriture comptable sera générée automatiquement.",
-  "deleteConfirm": "Supprimer cette fiche de paie ?",
-  "errors": { "duplicateNomina": "Une fiche de paie existe déjà pour ce mois/année", "noActiveContract": "L'employé n'a pas de contrat actif", "alreadyConfirmed": "Déjà confirmée", "cannotDeleteConfirmed": "Impossible de supprimer une fiche confirmée", "missingAccounts": "Comptes comptables manquants" }
+  "deleteConfirm": "Supprimer cette fiche de paie ? Seuls les brouillons peuvent être supprimés.",
+  "errors": {
+    "duplicateNomina": "Une fiche de paie existe déjà pour cet employé pour ce mois/année",
+    "noActiveContract": "L'employé n'a pas de contrat actif",
+    "alreadyConfirmed": "Cette fiche de paie est déjà confirmée",
+    "cannotDeleteConfirmed": "Impossible de supprimer une fiche de paie confirmée ou payée",
+    "missingAccounts": "Comptes comptables requis manquants (640, 642, 4751, 476, 465). Exécutez d'abord la configuration du Plan Comptable."
+  }
 }
