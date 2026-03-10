@@ -887,9 +887,16 @@ ipcMain.handle('empresa:list', async () => {
       } else {
         // Cloud session active: validate against server, clean orphans
         try {
+          // Save existing config to restore after listing (don't break active cloud session)
+          const previousConfig = cloudApi.getCloudApiConfig()
           cloudApi.setCloudApiConfig(session.serverUrl, session.token, 0)
           const serverEmpresas = await cloudApi.empresaCloud.list()
-          cloudApi.clearCloudApiConfig()
+          if (previousConfig) {
+            // Restore previous cloud config (user has an active cloud empresa)
+            cloudApi.setCloudApiConfig(previousConfig.serverUrl, previousConfig.token, previousConfig.empresaId)
+          } else {
+            cloudApi.clearCloudApiConfig()
+          }
           const validIds = new Set(serverEmpresas.map((e: any) => e.id))
           returnEmpresas = config.empresas.filter(e => {
             if (e.tipo !== 'cloud') return true
@@ -934,6 +941,8 @@ ipcMain.handle('empresa:create', async (_, data: { nombre: string; customDataPat
       const salt = cloudApi.generateSalt()
       const verificationHash = cloudApi.generateVerificationHash(data.passphrase, salt)
 
+      // Save existing config to restore after creation
+      const previousConfig = cloudApi.getCloudApiConfig()
       // Configure cloud API temporarily to create empresa
       cloudApi.setCloudApiConfig(session.serverUrl, session.token, 0)
       const key = cloudApi.deriveCloudKey(data.passphrase, salt)
@@ -995,7 +1004,8 @@ ipcMain.handle('empresa:create', async (_, data: { nombre: string; customDataPat
         verificationHash,
       })
 
-      cloudApi.clearCloudApiConfig()
+      if (previousConfig) cloudApi.setCloudApiConfig(previousConfig.serverUrl, previousConfig.token, previousConfig.empresaId)
+      else cloudApi.clearCloudApiConfig()
       return { success: true, data: empresa }
     }
     const empresa = crypto.createEmpresa(data.nombre, data.customDataPath)
@@ -1221,11 +1231,14 @@ ipcMain.handle('empresa:joinCloud', async (_, data: { code: string; passphrase: 
     if (!session) {
       return { success: false, error: 'No cloud session' }
     }
+    // Save existing config to restore after operation
+    const previousConfig = cloudApi.getCloudApiConfig()
     cloud.setCloudConfig(session.serverUrl, session.token)
     cloudApi.setCloudApiConfig(session.serverUrl, session.token, 0)
     const serverEmpresa = await cloudApi.empresaCloud.join(data.code)
     if (!cloudApi.verifyPassphrase(data.passphrase, serverEmpresa.salt, serverEmpresa.verification_hash)) {
-      cloudApi.clearCloudApiConfig()
+      if (previousConfig) cloudApi.setCloudApiConfig(previousConfig.serverUrl, previousConfig.token, previousConfig.empresaId)
+      else cloudApi.clearCloudApiConfig()
       return { success: false, error: 'passwordIncorrect' }
     }
     const authCheck = await cloud.checkAuth()
@@ -1239,10 +1252,11 @@ ipcMain.handle('empresa:joinCloud', async (_, data: { code: string; passphrase: 
         verificationHash: serverEmpresa.verification_hash,
       }
     )
-    cloudApi.clearCloudApiConfig()
+    if (previousConfig) cloudApi.setCloudApiConfig(previousConfig.serverUrl, previousConfig.token, previousConfig.empresaId)
+    else cloudApi.clearCloudApiConfig()
     return { success: true, data: empresa }
   } catch (error) {
-    cloudApi.clearCloudApiConfig()
+    if (!isCloudMode) cloudApi.clearCloudApiConfig()
     return { success: false, error: String(error) }
   }
 })
@@ -1253,12 +1267,18 @@ ipcMain.handle('empresa:listCloud', async () => {
     if (!session) {
       return { success: false, error: 'No cloud session' }
     }
+    // Save existing config to restore after listing
+    const previousConfig = cloudApi.getCloudApiConfig()
     cloudApi.setCloudApiConfig(session.serverUrl, session.token, 0)
     const empresas = await cloudApi.empresaCloud.list()
-    cloudApi.clearCloudApiConfig()
+    if (previousConfig) {
+      cloudApi.setCloudApiConfig(previousConfig.serverUrl, previousConfig.token, previousConfig.empresaId)
+    } else {
+      cloudApi.clearCloudApiConfig()
+    }
     return { success: true, data: empresas }
   } catch (error) {
-    cloudApi.clearCloudApiConfig()
+    if (!isCloudMode) cloudApi.clearCloudApiConfig()
     return { success: false, error: String(error) }
   }
 })
