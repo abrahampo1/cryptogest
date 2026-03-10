@@ -29,9 +29,13 @@ import {
   ChevronsUpDown,
   Check,
   ArrowLeft,
+  UserCog,
+  Banknote,
+  CalendarOff,
+  Clock,
 } from "lucide-react"
 
-export type Page = "dashboard" | "clientes" | "productos" | "facturas" | "gastos" | "ejercicios" | "contabilidad" | "modelos" | "buzon" | "cloud" | "configuracion" | "manual"
+export type Page = "dashboard" | "clientes" | "productos" | "facturas" | "gastos" | "ejercicios" | "contabilidad" | "modelos" | "rrhh" | "nominas" | "ausencias" | "jornada" | "sepa" | "buzon" | "cloud" | "configuracion" | "manual"
 
 interface CloudSession {
   serverUrl: string
@@ -62,6 +66,14 @@ const menuItems = [
   { id: "ejercicios" as Page, labelKey: "ejercicios", icon: Calendar },
   { id: "contabilidad" as Page, labelKey: "contabilidad", icon: BookOpen },
   { id: "modelos" as Page, labelKey: "modelos", icon: FileBarChart },
+]
+
+const rrhhItems = [
+  { id: "rrhh" as Page, labelKey: "rrhh", icon: UserCog },
+  { id: "nominas" as Page, labelKey: "nominas", icon: Banknote },
+  { id: "ausencias" as Page, labelKey: "ausencias", icon: CalendarOff },
+  { id: "jornada" as Page, labelKey: "jornada", icon: Clock },
+  { id: "sepa" as Page, labelKey: "sepa", icon: Building2 },
 ]
 
 const betaItems = [
@@ -110,6 +122,33 @@ export function Sidebar({ currentPage, onPageChange, onLock, onSwitchEmpresa, on
           </span>
         </div>
         {menuItems.map((item) => {
+          const Icon = item.icon
+          const isActive = currentPage === item.id
+          return (
+            <button
+              key={item.id}
+              className={cn(
+                "flex w-full items-center gap-2 px-4 py-2 text-left text-sm transition-colors",
+                isActive
+                  ? "bg-slate-800 text-white border-l-2 border-primary"
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 border-l-2 border-transparent"
+              )}
+              onClick={() => onPageChange(item.id)}
+            >
+              <Icon className="h-4 w-4 flex-shrink-0" />
+              <span className="truncate">{t(item.labelKey)}</span>
+              {isActive && <ChevronRight className="ml-auto h-3 w-3" />}
+            </button>
+          )
+        })}
+
+        <div className="my-2 border-t border-slate-700" />
+        <div className="px-3 py-1">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+            {t('rrhhSection')}
+          </span>
+        </div>
+        {rrhhItems.map((item) => {
           const Icon = item.icon
           const isActive = currentPage === item.id
           return (

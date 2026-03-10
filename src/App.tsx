@@ -14,6 +14,11 @@ import { ModelosHaciendaPage } from '@/pages/ModelosHaciendaPage'
 import { CloudPage } from '@/pages/CloudPage'
 import { ManualPage } from '@/pages/ManualPage'
 import { BuzonPage } from '@/pages/BuzonPage'
+import { RRHHPage } from '@/pages/RRHHPage'
+import { NominasPage } from '@/pages/NominasPage'
+import { AusenciasPage } from '@/pages/AusenciasPage'
+import { JornadaPage } from '@/pages/JornadaPage'
+import { SEPAPage } from '@/pages/SEPAPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { EmpresaSelectorPage } from '@/pages/EmpresaSelectorPage'
 import { SetupWizardPage } from '@/pages/SetupWizardPage'
@@ -280,6 +285,16 @@ function App() {
         return <ContabilidadPage onHelp={() => navigateToManual('contabilidad')} />
       case 'modelos':
         return <ModelosHaciendaPage onHelp={() => navigateToManual('modelos')} />
+      case 'rrhh':
+        return <RRHHPage onHelp={() => navigateToManual('rrhh')} />
+      case 'nominas':
+        return <NominasPage onHelp={() => navigateToManual('nominas')} />
+      case 'ausencias':
+        return <AusenciasPage onHelp={() => navigateToManual('ausencias')} />
+      case 'jornada':
+        return <JornadaPage onHelp={() => navigateToManual('jornada')} />
+      case 'sepa':
+        return <SEPAPage onHelp={() => navigateToManual('sepa')} />
       case 'buzon':
         return <BuzonPage />
       case 'cloud':

@@ -1,0 +1,39 @@
+{
+  "title": "Ausencias y Vacaciones",
+  "tabs": { "calendario": "Calendario", "solicitudes": "Solicitudes", "tipos": "Tipos de Ausencia" },
+  "new": "Nueva Ausencia",
+  "empleado": "Empleado",
+  "tipo": "Tipo",
+  "fechaInicio": "Fecha Inicio",
+  "fechaFin": "Fecha Fin",
+  "diasNaturales": "Días Naturales",
+  "diasHabiles": "Días Hábiles",
+  "estado": "Estado",
+  "notas": "Notas",
+  "aprobar": "Aprobar",
+  "rechazar": "Rechazar",
+  "cancelar": "Cancelar",
+  "estados": { "pendiente": "Pendiente", "aprobada": "Aprobada", "rechazada": "Rechazada", "cancelada": "Cancelada" },
+  "noAusencias": "No hay ausencias registradas",
+  "tiposAusencia": {
+    "title": "Tipos de Ausencia",
+    "new": "Nuevo Tipo",
+    "edit": "Editar Tipo",
+    "nombre": "Nombre",
+    "codigo": "Código",
+    "descontaSalario": "Descuenta Salario",
+    "requiereAprobacion": "Requiere Aprobación",
+    "color": "Color",
+    "activo": "Activo",
+    "deleteConfirm": "¿Eliminar este tipo de ausencia?",
+    "noTipos": "No hay tipos de ausencia. Crea los tipos predeterminados.",
+    "seedDefaults": "Crear tipos predeterminados"
+  },
+  "defaultTypes": {
+    "VAC": "Vacaciones",
+    "BAJA_IT": "Baja por IT",
+    "PERM_R": "Permiso Retribuido",
+    "PERM_NR": "Permiso No Retribuido",
+    "MATPAT": "Maternidad/Paternidad"
+  }
+}

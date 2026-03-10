@@ -1,0 +1,13 @@
+{
+  "title": "Pointage",
+  "tabs": { "fichar": "Pointer", "historial": "Historique", "resumen": "Résumé Mensuel" },
+  "empleado": "Employé", "fecha": "Date", "horaEntrada": "Entrée", "horaSalida": "Sortie",
+  "pausaMinutos": "Pause (min)", "horasTrabajadas": "Heures Travaillées", "horasExtra": "Heures Sup.",
+  "tipoHorasExtra": "Type H. Sup.", "notas": "Notes",
+  "ficharEntrada": "Pointer Entrée", "ficharSalida": "Pointer Sortie",
+  "selectEmpleado": "Sélectionnez un employé", "noRegistros": "Aucun enregistrement",
+  "mes": "Mois", "anio": "Année", "diasTrabajados": "Jours Travaillés",
+  "totalHoras": "Total Heures", "totalHorasExtra": "Total H. Sup.",
+  "tiposExtra": { "normal": "Normal", "fuerza_mayor": "Force Majeure" },
+  "deleteConfirm": "Supprimer cet enregistrement ?"
+}

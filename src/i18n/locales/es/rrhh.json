@@ -1,0 +1,117 @@
+{
+  "title": "Recursos Humanos",
+  "tabs": {
+    "empleados": "Empleados",
+    "contratos": "Contratos",
+    "departamentos": "Departamentos"
+  },
+  "empleados": {
+    "title": "Empleados",
+    "new": "Nuevo Empleado",
+    "edit": "Editar Empleado",
+    "nombre": "Nombre",
+    "apellidos": "Apellidos",
+    "nif": "NIF/NIE",
+    "numSS": "Nº Seguridad Social",
+    "fechaNacimiento": "Fecha de Nacimiento",
+    "genero": "Género",
+    "estadoCivil": "Estado Civil",
+    "email": "Email",
+    "telefono": "Teléfono",
+    "direccion": "Dirección",
+    "codigoPostal": "Código Postal",
+    "ciudad": "Ciudad",
+    "provincia": "Provincia",
+    "pais": "País",
+    "iban": "IBAN",
+    "categoriaProfesional": "Categoría Profesional",
+    "grupoCotizacion": "Grupo de Cotización",
+    "departamento": "Departamento",
+    "codigoCNAE": "Código CNAE",
+    "fechaAlta": "Fecha de Alta",
+    "fechaBaja": "Fecha de Baja",
+    "motivoBaja": "Motivo de Baja",
+    "porcentajeIRPF": "% IRPF",
+    "diasVacaciones": "Días Vacaciones/año",
+    "activo": "Activo",
+    "notas": "Notas",
+    "generos": {
+      "M": "Masculino",
+      "F": "Femenino",
+      "otro": "Otro"
+    },
+    "estadosCiviles": {
+      "soltero": "Soltero/a",
+      "casado": "Casado/a",
+      "divorciado": "Divorciado/a",
+      "viudo": "Viudo/a"
+    },
+    "deleteConfirm": "¿Eliminar este empleado? Se eliminarán también sus contratos, ausencias y registros de jornada.",
+    "noEmpleados": "No hay empleados registrados",
+    "personalData": "Datos Personales",
+    "contactData": "Contacto",
+    "laboralData": "Datos Laborales",
+    "gruposCotizacion": {
+      "1": "1 - Ingenieros y Licenciados",
+      "2": "2 - Ingenieros Técnicos y Diplomados",
+      "3": "3 - Jefes Administrativos y de Taller",
+      "4": "4 - Ayudantes no Titulados",
+      "5": "5 - Oficiales Administrativos",
+      "6": "6 - Subalternos",
+      "7": "7 - Auxiliares Administrativos",
+      "8": "8 - Oficiales de 1ª y 2ª",
+      "9": "9 - Oficiales de 3ª y Especialistas",
+      "10": "10 - Peones",
+      "11": "11 - Menores de 18 años"
+    }
+  },
+  "contratos": {
+    "title": "Contratos",
+    "new": "Nuevo Contrato",
+    "edit": "Editar Contrato",
+    "empleado": "Empleado",
+    "tipoContrato": "Tipo de Contrato",
+    "fechaInicio": "Fecha Inicio",
+    "fechaFin": "Fecha Fin",
+    "jornada": "Jornada",
+    "horasSemanales": "Horas Semanales",
+    "salarioBrutoAnual": "Salario Bruto Anual",
+    "salarioBrutoMensual": "Salario Bruto Mensual",
+    "numPagasExtra": "Nº Pagas Extra",
+    "pagasProrrateadas": "Pagas Prorrateadas",
+    "convenioColectivo": "Convenio Colectivo",
+    "codigoContrato": "Código Contrato",
+    "porcentajeATEP": "% AT/EP",
+    "activo": "Activo",
+    "notas": "Notas",
+    "tipos": {
+      "indefinido": "Indefinido",
+      "temporal": "Temporal",
+      "practicas": "Prácticas",
+      "formacion": "Formación",
+      "interinidad": "Interinidad"
+    },
+    "jornadas": {
+      "completa": "Completa",
+      "parcial": "Parcial"
+    },
+    "deleteConfirm": "¿Eliminar este contrato?",
+    "noContratos": "No hay contratos para este empleado",
+    "selectEmpleado": "Selecciona un empleado para ver sus contratos"
+  },
+  "departamentos": {
+    "title": "Departamentos",
+    "new": "Nuevo Departamento",
+    "edit": "Editar Departamento",
+    "nombre": "Nombre",
+    "activo": "Activo",
+    "empleados": "Empleados",
+    "deleteConfirm": "¿Eliminar este departamento?",
+    "noDepartamentos": "No hay departamentos registrados"
+  },
+  "errors": {
+    "duplicateNif": "Ya existe un empleado con ese NIF",
+    "duplicateName": "Ya existe un registro con ese nombre",
+    "noActiveContract": "El empleado no tiene contrato activo"
+  }
+}

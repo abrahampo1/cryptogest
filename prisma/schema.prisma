@@ -23,6 +23,9 @@ model Cliente {
   nif       String?   @unique
   notas     String?
   activo    Boolean   @default(true)
+  iban      String?
+  mandatoSEPA String?
+  mandatoSEPAFecha DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   facturas  Factura[]
@@ -218,12 +221,14 @@ model Asiento {
   numero        Int
   fecha         DateTime  @default(now())
   descripcion   String
-  tipo          String    @default("manual") // "manual", "factura", "gasto", "cierre", "apertura"
+  tipo          String    @default("manual") // "manual", "factura", "gasto", "nomina", "cierre", "apertura"
   documentoRef  String?
   facturaId     Int?
   factura       Factura?  @relation(fields: [facturaId], references: [id])
   gastoId       Int?
   gasto         Gasto?    @relation(fields: [gastoId], references: [id])
+  nominaId      Int?      @unique
+  nomina        Nomina?   @relation(fields: [nominaId], references: [id])
   ejercicioId   Int
   ejercicio     EjercicioFiscal @relation(fields: [ejercicioId], references: [id])
   createdAt     DateTime  @default(now())
@@ -243,4 +248,217 @@ model LineaAsiento {
   debe        Float     @default(0)
   haber       Float     @default(0)
   concepto    String?
+}
+
+// ============================================
+// RRHH - Departamentos
+// ============================================
+model Departamento {
+  id        Int       @id @default(autoincrement())
+  nombre    String    @unique
+  activo    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  empleados Empleado[]
+}
+
+// ============================================
+// RRHH - Empleados
+// ============================================
+model Empleado {
+  id                    Int       @id @default(autoincrement())
+  nombre                String
+  apellidos             String
+  nif                   String    @unique
+  numSeguridadSocial    String?
+  fechaNacimiento       DateTime?
+  genero                String?   // "M", "F", "otro"
+  estadoCivil           String?   // "soltero", "casado", "divorciado", "viudo"
+  email                 String?
+  telefono              String?
+  direccion             String?
+  codigoPostal          String?
+  ciudad                String?
+  provincia             String?
+  pais                  String    @default("España")
+  iban                  String?
+  categoriaProfesional  String?
+  grupoCotizacion       Int       @default(1) // 1-11
+  departamentoId        Int?
+  departamento          Departamento? @relation(fields: [departamentoId], references: [id])
+  codigoCNAE            String?
+  fechaAlta             DateTime  @default(now())
+  fechaBaja             DateTime?
+  motivoBaja            String?
+  porcentajeIRPF        Float     @default(0)
+  diasVacacionesAnuales Int       @default(30)
+  activo                Boolean   @default(true)
+  notas                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  contratos             Contrato[]
+  nominas               Nomina[]
+  ausencias             Ausencia[]
+  registrosJornada      RegistroJornada[]
+}
+
+// ============================================
+// RRHH - Contratos
+// ============================================
+model Contrato {
+  id                Int       @id @default(autoincrement())
+  empleadoId        Int
+  empleado          Empleado  @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  tipoContrato      String    @default("indefinido") // indefinido/temporal/practicas/formacion/interinidad
+  fechaInicio       DateTime
+  fechaFin          DateTime?
+  jornada           String    @default("completa") // completa/parcial
+  horasSemanales    Float     @default(40)
+  salarioBrutoAnual Float
+  salarioBrutoMensual Float
+  numPagasExtra     Int       @default(2)
+  pagasProrrateadas Boolean   @default(false)
+  convenioColectivo String?
+  codigoContrato    String?
+  porcentajeATEP    Float     @default(1.50)
+  activo            Boolean   @default(true)
+  notas             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+// ============================================
+// RRHH - Nóminas
+// ============================================
+model Nomina {
+  id                  Int       @id @default(autoincrement())
+  empleadoId          Int
+  empleado            Empleado  @relation(fields: [empleadoId], references: [id])
+  mes                 Int
+  anio                Int
+  salarioBase         Float
+  prorrataPagasExtra  Float     @default(0)
+  complementos        Float     @default(0)
+  horasExtraImporte   Float     @default(0)
+  otrosDevengos       Float     @default(0)
+  totalDevengado      Float
+  baseCotizacionCC    Float
+  baseCotizacionCP    Float
+  ccTrabajador        Float     // 4.70%
+  desempleoTrabajador Float     // 1.55%/1.60%
+  fpTrabajador        Float     // 0.10%
+  irpfImporte         Float
+  porcentajeIRPF      Float
+  totalDeducciones    Float
+  liquidoPercibir     Float
+  ccEmpresa           Float     // 23.60%
+  desempleoEmpresa    Float     // 5.50%/6.70%
+  fogasaEmpresa       Float     // 0.20%
+  fpEmpresa           Float     // 0.60%
+  atepEmpresa         Float     // variable
+  totalCosteSS        Float
+  costeTotal          Float
+  estado              String    @default("borrador") // borrador/confirmada/pagada
+  fechaPago           DateTime?
+  asiento             Asiento?
+  notas               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  lineas              LineaNomina[]
+
+  @@unique([empleadoId, mes, anio])
+}
+
+// ============================================
+// RRHH - Líneas de Nómina
+// ============================================
+model LineaNomina {
+  id          Int       @id @default(autoincrement())
+  nominaId    Int
+  nomina      Nomina    @relation(fields: [nominaId], references: [id], onDelete: Cascade)
+  tipo        String    // "devengo" / "deduccion"
+  concepto    String
+  base        Float     @default(0)
+  porcentaje  Float     @default(0)
+  importe     Float
+  orden       Int       @default(0)
+}
+
+// ============================================
+// RRHH - Lotes SEPA
+// ============================================
+model LoteSEPA {
+  id              Int       @id @default(autoincrement())
+  tipo            String    // "pain001" / "pain008"
+  referencia      String    @unique
+  fechaCreacion   DateTime  @default(now())
+  fechaEjecucion  DateTime
+  ordenante       String
+  ordenanteIBAN   String
+  ordenanteBIC    String?
+  ordenanteNIF    String
+  idAcreedor      String?   // para pain.008
+  numOperaciones  Int
+  importeTotal    Float
+  estado          String    @default("generado") // generado/enviado
+  xmlContent      String
+  notas           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ============================================
+// RRHH - Tipos de Ausencia
+// ============================================
+model TipoAusencia {
+  id                  Int       @id @default(autoincrement())
+  nombre              String    @unique
+  codigo              String    @unique // VAC/BAJA_IT/PERM_R/PERM_NR/MATPAT
+  descontaSalario     Boolean   @default(false)
+  requiereAprobacion  Boolean   @default(true)
+  color               String    @default("#3B82F6")
+  activo              Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  ausencias           Ausencia[]
+}
+
+// ============================================
+// RRHH - Ausencias
+// ============================================
+model Ausencia {
+  id              Int       @id @default(autoincrement())
+  empleadoId      Int
+  empleado        Empleado  @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  tipoAusenciaId  Int
+  tipoAusencia    TipoAusencia @relation(fields: [tipoAusenciaId], references: [id])
+  fechaInicio     DateTime
+  fechaFin        DateTime
+  diasNaturales   Int
+  diasHabiles     Int
+  estado          String    @default("pendiente") // pendiente/aprobada/rechazada/cancelada
+  notas           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ============================================
+// RRHH - Registro de Jornada
+// ============================================
+model RegistroJornada {
+  id              Int       @id @default(autoincrement())
+  empleadoId      Int
+  empleado        Empleado  @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  fecha           DateTime
+  horaEntrada     DateTime?
+  horaSalida      DateTime?
+  pausaMinutos    Int       @default(0)
+  horasTrabajadas Float     @default(0)
+  horasExtra      Float     @default(0)
+  tipoHorasExtra  String?   // "normal" / "fuerza_mayor"
+  notas           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([empleadoId, fecha])
 }

@@ -372,6 +372,74 @@ const electronAPI = {
     },
   },
 
+  // RRHH - Departamentos
+  departamentos: {
+    getAll: () => ipcRenderer.invoke('departamentos:getAll') as Promise<ApiResponse<any[]>>,
+    create: (data: any) => ipcRenderer.invoke('departamentos:create', data) as Promise<ApiResponse<any>>,
+    update: (id: number, data: any) => ipcRenderer.invoke('departamentos:update', id, data) as Promise<ApiResponse<any>>,
+    delete: (id: number) => ipcRenderer.invoke('departamentos:delete', id) as Promise<ApiResponse<void>>,
+  },
+
+  // RRHH - Empleados
+  empleados: {
+    getAll: () => ipcRenderer.invoke('empleados:getAll') as Promise<ApiResponse<any[]>>,
+    getById: (id: number) => ipcRenderer.invoke('empleados:getById', id) as Promise<ApiResponse<any>>,
+    create: (data: any) => ipcRenderer.invoke('empleados:create', data) as Promise<ApiResponse<any>>,
+    update: (id: number, data: any) => ipcRenderer.invoke('empleados:update', id, data) as Promise<ApiResponse<any>>,
+    delete: (id: number) => ipcRenderer.invoke('empleados:delete', id) as Promise<ApiResponse<void>>,
+  },
+
+  // RRHH - Contratos
+  contratos: {
+    getByEmpleado: (empleadoId: number) => ipcRenderer.invoke('contratos:getByEmpleado', empleadoId) as Promise<ApiResponse<any[]>>,
+    create: (data: any) => ipcRenderer.invoke('contratos:create', data) as Promise<ApiResponse<any>>,
+    update: (id: number, data: any) => ipcRenderer.invoke('contratos:update', id, data) as Promise<ApiResponse<any>>,
+    delete: (id: number) => ipcRenderer.invoke('contratos:delete', id) as Promise<ApiResponse<void>>,
+  },
+
+  // RRHH - Nóminas
+  nominas: {
+    getAll: (filters?: any) => ipcRenderer.invoke('nominas:getAll', filters) as Promise<ApiResponse<any[]>>,
+    getById: (id: number) => ipcRenderer.invoke('nominas:getById', id) as Promise<ApiResponse<any>>,
+    calcular: (data: any) => ipcRenderer.invoke('nominas:calcular', data) as Promise<ApiResponse<any>>,
+    create: (data: any) => ipcRenderer.invoke('nominas:create', data) as Promise<ApiResponse<any>>,
+    confirmar: (id: number) => ipcRenderer.invoke('nominas:confirmar', id) as Promise<ApiResponse<any>>,
+    marcarPagada: (id: number) => ipcRenderer.invoke('nominas:marcarPagada', id) as Promise<ApiResponse<any>>,
+    delete: (id: number) => ipcRenderer.invoke('nominas:delete', id) as Promise<ApiResponse<void>>,
+  },
+
+  // SEPA
+  sepa: {
+    getLotes: () => ipcRenderer.invoke('sepa:getLotes') as Promise<ApiResponse<any[]>>,
+    createLote: (data: any) => ipcRenderer.invoke('sepa:createLote', data) as Promise<ApiResponse<any>>,
+    updateEstado: (id: number, estado: string) => ipcRenderer.invoke('sepa:updateEstado', id, estado) as Promise<ApiResponse<any>>,
+    deleteLote: (id: number) => ipcRenderer.invoke('sepa:deleteLote', id) as Promise<ApiResponse<void>>,
+  },
+
+  // RRHH - Ausencias
+  tiposAusencia: {
+    getAll: () => ipcRenderer.invoke('tiposAusencia:getAll') as Promise<ApiResponse<any[]>>,
+    create: (data: any) => ipcRenderer.invoke('tiposAusencia:create', data) as Promise<ApiResponse<any>>,
+    update: (id: number, data: any) => ipcRenderer.invoke('tiposAusencia:update', id, data) as Promise<ApiResponse<any>>,
+    delete: (id: number) => ipcRenderer.invoke('tiposAusencia:delete', id) as Promise<ApiResponse<void>>,
+  },
+
+  ausencias: {
+    getAll: (filters?: any) => ipcRenderer.invoke('ausencias:getAll', filters) as Promise<ApiResponse<any[]>>,
+    create: (data: any) => ipcRenderer.invoke('ausencias:create', data) as Promise<ApiResponse<any>>,
+    updateEstado: (id: number, estado: string) => ipcRenderer.invoke('ausencias:updateEstado', id, estado) as Promise<ApiResponse<any>>,
+    delete: (id: number) => ipcRenderer.invoke('ausencias:delete', id) as Promise<ApiResponse<void>>,
+  },
+
+  // RRHH - Jornada
+  jornada: {
+    getAll: (filters?: any) => ipcRenderer.invoke('jornada:getAll', filters) as Promise<ApiResponse<any[]>>,
+    fichar: (data: { empleadoId: number; tipo: 'entrada' | 'salida' }) => ipcRenderer.invoke('jornada:fichar', data) as Promise<ApiResponse<any>>,
+    update: (id: number, data: any) => ipcRenderer.invoke('jornada:update', id, data) as Promise<ApiResponse<any>>,
+    delete: (id: number) => ipcRenderer.invoke('jornada:delete', id) as Promise<ApiResponse<void>>,
+    resumenMensual: (params: { mes: number; anio: number }) => ipcRenderer.invoke('jornada:resumenMensual', params) as Promise<ApiResponse<any[]>>,
+  },
+
   // Cloud entity sync events
   onEntityUpdated: (callback: (data: { entityType: string }) => void) => {
     ipcRenderer.on('cloud:entity-updated', (_, data) => callback(data))

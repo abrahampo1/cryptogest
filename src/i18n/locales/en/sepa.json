@@ -1,0 +1,21 @@
+{
+  "title": "SEPA Files",
+  "tabs": { "pain001": "Credit Transfers (pain.001)", "pain008": "Direct Debits (pain.008)", "lotes": "Generated Batches" },
+  "generatePain001": "Generate pain.001", "generatePain008": "Generate pain.008",
+  "ordenante": "Originator", "ordenanteIBAN": "Originator IBAN", "ordenanteBIC": "BIC",
+  "ordenanteNIF": "Originator Tax ID", "idAcreedor": "SEPA Creditor ID",
+  "fechaEjecucion": "Execution Date", "referencia": "Reference",
+  "numOperaciones": "Nº Operations", "importeTotal": "Total Amount",
+  "estado": "Status", "tipo": "Type",
+  "estados": { "generado": "Generated", "enviado": "Sent" },
+  "marcarEnviado": "Mark as Sent", "descargarXML": "Download XML",
+  "noLotes": "No SEPA batches generated",
+  "selectNominas": "Select confirmed payrolls to include in the credit transfer",
+  "selectFacturas": "Select pending invoices to include in the direct debit",
+  "noNominasConfirmadas": "No confirmed payrolls pending payment",
+  "noFacturasPendientes": "No pending invoices with SEPA mandate",
+  "configEmpresa": "Configure company SEPA details in Settings",
+  "deleteConfirm": "Delete this SEPA batch?",
+  "pain001Desc": "Credit transfers for payroll payments (ISO 20022 pain.001.001.03)",
+  "pain008Desc": "Direct debits for invoice collection (ISO 20022 pain.008.001.02)"
+}

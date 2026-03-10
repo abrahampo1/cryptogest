@@ -1,0 +1,19 @@
+{
+  "title": "Fichiers SEPA",
+  "tabs": { "pain001": "Virements (pain.001)", "pain008": "Prélèvements (pain.008)", "lotes": "Lots Générés" },
+  "generatePain001": "Générer pain.001", "generatePain008": "Générer pain.008",
+  "ordenante": "Donneur d'Ordre", "ordenanteIBAN": "IBAN", "ordenanteBIC": "BIC",
+  "ordenanteNIF": "Nº Fiscal", "idAcreedor": "ID Créancier SEPA",
+  "fechaEjecucion": "Date d'Exécution", "referencia": "Référence",
+  "numOperaciones": "Nº Opérations", "importeTotal": "Montant Total",
+  "estado": "Statut", "tipo": "Type",
+  "estados": { "generado": "Généré", "enviado": "Envoyé" },
+  "marcarEnviado": "Marquer Envoyé", "descargarXML": "Télécharger XML",
+  "noLotes": "Aucun lot SEPA", "selectNominas": "Sélectionnez les fiches de paie confirmées",
+  "selectFacturas": "Sélectionnez les factures en attente", "noNominasConfirmadas": "Aucune fiche confirmée",
+  "noFacturasPendientes": "Aucune facture avec mandat SEPA",
+  "configEmpresa": "Configurez les données SEPA dans Paramètres",
+  "deleteConfirm": "Supprimer ce lot ?",
+  "pain001Desc": "Virements pour paiement de salaires (ISO 20022 pain.001.001.03)",
+  "pain008Desc": "Prélèvements pour encaissement de factures (ISO 20022 pain.008.001.02)"
+}

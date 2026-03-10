@@ -332,6 +332,216 @@ async function ensureDatabaseTables(db: PrismaClient) {
     )
   `)
   await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "CorreoCache_cuentaId_carpetaId_uid_key" ON "CorreoCache"("cuentaId", "carpetaId", "uid")`)
+
+  // ---- Tablas RRHH ----
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "Departamento" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "nombre" TEXT NOT NULL,
+      "activo" INTEGER NOT NULL DEFAULT 1,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+  await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Departamento_nombre_key" ON "Departamento"("nombre")`)
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "Empleado" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "nombre" TEXT NOT NULL,
+      "apellidos" TEXT NOT NULL,
+      "nif" TEXT NOT NULL,
+      "numSeguridadSocial" TEXT,
+      "fechaNacimiento" DATETIME,
+      "genero" TEXT,
+      "estadoCivil" TEXT,
+      "email" TEXT,
+      "telefono" TEXT,
+      "direccion" TEXT,
+      "codigoPostal" TEXT,
+      "ciudad" TEXT,
+      "provincia" TEXT,
+      "pais" TEXT NOT NULL DEFAULT 'España',
+      "iban" TEXT,
+      "categoriaProfesional" TEXT,
+      "grupoCotizacion" INTEGER NOT NULL DEFAULT 1,
+      "departamentoId" INTEGER,
+      "codigoCNAE" TEXT,
+      "fechaAlta" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "fechaBaja" DATETIME,
+      "motivoBaja" TEXT,
+      "porcentajeIRPF" REAL NOT NULL DEFAULT 0,
+      "diasVacacionesAnuales" INTEGER NOT NULL DEFAULT 30,
+      "activo" INTEGER NOT NULL DEFAULT 1,
+      "notas" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "Empleado_departamentoId_fkey" FOREIGN KEY ("departamentoId") REFERENCES "Departamento" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    )
+  `)
+  await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Empleado_nif_key" ON "Empleado"("nif")`)
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "Contrato" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "empleadoId" INTEGER NOT NULL,
+      "tipoContrato" TEXT NOT NULL DEFAULT 'indefinido',
+      "fechaInicio" DATETIME NOT NULL,
+      "fechaFin" DATETIME,
+      "jornada" TEXT NOT NULL DEFAULT 'completa',
+      "horasSemanales" REAL NOT NULL DEFAULT 40,
+      "salarioBrutoAnual" REAL NOT NULL,
+      "salarioBrutoMensual" REAL NOT NULL,
+      "numPagasExtra" INTEGER NOT NULL DEFAULT 2,
+      "pagasProrrateadas" INTEGER NOT NULL DEFAULT 0,
+      "convenioColectivo" TEXT,
+      "codigoContrato" TEXT,
+      "porcentajeATEP" REAL NOT NULL DEFAULT 1.50,
+      "activo" INTEGER NOT NULL DEFAULT 1,
+      "notas" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "Contrato_empleadoId_fkey" FOREIGN KEY ("empleadoId") REFERENCES "Empleado" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    )
+  `)
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "Nomina" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "empleadoId" INTEGER NOT NULL,
+      "mes" INTEGER NOT NULL,
+      "anio" INTEGER NOT NULL,
+      "salarioBase" REAL NOT NULL,
+      "prorrataPagasExtra" REAL NOT NULL DEFAULT 0,
+      "complementos" REAL NOT NULL DEFAULT 0,
+      "horasExtraImporte" REAL NOT NULL DEFAULT 0,
+      "otrosDevengos" REAL NOT NULL DEFAULT 0,
+      "totalDevengado" REAL NOT NULL,
+      "baseCotizacionCC" REAL NOT NULL,
+      "baseCotizacionCP" REAL NOT NULL,
+      "ccTrabajador" REAL NOT NULL,
+      "desempleoTrabajador" REAL NOT NULL,
+      "fpTrabajador" REAL NOT NULL,
+      "irpfImporte" REAL NOT NULL,
+      "porcentajeIRPF" REAL NOT NULL,
+      "totalDeducciones" REAL NOT NULL,
+      "liquidoPercibir" REAL NOT NULL,
+      "ccEmpresa" REAL NOT NULL,
+      "desempleoEmpresa" REAL NOT NULL,
+      "fogasaEmpresa" REAL NOT NULL,
+      "fpEmpresa" REAL NOT NULL,
+      "atepEmpresa" REAL NOT NULL,
+      "totalCosteSS" REAL NOT NULL,
+      "costeTotal" REAL NOT NULL,
+      "estado" TEXT NOT NULL DEFAULT 'borrador',
+      "fechaPago" DATETIME,
+      "notas" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "Nomina_empleadoId_fkey" FOREIGN KEY ("empleadoId") REFERENCES "Empleado" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    )
+  `)
+  await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Nomina_empleadoId_mes_anio_key" ON "Nomina"("empleadoId", "mes", "anio")`)
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "LineaNomina" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "nominaId" INTEGER NOT NULL,
+      "tipo" TEXT NOT NULL,
+      "concepto" TEXT NOT NULL,
+      "base" REAL NOT NULL DEFAULT 0,
+      "porcentaje" REAL NOT NULL DEFAULT 0,
+      "importe" REAL NOT NULL,
+      "orden" INTEGER NOT NULL DEFAULT 0,
+      CONSTRAINT "LineaNomina_nominaId_fkey" FOREIGN KEY ("nominaId") REFERENCES "Nomina" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    )
+  `)
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "LoteSEPA" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "tipo" TEXT NOT NULL,
+      "referencia" TEXT NOT NULL,
+      "fechaCreacion" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "fechaEjecucion" DATETIME NOT NULL,
+      "ordenante" TEXT NOT NULL,
+      "ordenanteIBAN" TEXT NOT NULL,
+      "ordenanteBIC" TEXT,
+      "ordenanteNIF" TEXT NOT NULL,
+      "idAcreedor" TEXT,
+      "numOperaciones" INTEGER NOT NULL,
+      "importeTotal" REAL NOT NULL,
+      "estado" TEXT NOT NULL DEFAULT 'generado',
+      "xmlContent" TEXT NOT NULL,
+      "notas" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+  await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "LoteSEPA_referencia_key" ON "LoteSEPA"("referencia")`)
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "TipoAusencia" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "nombre" TEXT NOT NULL,
+      "codigo" TEXT NOT NULL,
+      "descontaSalario" INTEGER NOT NULL DEFAULT 0,
+      "requiereAprobacion" INTEGER NOT NULL DEFAULT 1,
+      "color" TEXT NOT NULL DEFAULT '#3B82F6',
+      "activo" INTEGER NOT NULL DEFAULT 1,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+  await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "TipoAusencia_nombre_key" ON "TipoAusencia"("nombre")`)
+  await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "TipoAusencia_codigo_key" ON "TipoAusencia"("codigo")`)
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "Ausencia" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "empleadoId" INTEGER NOT NULL,
+      "tipoAusenciaId" INTEGER NOT NULL,
+      "fechaInicio" DATETIME NOT NULL,
+      "fechaFin" DATETIME NOT NULL,
+      "diasNaturales" INTEGER NOT NULL,
+      "diasHabiles" INTEGER NOT NULL,
+      "estado" TEXT NOT NULL DEFAULT 'pendiente',
+      "notas" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "Ausencia_empleadoId_fkey" FOREIGN KEY ("empleadoId") REFERENCES "Empleado" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT "Ausencia_tipoAusenciaId_fkey" FOREIGN KEY ("tipoAusenciaId") REFERENCES "TipoAusencia" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    )
+  `)
+
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "RegistroJornada" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "empleadoId" INTEGER NOT NULL,
+      "fecha" DATETIME NOT NULL,
+      "horaEntrada" DATETIME,
+      "horaSalida" DATETIME,
+      "pausaMinutos" INTEGER NOT NULL DEFAULT 0,
+      "horasTrabajadas" REAL NOT NULL DEFAULT 0,
+      "horasExtra" REAL NOT NULL DEFAULT 0,
+      "tipoHorasExtra" TEXT,
+      "notas" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "RegistroJornada_empleadoId_fkey" FOREIGN KEY ("empleadoId") REFERENCES "Empleado" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    )
+  `)
+  await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "RegistroJornada_empleadoId_fecha_key" ON "RegistroJornada"("empleadoId", "fecha")`)
+
+  // Add nominaId to Asiento if not exists
+  try { await db.$executeRawUnsafe(`ALTER TABLE "Asiento" ADD COLUMN "nominaId" INTEGER REFERENCES "Nomina"("id")`) } catch {}
+  try { await db.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Asiento_nominaId_key" ON "Asiento"("nominaId")`) } catch {}
+
+  // Add SEPA fields to Cliente if not exists
+  try { await db.$executeRawUnsafe(`ALTER TABLE "Cliente" ADD COLUMN "iban" TEXT`) } catch {}
+  try { await db.$executeRawUnsafe(`ALTER TABLE "Cliente" ADD COLUMN "mandatoSEPA" TEXT`) } catch {}
+  try { await db.$executeRawUnsafe(`ALTER TABLE "Cliente" ADD COLUMN "mandatoSEPAFecha" DATETIME`) } catch {}
 }
 
 let mainWindow: BrowserWindow | null = null
@@ -6669,6 +6879,795 @@ ipcMain.handle('holded:import', async (_, apiKey: string, entities: string[]) =>
     }
 
     return { success: true, data: results }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - RRHH: Departamentos
+// ============================================
+
+ipcMain.handle('departamentos:getAll', async () => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    const db = ctx.db
+    const departamentos = await db.departamento.findMany({
+      orderBy: { nombre: 'asc' },
+      include: { _count: { select: { empleados: true } } }
+    })
+    return { success: true, data: departamentos }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('departamentos:create', async (_, data: any) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const departamento = await db.departamento.create({ data: { nombre: data.nombre, activo: data.activo ?? true } })
+    return { success: true, data: departamento }
+  } catch (error: any) {
+    if (error.code === 'P2002') return { success: false, error: 'duplicateName' }
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('departamentos:update', async (_, id: number, data: any) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const departamento = await db.departamento.update({ where: { id }, data: { nombre: data.nombre, activo: data.activo } })
+    return { success: true, data: departamento }
+  } catch (error: any) {
+    if (error.code === 'P2002') return { success: false, error: 'duplicateName' }
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('departamentos:delete', async (_, id: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    await db.departamento.delete({ where: { id } })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - RRHH: Empleados
+// ============================================
+
+ipcMain.handle('empleados:getAll', async () => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    const db = ctx.db
+    const empleados = await db.empleado.findMany({
+      orderBy: [{ apellidos: 'asc' }, { nombre: 'asc' }],
+      include: { departamento: true, contratos: { where: { activo: true }, take: 1 } }
+    })
+    return { success: true, data: empleados }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('empleados:getById', async (_, id: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const empleado = await db.empleado.findUnique({
+      where: { id },
+      include: { departamento: true, contratos: { orderBy: { fechaInicio: 'desc' } }, nominas: { orderBy: [{ anio: 'desc' }, { mes: 'desc' }], take: 12 }, ausencias: { include: { tipoAusencia: true }, orderBy: { fechaInicio: 'desc' }, take: 10 } }
+    })
+    if (!empleado) return { success: false, error: 'notFound' }
+    return { success: true, data: empleado }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('empleados:create', async (_, data: any) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const empleado = await db.empleado.create({
+      data: {
+        nombre: data.nombre, apellidos: data.apellidos, nif: data.nif,
+        numSeguridadSocial: data.numSeguridadSocial || null,
+        fechaNacimiento: data.fechaNacimiento ? new Date(data.fechaNacimiento) : null,
+        genero: data.genero || null, estadoCivil: data.estadoCivil || null,
+        email: data.email || null, telefono: data.telefono || null,
+        direccion: data.direccion || null, codigoPostal: data.codigoPostal || null,
+        ciudad: data.ciudad || null, provincia: data.provincia || null,
+        pais: data.pais || 'España', iban: data.iban || null,
+        categoriaProfesional: data.categoriaProfesional || null,
+        grupoCotizacion: data.grupoCotizacion || 1,
+        departamentoId: data.departamentoId || null,
+        codigoCNAE: data.codigoCNAE || null,
+        fechaAlta: data.fechaAlta ? new Date(data.fechaAlta) : new Date(),
+        porcentajeIRPF: data.porcentajeIRPF || 0,
+        diasVacacionesAnuales: data.diasVacacionesAnuales || 30,
+        activo: data.activo ?? true, notas: data.notas || null,
+      },
+      include: { departamento: true }
+    })
+    return { success: true, data: empleado }
+  } catch (error: any) {
+    if (error.code === 'P2002') return { success: false, error: 'duplicateNif' }
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('empleados:update', async (_, id: number, data: any) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const empleado = await db.empleado.update({
+      where: { id },
+      data: {
+        nombre: data.nombre, apellidos: data.apellidos, nif: data.nif,
+        numSeguridadSocial: data.numSeguridadSocial, email: data.email,
+        fechaNacimiento: data.fechaNacimiento ? new Date(data.fechaNacimiento) : undefined,
+        genero: data.genero, estadoCivil: data.estadoCivil,
+        telefono: data.telefono, direccion: data.direccion,
+        codigoPostal: data.codigoPostal, ciudad: data.ciudad,
+        provincia: data.provincia, pais: data.pais, iban: data.iban,
+        categoriaProfesional: data.categoriaProfesional,
+        grupoCotizacion: data.grupoCotizacion,
+        departamentoId: data.departamentoId,
+        codigoCNAE: data.codigoCNAE,
+        fechaAlta: data.fechaAlta ? new Date(data.fechaAlta) : undefined,
+        fechaBaja: data.fechaBaja ? new Date(data.fechaBaja) : data.fechaBaja === null ? null : undefined,
+        motivoBaja: data.motivoBaja, porcentajeIRPF: data.porcentajeIRPF,
+        diasVacacionesAnuales: data.diasVacacionesAnuales,
+        activo: data.activo, notas: data.notas,
+      },
+      include: { departamento: true }
+    })
+    return { success: true, data: empleado }
+  } catch (error: any) {
+    if (error.code === 'P2002') return { success: false, error: 'duplicateNif' }
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('empleados:delete', async (_, id: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    await db.empleado.delete({ where: { id } })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - RRHH: Contratos
+// ============================================
+
+ipcMain.handle('contratos:getByEmpleado', async (_, empleadoId: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    const db = ctx.db
+    const contratos = await db.contrato.findMany({ where: { empleadoId }, orderBy: { fechaInicio: 'desc' } })
+    return { success: true, data: contratos }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('contratos:create', async (_, data: any) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const contrato = await db.contrato.create({
+      data: {
+        empleadoId: data.empleadoId, tipoContrato: data.tipoContrato || 'indefinido',
+        fechaInicio: new Date(data.fechaInicio),
+        fechaFin: data.fechaFin ? new Date(data.fechaFin) : null,
+        jornada: data.jornada || 'completa', horasSemanales: data.horasSemanales || 40,
+        salarioBrutoAnual: data.salarioBrutoAnual, salarioBrutoMensual: data.salarioBrutoMensual,
+        numPagasExtra: data.numPagasExtra ?? 2, pagasProrrateadas: data.pagasProrrateadas ?? false,
+        convenioColectivo: data.convenioColectivo || null,
+        codigoContrato: data.codigoContrato || null,
+        porcentajeATEP: data.porcentajeATEP ?? 1.50,
+        activo: data.activo ?? true, notas: data.notas || null,
+      }
+    })
+    return { success: true, data: contrato }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('contratos:update', async (_, id: number, data: any) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const contrato = await db.contrato.update({
+      where: { id },
+      data: {
+        tipoContrato: data.tipoContrato,
+        fechaInicio: data.fechaInicio ? new Date(data.fechaInicio) : undefined,
+        fechaFin: data.fechaFin ? new Date(data.fechaFin) : data.fechaFin === null ? null : undefined,
+        jornada: data.jornada, horasSemanales: data.horasSemanales,
+        salarioBrutoAnual: data.salarioBrutoAnual, salarioBrutoMensual: data.salarioBrutoMensual,
+        numPagasExtra: data.numPagasExtra, pagasProrrateadas: data.pagasProrrateadas,
+        convenioColectivo: data.convenioColectivo, codigoContrato: data.codigoContrato,
+        porcentajeATEP: data.porcentajeATEP, activo: data.activo, notas: data.notas,
+      }
+    })
+    return { success: true, data: contrato }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('contratos:delete', async (_, id: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    await db.contrato.delete({ where: { id } })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - RRHH: Nóminas
+// ============================================
+
+ipcMain.handle('nominas:getAll', async (_, filters?: { empleadoId?: number; mes?: number; anio?: number; estado?: string }) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    const db = ctx.db
+    const where: any = {}
+    if (filters?.empleadoId) where.empleadoId = filters.empleadoId
+    if (filters?.mes) where.mes = filters.mes
+    if (filters?.anio) where.anio = filters.anio
+    if (filters?.estado) where.estado = filters.estado
+    const nominas = await db.nomina.findMany({
+      where, orderBy: [{ anio: 'desc' }, { mes: 'desc' }],
+      include: { empleado: { select: { id: true, nombre: true, apellidos: true, nif: true } }, lineas: { orderBy: { orden: 'asc' } } }
+    })
+    return { success: true, data: nominas }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('nominas:getById', async (_, id: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const nomina = await db.nomina.findUnique({
+      where: { id },
+      include: { empleado: { include: { departamento: true, contratos: { where: { activo: true }, take: 1 } } }, lineas: { orderBy: { orden: 'asc' } }, asiento: true }
+    })
+    if (!nomina) return { success: false, error: 'notFound' }
+    return { success: true, data: nomina }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('nominas:calcular', async (_, data: { empleadoId: number; mes: number; anio: number; complementos?: number; horasExtraImporte?: number; otrosDevengos?: number }) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+
+    const empleado = await db.empleado.findUnique({ where: { id: data.empleadoId } })
+    if (!empleado) return { success: false, error: 'empleadoNotFound' }
+
+    const contrato = await db.contrato.findFirst({ where: { empleadoId: data.empleadoId, activo: true }, orderBy: { fechaInicio: 'desc' } })
+    if (!contrato) return { success: false, error: 'noActiveContract' }
+
+    const salarioBase = contrato.salarioBrutoMensual
+    const prorrataPagasExtra = contrato.pagasProrrateadas ? (contrato.salarioBrutoAnual / 12 - contrato.salarioBrutoMensual) : 0
+    const complementos = data.complementos || 0
+    const horasExtraImporte = data.horasExtraImporte || 0
+    const otrosDevengos = data.otrosDevengos || 0
+
+    const totalDevengado = salarioBase + prorrataPagasExtra + complementos + horasExtraImporte + otrosDevengos
+    const baseCotizacionCC = salarioBase + complementos + prorrataPagasExtra
+    const baseCotizacionCP = baseCotizacionCC + horasExtraImporte
+
+    const isTemporary = contrato.tipoContrato === 'temporal'
+    const ccTrab = Math.round(baseCotizacionCC * 0.047 * 100) / 100
+    const desempleoTrab = Math.round(baseCotizacionCP * (isTemporary ? 0.016 : 0.0155) * 100) / 100
+    const fpTrab = Math.round(baseCotizacionCP * 0.001 * 100) / 100
+    const irpfImporte = Math.round(totalDevengado * (empleado.porcentajeIRPF / 100) * 100) / 100
+    const totalDeducciones = Math.round((ccTrab + desempleoTrab + fpTrab + irpfImporte) * 100) / 100
+    const liquidoPercibir = Math.round((totalDevengado - totalDeducciones) * 100) / 100
+
+    const ccEmp = Math.round(baseCotizacionCC * 0.236 * 100) / 100
+    const desempleoEmp = Math.round(baseCotizacionCP * (isTemporary ? 0.067 : 0.055) * 100) / 100
+    const fogasaEmp = Math.round(baseCotizacionCP * 0.002 * 100) / 100
+    const fpEmp = Math.round(baseCotizacionCP * 0.006 * 100) / 100
+    const atepEmp = Math.round(baseCotizacionCP * (contrato.porcentajeATEP / 100) * 100) / 100
+    const totalCosteSS = Math.round((ccEmp + desempleoEmp + fogasaEmp + fpEmp + atepEmp) * 100) / 100
+    const costeTotal = Math.round((totalDevengado + totalCosteSS) * 100) / 100
+
+    const lineas = [
+      { tipo: 'devengo', concepto: 'Salario base', base: salarioBase, porcentaje: 0, importe: salarioBase, orden: 1 },
+      ...(prorrataPagasExtra > 0 ? [{ tipo: 'devengo', concepto: 'Prorrata pagas extra', base: prorrataPagasExtra, porcentaje: 0, importe: prorrataPagasExtra, orden: 2 }] : []),
+      ...(complementos > 0 ? [{ tipo: 'devengo', concepto: 'Complementos', base: complementos, porcentaje: 0, importe: complementos, orden: 3 }] : []),
+      ...(horasExtraImporte > 0 ? [{ tipo: 'devengo', concepto: 'Horas extra', base: horasExtraImporte, porcentaje: 0, importe: horasExtraImporte, orden: 4 }] : []),
+      ...(otrosDevengos > 0 ? [{ tipo: 'devengo', concepto: 'Otros devengos', base: otrosDevengos, porcentaje: 0, importe: otrosDevengos, orden: 5 }] : []),
+      { tipo: 'deduccion', concepto: 'Contingencias comunes', base: baseCotizacionCC, porcentaje: 4.70, importe: ccTrab, orden: 10 },
+      { tipo: 'deduccion', concepto: 'Desempleo', base: baseCotizacionCP, porcentaje: isTemporary ? 1.60 : 1.55, importe: desempleoTrab, orden: 11 },
+      { tipo: 'deduccion', concepto: 'Formación profesional', base: baseCotizacionCP, porcentaje: 0.10, importe: fpTrab, orden: 12 },
+      { tipo: 'deduccion', concepto: 'IRPF', base: totalDevengado, porcentaje: empleado.porcentajeIRPF, importe: irpfImporte, orden: 13 },
+    ]
+
+    return {
+      success: true,
+      data: {
+        salarioBase, prorrataPagasExtra, complementos, horasExtraImporte, otrosDevengos,
+        totalDevengado, baseCotizacionCC, baseCotizacionCP,
+        ccTrabajador: ccTrab, desempleoTrabajador: desempleoTrab, fpTrabajador: fpTrab,
+        irpfImporte, porcentajeIRPF: empleado.porcentajeIRPF, totalDeducciones, liquidoPercibir,
+        ccEmpresa: ccEmp, desempleoEmpresa: desempleoEmp, fogasaEmpresa: fogasaEmp,
+        fpEmpresa: fpEmp, atepEmpresa: atepEmp, totalCosteSS, costeTotal, lineas,
+      }
+    }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('nominas:create', async (_, data: any) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const nomina = await db.nomina.create({
+      data: {
+        empleadoId: data.empleadoId, mes: data.mes, anio: data.anio,
+        salarioBase: data.salarioBase, prorrataPagasExtra: data.prorrataPagasExtra,
+        complementos: data.complementos, horasExtraImporte: data.horasExtraImporte,
+        otrosDevengos: data.otrosDevengos, totalDevengado: data.totalDevengado,
+        baseCotizacionCC: data.baseCotizacionCC, baseCotizacionCP: data.baseCotizacionCP,
+        ccTrabajador: data.ccTrabajador, desempleoTrabajador: data.desempleoTrabajador,
+        fpTrabajador: data.fpTrabajador, irpfImporte: data.irpfImporte,
+        porcentajeIRPF: data.porcentajeIRPF, totalDeducciones: data.totalDeducciones,
+        liquidoPercibir: data.liquidoPercibir, ccEmpresa: data.ccEmpresa,
+        desempleoEmpresa: data.desempleoEmpresa, fogasaEmpresa: data.fogasaEmpresa,
+        fpEmpresa: data.fpEmpresa, atepEmpresa: data.atepEmpresa,
+        totalCosteSS: data.totalCosteSS, costeTotal: data.costeTotal,
+        estado: 'borrador', notas: data.notas || null,
+        lineas: { create: data.lineas || [] }
+      },
+      include: { empleado: true, lineas: { orderBy: { orden: 'asc' } } }
+    })
+    return { success: true, data: nomina }
+  } catch (error: any) {
+    if (error.code === 'P2002') return { success: false, error: 'duplicateNomina' }
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('nominas:confirmar', async (_, id: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+
+    const nomina = await db.nomina.findUnique({ where: { id }, include: { empleado: true, asiento: true } })
+    if (!nomina) return { success: false, error: 'notFound' }
+    if (nomina.estado !== 'borrador') return { success: false, error: 'alreadyConfirmed' }
+    if (nomina.asiento) return { success: false, error: 'asientoAlreadyExists' }
+
+    const year = nomina.anio
+    let ejercicio = await db.ejercicioFiscal.findFirst({ where: { anio: year } })
+    if (!ejercicio) {
+      ejercicio = await db.ejercicioFiscal.create({
+        data: { anio: year, fechaInicio: new Date(year, 0, 1), fechaFin: new Date(year, 11, 31, 23, 59, 59) }
+      })
+    }
+
+    const cuenta640 = await db.cuentaContable.findFirst({ where: { codigo: '640' } })
+    const cuenta642 = await db.cuentaContable.findFirst({ where: { codigo: '642' } })
+    const cuenta4751 = await db.cuentaContable.findFirst({ where: { codigo: '4751' } })
+    const cuenta476 = await db.cuentaContable.findFirst({ where: { codigo: '476' } })
+    const cuenta465 = await db.cuentaContable.findFirst({ where: { codigo: '465' } })
+
+    if (!cuenta640 || !cuenta642 || !cuenta4751 || !cuenta476 || !cuenta465) {
+      return { success: false, error: 'missingAccounts' }
+    }
+
+    const totalSSWorker = Math.round((nomina.ccTrabajador + nomina.desempleoTrabajador + nomina.fpTrabajador) * 100) / 100
+    const totalSSAll = Math.round((totalSSWorker + nomina.totalCosteSS) * 100) / 100
+
+    const lineas = [
+      { cuentaId: cuenta640.id, debe: nomina.totalDevengado, haber: 0, concepto: `Sueldos y salarios - ${nomina.empleado.nombre} ${nomina.empleado.apellidos}` },
+      { cuentaId: cuenta642.id, debe: nomina.totalCosteSS, haber: 0, concepto: `SS empresa - ${nomina.empleado.nombre} ${nomina.empleado.apellidos}` },
+      { cuentaId: cuenta4751.id, debe: 0, haber: nomina.irpfImporte, concepto: `Retención IRPF ${nomina.porcentajeIRPF}%` },
+      { cuentaId: cuenta476.id, debe: 0, haber: totalSSAll, concepto: 'Org. SS acreedores' },
+      { cuentaId: cuenta465.id, debe: 0, haber: nomina.liquidoPercibir, concepto: 'Remuneraciones pendientes de pago' },
+    ]
+
+    const lastAsiento = await db.asiento.findFirst({ where: { ejercicioId: ejercicio.id }, orderBy: { numero: 'desc' } })
+    const monthStr = String(nomina.mes).padStart(2, '0')
+
+    const asiento = await db.asiento.create({
+      data: {
+        numero: (lastAsiento?.numero || 0) + 1,
+        fecha: new Date(nomina.anio, nomina.mes - 1, 28),
+        descripcion: `Nómina ${monthStr}/${nomina.anio} - ${nomina.empleado.nombre} ${nomina.empleado.apellidos}`,
+        tipo: 'nomina', documentoRef: `NOM-${monthStr}/${nomina.anio}`,
+        nominaId: nomina.id, ejercicioId: ejercicio.id,
+        lineas: { create: lineas }
+      },
+      include: { lineas: { include: { cuenta: true } }, ejercicio: true }
+    })
+
+    await db.nomina.update({ where: { id }, data: { estado: 'confirmada' } })
+    return { success: true, data: asiento }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('nominas:marcarPagada', async (_, id: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const nomina = await db.nomina.update({ where: { id }, data: { estado: 'pagada', fechaPago: new Date() } })
+    return { success: true, data: nomina }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('nominas:delete', async (_, id: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const nomina = await db.nomina.findUnique({ where: { id }, include: { asiento: true } })
+    if (!nomina) return { success: false, error: 'notFound' }
+    if (nomina.estado !== 'borrador') return { success: false, error: 'cannotDeleteConfirmed' }
+    await db.nomina.delete({ where: { id } })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - SEPA
+// ============================================
+
+ipcMain.handle('sepa:getLotes', async () => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    const db = ctx.db
+    const lotes = await db.loteSEPA.findMany({ orderBy: { fechaCreacion: 'desc' } })
+    return { success: true, data: lotes }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('sepa:createLote', async (_, data: any) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const lote = await db.loteSEPA.create({
+      data: {
+        tipo: data.tipo, referencia: data.referencia,
+        fechaEjecucion: new Date(data.fechaEjecucion),
+        ordenante: data.ordenante, ordenanteIBAN: data.ordenanteIBAN,
+        ordenanteBIC: data.ordenanteBIC || null, ordenanteNIF: data.ordenanteNIF,
+        idAcreedor: data.idAcreedor || null, numOperaciones: data.numOperaciones,
+        importeTotal: data.importeTotal, xmlContent: data.xmlContent,
+        notas: data.notas || null,
+      }
+    })
+    return { success: true, data: lote }
+  } catch (error: any) {
+    if (error.code === 'P2002') return { success: false, error: 'duplicateReference' }
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('sepa:updateEstado', async (_, id: number, estado: string) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const lote = await db.loteSEPA.update({ where: { id }, data: { estado } })
+    return { success: true, data: lote }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('sepa:deleteLote', async (_, id: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    await db.loteSEPA.delete({ where: { id } })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - RRHH: Ausencias
+// ============================================
+
+ipcMain.handle('tiposAusencia:getAll', async () => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    const db = ctx.db
+    const tipos = await db.tipoAusencia.findMany({ orderBy: { nombre: 'asc' } })
+    return { success: true, data: tipos }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('tiposAusencia:create', async (_, data: any) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const tipo = await db.tipoAusencia.create({
+      data: {
+        nombre: data.nombre, codigo: data.codigo,
+        descontaSalario: data.descontaSalario ?? false,
+        requiereAprobacion: data.requiereAprobacion ?? true,
+        color: data.color || '#3B82F6', activo: data.activo ?? true,
+      }
+    })
+    return { success: true, data: tipo }
+  } catch (error: any) {
+    if (error.code === 'P2002') return { success: false, error: 'duplicateName' }
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('tiposAusencia:update', async (_, id: number, data: any) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const tipo = await db.tipoAusencia.update({
+      where: { id },
+      data: { nombre: data.nombre, codigo: data.codigo, descontaSalario: data.descontaSalario, requiereAprobacion: data.requiereAprobacion, color: data.color, activo: data.activo }
+    })
+    return { success: true, data: tipo }
+  } catch (error: any) {
+    if (error.code === 'P2002') return { success: false, error: 'duplicateName' }
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('tiposAusencia:delete', async (_, id: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    await db.tipoAusencia.delete({ where: { id } })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('ausencias:getAll', async (_, filters?: { empleadoId?: number; estado?: string; fechaDesde?: string; fechaHasta?: string }) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    const db = ctx.db
+    const where: any = {}
+    if (filters?.empleadoId) where.empleadoId = filters.empleadoId
+    if (filters?.estado) where.estado = filters.estado
+    if (filters?.fechaDesde || filters?.fechaHasta) {
+      where.fechaInicio = {}
+      if (filters?.fechaDesde) where.fechaInicio.gte = new Date(filters.fechaDesde)
+      if (filters?.fechaHasta) where.fechaInicio.lte = new Date(filters.fechaHasta)
+    }
+    const ausencias = await db.ausencia.findMany({
+      where, orderBy: { fechaInicio: 'desc' },
+      include: { empleado: { select: { id: true, nombre: true, apellidos: true } }, tipoAusencia: true }
+    })
+    return { success: true, data: ausencias }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('ausencias:create', async (_, data: any) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const ausencia = await db.ausencia.create({
+      data: {
+        empleadoId: data.empleadoId, tipoAusenciaId: data.tipoAusenciaId,
+        fechaInicio: new Date(data.fechaInicio), fechaFin: new Date(data.fechaFin),
+        diasNaturales: data.diasNaturales, diasHabiles: data.diasHabiles,
+        estado: data.estado || 'pendiente', notas: data.notas || null,
+      },
+      include: { empleado: { select: { id: true, nombre: true, apellidos: true } }, tipoAusencia: true }
+    })
+    return { success: true, data: ausencia }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('ausencias:updateEstado', async (_, id: number, estado: string) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const ausencia = await db.ausencia.update({
+      where: { id }, data: { estado },
+      include: { empleado: { select: { id: true, nombre: true, apellidos: true } }, tipoAusencia: true }
+    })
+    return { success: true, data: ausencia }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('ausencias:delete', async (_, id: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    await db.ausencia.delete({ where: { id } })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - RRHH: Control de Jornada
+// ============================================
+
+ipcMain.handle('jornada:getAll', async (_, filters?: { empleadoId?: number; fechaDesde?: string; fechaHasta?: string }) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    const db = ctx.db
+    const where: any = {}
+    if (filters?.empleadoId) where.empleadoId = filters.empleadoId
+    if (filters?.fechaDesde || filters?.fechaHasta) {
+      where.fecha = {}
+      if (filters?.fechaDesde) where.fecha.gte = new Date(filters.fechaDesde)
+      if (filters?.fechaHasta) where.fecha.lte = new Date(filters.fechaHasta)
+    }
+    const registros = await db.registroJornada.findMany({
+      where, orderBy: [{ fecha: 'desc' }],
+      include: { empleado: { select: { id: true, nombre: true, apellidos: true } } }
+    })
+    return { success: true, data: registros }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('jornada:fichar', async (_, data: { empleadoId: number; tipo: 'entrada' | 'salida' }) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+    let registro = await db.registroJornada.findFirst({ where: { empleadoId: data.empleadoId, fecha: today } })
+
+    if (data.tipo === 'entrada') {
+      if (registro) {
+        registro = await db.registroJornada.update({ where: { id: registro.id }, data: { horaEntrada: now } })
+      } else {
+        registro = await db.registroJornada.create({ data: { empleadoId: data.empleadoId, fecha: today, horaEntrada: now } })
+      }
+    } else {
+      if (!registro) return { success: false, error: 'noEntryToday' }
+      const horaEntrada = registro.horaEntrada ? new Date(registro.horaEntrada) : null
+      let horasTrabajadas = 0
+      if (horaEntrada) {
+        horasTrabajadas = Math.round(((now.getTime() - horaEntrada.getTime()) / 3600000 - (registro.pausaMinutos || 0) / 60) * 100) / 100
+      }
+      const horasExtra = Math.max(0, Math.round((horasTrabajadas - 8) * 100) / 100)
+      registro = await db.registroJornada.update({ where: { id: registro.id }, data: { horaSalida: now, horasTrabajadas, horasExtra } })
+    }
+    return { success: true, data: registro }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('jornada:update', async (_, id: number, data: any) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    const registro = await db.registroJornada.update({
+      where: { id },
+      data: {
+        horaEntrada: data.horaEntrada ? new Date(data.horaEntrada) : undefined,
+        horaSalida: data.horaSalida ? new Date(data.horaSalida) : undefined,
+        pausaMinutos: data.pausaMinutos, horasTrabajadas: data.horasTrabajadas,
+        horasExtra: data.horasExtra, tipoHorasExtra: data.tipoHorasExtra, notas: data.notas,
+      }
+    })
+    return { success: true, data: registro }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('jornada:delete', async (_, id: number) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: false, error: 'cloudNotSupported' }
+    const db = ctx.db
+    await db.registroJornada.delete({ where: { id } })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('jornada:resumenMensual', async (_, params: { mes: number; anio: number }) => {
+  try {
+    const ctx = requireAuthOrCloud()
+    if (ctx.mode === 'cloud') return { success: true, data: [] }
+    const db = ctx.db
+    const fechaDesde = new Date(params.anio, params.mes - 1, 1)
+    const fechaHasta = new Date(params.anio, params.mes, 0, 23, 59, 59)
+
+    const empleados = await db.empleado.findMany({ where: { activo: true }, orderBy: [{ apellidos: 'asc' }, { nombre: 'asc' }] })
+    const registros = await db.registroJornada.findMany({ where: { fecha: { gte: fechaDesde, lte: fechaHasta } } })
+
+    const resumen = empleados.map(emp => {
+      const regs = registros.filter(r => r.empleadoId === emp.id)
+      const totalHoras = regs.reduce((s, r) => s + r.horasTrabajadas, 0)
+      const totalExtra = regs.reduce((s, r) => s + r.horasExtra, 0)
+      return {
+        empleadoId: emp.id, nombre: `${emp.apellidos}, ${emp.nombre}`,
+        diasTrabajados: regs.filter(r => r.horasTrabajadas > 0).length,
+        totalHoras: Math.round(totalHoras * 100) / 100,
+        totalHorasExtra: Math.round(totalExtra * 100) / 100,
+      }
+    })
+    return { success: true, data: resumen }
   } catch (error) {
     return { success: false, error: String(error) }
   }

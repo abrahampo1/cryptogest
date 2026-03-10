@@ -1,0 +1,17 @@
+{
+  "title": "Absences et Congés",
+  "tabs": { "calendario": "Calendrier", "solicitudes": "Demandes", "tipos": "Types d'Absence" },
+  "new": "Nouvelle Absence", "empleado": "Employé", "tipo": "Type",
+  "fechaInicio": "Date Début", "fechaFin": "Date Fin", "diasNaturales": "Jours Calendaires",
+  "diasHabiles": "Jours Ouvrés", "estado": "Statut", "notas": "Notes",
+  "aprobar": "Approuver", "rechazar": "Rejeter", "cancelar": "Annuler",
+  "estados": { "pendiente": "En Attente", "aprobada": "Approuvée", "rechazada": "Rejetée", "cancelada": "Annulée" },
+  "noAusencias": "Aucune absence enregistrée",
+  "tiposAusencia": {
+    "title": "Types d'Absence", "new": "Nouveau Type", "edit": "Modifier Type",
+    "nombre": "Nom", "codigo": "Code", "descontaSalario": "Déduit du Salaire",
+    "requiereAprobacion": "Approbation Requise", "color": "Couleur", "activo": "Actif",
+    "deleteConfirm": "Supprimer ce type ?", "noTipos": "Aucun type d'absence.", "seedDefaults": "Créer types par défaut"
+  },
+  "defaultTypes": { "VAC": "Congés", "BAJA_IT": "Arrêt Maladie", "PERM_R": "Congé Payé", "PERM_NR": "Congé Sans Solde", "MATPAT": "Maternité/Paternité" }
+}

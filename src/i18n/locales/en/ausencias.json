@@ -1,0 +1,26 @@
+{
+  "title": "Absences & Holidays",
+  "tabs": { "calendario": "Calendar", "solicitudes": "Requests", "tipos": "Absence Types" },
+  "new": "New Absence",
+  "empleado": "Employee",
+  "tipo": "Type",
+  "fechaInicio": "Start Date",
+  "fechaFin": "End Date",
+  "diasNaturales": "Calendar Days",
+  "diasHabiles": "Working Days",
+  "estado": "Status",
+  "notas": "Notes",
+  "aprobar": "Approve",
+  "rechazar": "Reject",
+  "cancelar": "Cancel",
+  "estados": { "pendiente": "Pending", "aprobada": "Approved", "rechazada": "Rejected", "cancelada": "Cancelled" },
+  "noAusencias": "No absences registered",
+  "tiposAusencia": {
+    "title": "Absence Types", "new": "New Type", "edit": "Edit Type",
+    "nombre": "Name", "codigo": "Code", "descontaSalario": "Deducts Salary",
+    "requiereAprobacion": "Requires Approval", "color": "Colour", "activo": "Active",
+    "deleteConfirm": "Delete this absence type?", "noTipos": "No absence types. Create default types.",
+    "seedDefaults": "Create default types"
+  },
+  "defaultTypes": { "VAC": "Holiday", "BAJA_IT": "Sick Leave", "PERM_R": "Paid Leave", "PERM_NR": "Unpaid Leave", "MATPAT": "Maternity/Paternity" }
+}

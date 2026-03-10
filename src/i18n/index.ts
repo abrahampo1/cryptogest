@@ -20,6 +20,11 @@ import esBuzon from './locales/es/buzon.json'
 import esManual from './locales/es/manual.json'
 import esPdf from './locales/es/pdf.json'
 import esErrors from './locales/es/errors.json'
+import esRrhh from './locales/es/rrhh.json'
+import esNominas from './locales/es/nominas.json'
+import esAusencias from './locales/es/ausencias.json'
+import esJornada from './locales/es/jornada.json'
+import esSepa from './locales/es/sepa.json'
 
 // EN
 import enCommon from './locales/en/common.json'
@@ -39,6 +44,11 @@ import enBuzon from './locales/en/buzon.json'
 import enManual from './locales/en/manual.json'
 import enPdf from './locales/en/pdf.json'
 import enErrors from './locales/en/errors.json'
+import enRrhh from './locales/en/rrhh.json'
+import enNominas from './locales/en/nominas.json'
+import enAusencias from './locales/en/ausencias.json'
+import enJornada from './locales/en/jornada.json'
+import enSepa from './locales/en/sepa.json'
 
 // FR
 import frCommon from './locales/fr/common.json'
@@ -58,6 +68,11 @@ import frBuzon from './locales/fr/buzon.json'
 import frManual from './locales/fr/manual.json'
 import frPdf from './locales/fr/pdf.json'
 import frErrors from './locales/fr/errors.json'
+import frRrhh from './locales/fr/rrhh.json'
+import frNominas from './locales/fr/nominas.json'
+import frAusencias from './locales/fr/ausencias.json'
+import frJornada from './locales/fr/jornada.json'
+import frSepa from './locales/fr/sepa.json'
 
 const resources = {
   es: {
@@ -78,6 +93,11 @@ const resources = {
     manual: esManual,
     pdf: esPdf,
     errors: esErrors,
+    rrhh: esRrhh,
+    nominas: esNominas,
+    ausencias: esAusencias,
+    jornada: esJornada,
+    sepa: esSepa,
   },
   en: {
     common: enCommon,
@@ -97,6 +117,11 @@ const resources = {
     manual: enManual,
     pdf: enPdf,
     errors: enErrors,
+    rrhh: enRrhh,
+    nominas: enNominas,
+    ausencias: enAusencias,
+    jornada: enJornada,
+    sepa: enSepa,
   },
   fr: {
     common: frCommon,
@@ -116,6 +141,11 @@ const resources = {
     manual: frManual,
     pdf: frPdf,
     errors: frErrors,
+    rrhh: frRrhh,
+    nominas: frNominas,
+    ausencias: frAusencias,
+    jornada: frJornada,
+    sepa: frSepa,
   },
 }
 
@@ -130,6 +160,7 @@ i18n
       'common', 'sidebar', 'auth', 'dashboard', 'clientes', 'productos',
       'facturas', 'gastos', 'ejercicios', 'contabilidad', 'modelos',
       'configuracion', 'cloud', 'buzon', 'manual', 'pdf', 'errors',
+      'rrhh', 'nominas', 'ausencias', 'jornada', 'sepa',
     ],
     interpolation: {
       escapeValue: false,

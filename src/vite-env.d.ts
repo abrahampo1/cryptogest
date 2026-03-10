@@ -405,6 +405,193 @@ interface BuzonSendData {
   attachments?: Array<{ filename: string; data: number[] }>
 }
 
+// RRHH types
+interface Departamento {
+  id: number
+  nombre: string
+  activo: boolean
+  createdAt: Date
+  updatedAt: Date
+  _count?: { empleados: number }
+}
+
+interface Empleado {
+  id: number
+  nombre: string
+  apellidos: string
+  nif: string
+  numSeguridadSocial?: string | null
+  fechaNacimiento?: Date | null
+  genero?: string | null
+  estadoCivil?: string | null
+  email?: string | null
+  telefono?: string | null
+  direccion?: string | null
+  codigoPostal?: string | null
+  ciudad?: string | null
+  provincia?: string | null
+  pais: string
+  iban?: string | null
+  categoriaProfesional?: string | null
+  grupoCotizacion: number
+  departamentoId?: number | null
+  departamento?: Departamento | null
+  codigoCNAE?: string | null
+  fechaAlta: Date
+  fechaBaja?: Date | null
+  motivoBaja?: string | null
+  porcentajeIRPF: number
+  diasVacacionesAnuales: number
+  activo: boolean
+  notas?: string | null
+  createdAt: Date
+  updatedAt: Date
+  contratos?: Contrato[]
+  nominas?: Nomina[]
+  ausencias?: Ausencia[]
+}
+
+interface Contrato {
+  id: number
+  empleadoId: number
+  tipoContrato: string
+  fechaInicio: Date
+  fechaFin?: Date | null
+  jornada: string
+  horasSemanales: number
+  salarioBrutoAnual: number
+  salarioBrutoMensual: number
+  numPagasExtra: number
+  pagasProrrateadas: boolean
+  convenioColectivo?: string | null
+  codigoContrato?: string | null
+  porcentajeATEP: number
+  activo: boolean
+  notas?: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface Nomina {
+  id: number
+  empleadoId: number
+  empleado?: Empleado
+  mes: number
+  anio: number
+  salarioBase: number
+  prorrataPagasExtra: number
+  complementos: number
+  horasExtraImporte: number
+  otrosDevengos: number
+  totalDevengado: number
+  baseCotizacionCC: number
+  baseCotizacionCP: number
+  ccTrabajador: number
+  desempleoTrabajador: number
+  fpTrabajador: number
+  irpfImporte: number
+  porcentajeIRPF: number
+  totalDeducciones: number
+  liquidoPercibir: number
+  ccEmpresa: number
+  desempleoEmpresa: number
+  fogasaEmpresa: number
+  fpEmpresa: number
+  atepEmpresa: number
+  totalCosteSS: number
+  costeTotal: number
+  estado: string
+  fechaPago?: Date | null
+  asiento?: Asiento | null
+  notas?: string | null
+  createdAt: Date
+  updatedAt: Date
+  lineas?: LineaNomina[]
+}
+
+interface LineaNomina {
+  id: number
+  nominaId: number
+  tipo: string
+  concepto: string
+  base: number
+  porcentaje: number
+  importe: number
+  orden: number
+}
+
+interface LoteSEPA {
+  id: number
+  tipo: string
+  referencia: string
+  fechaCreacion: Date
+  fechaEjecucion: Date
+  ordenante: string
+  ordenanteIBAN: string
+  ordenanteBIC?: string | null
+  ordenanteNIF: string
+  idAcreedor?: string | null
+  numOperaciones: number
+  importeTotal: number
+  estado: string
+  xmlContent: string
+  notas?: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface TipoAusencia {
+  id: number
+  nombre: string
+  codigo: string
+  descontaSalario: boolean
+  requiereAprobacion: boolean
+  color: string
+  activo: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface Ausencia {
+  id: number
+  empleadoId: number
+  empleado?: { id: number; nombre: string; apellidos: string }
+  tipoAusenciaId: number
+  tipoAusencia?: TipoAusencia
+  fechaInicio: Date
+  fechaFin: Date
+  diasNaturales: number
+  diasHabiles: number
+  estado: string
+  notas?: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface RegistroJornada {
+  id: number
+  empleadoId: number
+  empleado?: { id: number; nombre: string; apellidos: string }
+  fecha: Date
+  horaEntrada?: Date | null
+  horaSalida?: Date | null
+  pausaMinutos: number
+  horasTrabajadas: number
+  horasExtra: number
+  tipoHorasExtra?: string | null
+  notas?: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface ResumenMensualJornada {
+  empleadoId: number
+  nombre: string
+  diasTrabajados: number
+  totalHoras: number
+  totalHorasExtra: number
+}
+
 // Cloud types
 interface CloudBackup {
   id: number
@@ -673,6 +860,68 @@ interface ElectronAPI {
     deleteMessage: (cuentaId: number, carpetaId: number, uid: number) => Promise<ApiResponse<void>>
     moveMessage: (cuentaId: number, carpetaId: number, uid: number, destPath: string) => Promise<ApiResponse<void>>
     sendEmail: (cuentaId: number, data: BuzonSendData) => Promise<ApiResponse<void>>
+  }
+
+  // RRHH
+  departamentos: {
+    getAll: () => Promise<ApiResponse<Departamento[]>>
+    create: (data: Partial<Departamento>) => Promise<ApiResponse<Departamento>>
+    update: (id: number, data: Partial<Departamento>) => Promise<ApiResponse<Departamento>>
+    delete: (id: number) => Promise<ApiResponse<void>>
+  }
+
+  empleados: {
+    getAll: () => Promise<ApiResponse<Empleado[]>>
+    getById: (id: number) => Promise<ApiResponse<Empleado>>
+    create: (data: Partial<Empleado>) => Promise<ApiResponse<Empleado>>
+    update: (id: number, data: Partial<Empleado>) => Promise<ApiResponse<Empleado>>
+    delete: (id: number) => Promise<ApiResponse<void>>
+  }
+
+  contratos: {
+    getByEmpleado: (empleadoId: number) => Promise<ApiResponse<Contrato[]>>
+    create: (data: Partial<Contrato>) => Promise<ApiResponse<Contrato>>
+    update: (id: number, data: Partial<Contrato>) => Promise<ApiResponse<Contrato>>
+    delete: (id: number) => Promise<ApiResponse<void>>
+  }
+
+  nominas: {
+    getAll: (filters?: { empleadoId?: number; mes?: number; anio?: number; estado?: string }) => Promise<ApiResponse<Nomina[]>>
+    getById: (id: number) => Promise<ApiResponse<Nomina>>
+    calcular: (data: { empleadoId: number; mes: number; anio: number; complementos?: number; horasExtraImporte?: number; otrosDevengos?: number }) => Promise<ApiResponse<any>>
+    create: (data: any) => Promise<ApiResponse<Nomina>>
+    confirmar: (id: number) => Promise<ApiResponse<Asiento>>
+    marcarPagada: (id: number) => Promise<ApiResponse<Nomina>>
+    delete: (id: number) => Promise<ApiResponse<void>>
+  }
+
+  sepa: {
+    getLotes: () => Promise<ApiResponse<LoteSEPA[]>>
+    createLote: (data: any) => Promise<ApiResponse<LoteSEPA>>
+    updateEstado: (id: number, estado: string) => Promise<ApiResponse<LoteSEPA>>
+    deleteLote: (id: number) => Promise<ApiResponse<void>>
+  }
+
+  tiposAusencia: {
+    getAll: () => Promise<ApiResponse<TipoAusencia[]>>
+    create: (data: Partial<TipoAusencia>) => Promise<ApiResponse<TipoAusencia>>
+    update: (id: number, data: Partial<TipoAusencia>) => Promise<ApiResponse<TipoAusencia>>
+    delete: (id: number) => Promise<ApiResponse<void>>
+  }
+
+  ausencias: {
+    getAll: (filters?: { empleadoId?: number; estado?: string; fechaDesde?: string; fechaHasta?: string }) => Promise<ApiResponse<Ausencia[]>>
+    create: (data: any) => Promise<ApiResponse<Ausencia>>
+    updateEstado: (id: number, estado: string) => Promise<ApiResponse<Ausencia>>
+    delete: (id: number) => Promise<ApiResponse<void>>
+  }
+
+  jornada: {
+    getAll: (filters?: { empleadoId?: number; fechaDesde?: string; fechaHasta?: string }) => Promise<ApiResponse<RegistroJornada[]>>
+    fichar: (data: { empleadoId: number; tipo: 'entrada' | 'salida' }) => Promise<ApiResponse<RegistroJornada>>
+    update: (id: number, data: any) => Promise<ApiResponse<RegistroJornada>>
+    delete: (id: number) => Promise<ApiResponse<void>>
+    resumenMensual: (params: { mes: number; anio: number }) => Promise<ApiResponse<ResumenMensualJornada[]>>
   }
 
   onEntityUpdated: (callback: (data: { entityType: string }) => void) => () => void

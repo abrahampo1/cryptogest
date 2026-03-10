@@ -1,0 +1,13 @@
+{
+  "title": "Time Tracking",
+  "tabs": { "fichar": "Clock In/Out", "historial": "History", "resumen": "Monthly Summary" },
+  "empleado": "Employee", "fecha": "Date", "horaEntrada": "Clock In", "horaSalida": "Clock Out",
+  "pausaMinutos": "Break (min)", "horasTrabajadas": "Hours Worked", "horasExtra": "Overtime",
+  "tipoHorasExtra": "Overtime Type", "notas": "Notes",
+  "ficharEntrada": "Clock In", "ficharSalida": "Clock Out",
+  "selectEmpleado": "Select an employee", "noRegistros": "No time records",
+  "mes": "Month", "anio": "Year", "diasTrabajados": "Days Worked",
+  "totalHoras": "Total Hours", "totalHorasExtra": "Total Overtime",
+  "tiposExtra": { "normal": "Normal", "fuerza_mayor": "Force Majeure" },
+  "deleteConfirm": "Delete this time record?"
+}
