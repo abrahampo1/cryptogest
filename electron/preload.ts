@@ -446,6 +446,29 @@ const electronAPI = {
     return () => { ipcRenderer.removeAllListeners('cloud:entity-updated') }
   },
 
+  // Test Runner
+  testing: {
+    run: () => ipcRenderer.invoke('testing:run') as Promise<ApiResponse<{
+      exitCode: number
+      passed: number
+      failed: number
+      skipped: number
+      duration: string | null
+    }>>,
+    onOutput: (callback: (line: string) => void) => {
+      ipcRenderer.on('testing:output', (_, line) => callback(line))
+      return () => { ipcRenderer.removeAllListeners('testing:output') }
+    },
+    onProgress: (callback: (data: { passed: number; failed: number; skipped: number }) => void) => {
+      ipcRenderer.on('testing:progress', (_, data) => callback(data))
+      return () => { ipcRenderer.removeAllListeners('testing:progress') }
+    },
+    onComplete: (callback: (data: { exitCode: number; passed: number; failed: number; skipped: number; duration: string | null }) => void) => {
+      ipcRenderer.on('testing:complete', (_, data) => callback(data))
+      return () => { ipcRenderer.removeAllListeners('testing:complete') }
+    },
+  },
+
   // Buzón de Correo
   buzon: {
     addAccount: (data: any) => ipcRenderer.invoke('buzon:addAccount', data) as Promise<ApiResponse<any>>,

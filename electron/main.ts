@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import os from 'os'
 import nodeCrypto from 'crypto'
+import { spawn } from 'child_process'
 import archiver from 'archiver'
 import AdmZip from 'adm-zip'
 import { PrismaClient } from '@prisma/client'
@@ -15,6 +16,12 @@ import { simpleParser } from 'mailparser'
 import { convert as htmlToText } from 'html-to-text'
 import { autoUpdater } from 'electron-updater'
 import { DBFFile } from 'dbffile'
+
+// GPU crash workaround: Chromium GPU process can crash on certain Windows GPU drivers.
+// Use ANGLE with D3D11 backend and allow software fallback to prevent repeated GPU crashes.
+app.commandLine.appendSwitch('use-angle', 'd3d11')
+app.commandLine.appendSwitch('disable-gpu-sandbox')
+app.commandLine.appendSwitch('gpu-fallback-to-software-rasterizer')
 
 // Establecer nombre de la aplicación
 app.setName('CryptoGest')
@@ -7866,6 +7873,133 @@ ipcMain.handle('jornada:resumenMensual', async (_, params: { mes: number; anio: 
       }
     })
     return { success: true, data: resumen }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+// ============================================
+// IPC Handlers - Test Runner
+// ============================================
+
+ipcMain.handle('testing:run', async () => {
+  try {
+    const projectRoot = app.isPackaged
+      ? path.join(process.resourcesPath, '..')
+      : path.join(__dirname, '..')
+
+    const npxCmd = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+
+    return new Promise<any>((resolve) => {
+      const child = spawn(npxCmd, ['vitest', 'run', '--reporter=verbose'], {
+        cwd: projectRoot,
+        shell: false,
+        env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+      })
+
+      let stdout = ''
+      let stderr = ''
+      let passCount = 0
+      let failCount = 0
+      let skipCount = 0
+      const startTime = Date.now()
+
+      // Strip ANSI escape sequences for reliable regex matching
+      const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*m/g, '')
+
+      const sendOutput = (line: string) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return
+        mainWindow.webContents.send('testing:output', line)
+
+        // Parse vitest verbose output for progress (strip ANSI first)
+        const clean = stripAnsi(line)
+        if (/^\s*[✓✔√]\s/.test(clean)) {
+          passCount++
+          mainWindow.webContents.send('testing:progress', { passed: passCount, failed: failCount, skipped: skipCount })
+        } else if (/^\s*[✗✘×]\s/.test(clean)) {
+          failCount++
+          mainWindow.webContents.send('testing:progress', { passed: passCount, failed: failCount, skipped: skipCount })
+        } else if (/^\s*[-⊘○]\s/.test(clean)) {
+          skipCount++
+          mainWindow.webContents.send('testing:progress', { passed: passCount, failed: failCount, skipped: skipCount })
+        }
+      }
+
+      child.stdout?.on('data', (data: Buffer) => {
+        const text = data.toString()
+        stdout += text
+        const lines = text.split('\n')
+        for (const line of lines) {
+          if (line.trim()) sendOutput(line)
+        }
+      })
+
+      child.stderr?.on('data', (data: Buffer) => {
+        const text = data.toString()
+        stderr += text
+        const lines = text.split('\n')
+        for (const line of lines) {
+          if (line.trim()) sendOutput(line)
+        }
+      })
+
+      child.on('close', (code) => {
+        // Compute elapsed time directly (most reliable)
+        const elapsedMs = Date.now() - startTime
+        const elapsed = elapsedMs >= 1000
+          ? `${(elapsedMs / 1000).toFixed(2)}s`
+          : `${elapsedMs}ms`
+
+        // Also try to parse vitest's own Duration from stdout+stderr as fallback
+        const cleanOutput = stripAnsi(stdout + '\n' + stderr)
+        const durationMatch = cleanOutput.match(/Duration\s+([\d.]+\s*(?:ms|s|m))/i)
+
+        const duration = elapsed || durationMatch?.[1] || null
+
+        // Parse vitest summary counts as fallback when line-by-line counting missed results
+        const passedSummary = cleanOutput.match(/(\d+)\s+passed/i)
+        const failedSummary = cleanOutput.match(/(\d+)\s+failed/i)
+        const skippedSummary = cleanOutput.match(/(\d+)\s+skipped/i)
+        const finalPassed = passCount || (passedSummary ? parseInt(passedSummary[1], 10) : 0)
+        const finalFailed = failCount || (failedSummary ? parseInt(failedSummary[1], 10) : 0)
+        const finalSkipped = skipCount || (skippedSummary ? parseInt(skippedSummary[1], 10) : 0)
+
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('testing:complete', {
+            exitCode: code,
+            passed: finalPassed,
+            failed: finalFailed,
+            skipped: finalSkipped,
+            duration,
+          })
+        }
+
+        resolve({
+          success: true,
+          data: {
+            exitCode: code,
+            passed: finalPassed,
+            failed: finalFailed,
+            skipped: finalSkipped,
+            duration,
+          }
+        })
+      })
+
+      child.on('error', (err) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('testing:output', `[ERROR] ${err.message}`)
+          mainWindow.webContents.send('testing:complete', {
+            exitCode: 1,
+            passed: passCount,
+            failed: failCount,
+            skipped: skipCount,
+            duration: null,
+          })
+        }
+        resolve({ success: false, error: err.message })
+      })
+    })
   } catch (error) {
     return { success: false, error: String(error) }
   }

@@ -74,12 +74,19 @@
     "preview": "vite preview",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/adm-zip": "^0.5.7",
     "@types/archiver": "^7.0.0",
     "@types/html-to-text": "^9.0.4",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.10.0",
     "@types/nodemailer": "^7.0.10",
     "@types/papaparse": "^5.5.2",
@@ -89,13 +96,15 @@
     "autoprefixer": "^10.4.16",
     "electron": "^27.3.11",
     "electron-builder": "^24.9.1",
+    "jsdom": "^28.1.0",
     "postcss": "^8.4.32",
     "prisma": "^5.7.1",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.3.3",
     "vite": "^5.0.10",
     "vite-plugin-electron": "^0.28.0",
-    "vite-plugin-electron-renderer": "^0.14.5"
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vitest": "^4.0.18"
   },
   "overrides": {
     "pino": "~8.21.0"

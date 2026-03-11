@@ -243,6 +243,17 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle, isCloud
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [appVersion, setAppVersion] = useState<string>('...')
 
+  // Test runner state
+  type TestStatus = 'idle' | 'running' | 'success' | 'failure'
+  const [testStatus, setTestStatus] = useState<TestStatus>('idle')
+  const [testLogs, setTestLogs] = useState<string[]>([])
+  const [testPassed, setTestPassed] = useState(0)
+  const [testFailed, setTestFailed] = useState(0)
+  const [testSkipped, setTestSkipped] = useState(0)
+  const [testDuration, setTestDuration] = useState<string | null>(null)
+  const [testExitCode, setTestExitCode] = useState<number | null>(null)
+  const testLogRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     checkSecurityStatus()
     loadImpuestos()
@@ -824,6 +835,55 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle, isCloud
     }
   }
 
+  const handleRunTests = useCallback(async () => {
+    if (!window.electronAPI?.testing) return
+    setTestStatus('running')
+    setTestLogs([])
+    setTestPassed(0)
+    setTestFailed(0)
+    setTestSkipped(0)
+    setTestDuration(null)
+    setTestExitCode(null)
+
+    const cleanupOutput = window.electronAPI.testing.onOutput((line: string) => {
+      setTestLogs(prev => {
+        const next = [...prev, line]
+        return next.length > 2000 ? next.slice(-2000) : next
+      })
+      // Auto-scroll
+      setTimeout(() => {
+        if (testLogRef.current) {
+          testLogRef.current.scrollTop = testLogRef.current.scrollHeight
+        }
+      }, 16)
+    })
+
+    const cleanupProgress = window.electronAPI.testing.onProgress((data: { passed: number; failed: number; skipped: number }) => {
+      setTestPassed(data.passed)
+      setTestFailed(data.failed)
+      setTestSkipped(data.skipped)
+    })
+
+    const cleanupComplete = window.electronAPI.testing.onComplete((data: { exitCode: number; passed: number; failed: number; skipped: number; duration: string | null }) => {
+      setTestStatus(data.exitCode === 0 ? 'success' : 'failure')
+      setTestPassed(data.passed)
+      setTestFailed(data.failed)
+      setTestSkipped(data.skipped)
+      setTestDuration(data.duration)
+      setTestExitCode(data.exitCode)
+    })
+
+    try {
+      await window.electronAPI.testing.run()
+    } catch {
+      setTestStatus('failure')
+    } finally {
+      cleanupOutput()
+      cleanupProgress()
+      cleanupComplete()
+    }
+  }, [])
+
   const handleDisablePasskey = async () => {
     setPasskeyLoading(true)
     setPasskeyError(null)
@@ -892,6 +952,10 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle, isCloud
           <TabsTrigger value="sistema" className="text-xs h-7 px-3">
             <Database className="mr-1.5 h-3.5 w-3.5" />
             {t('sections.system')}
+          </TabsTrigger>
+          <TabsTrigger value="testing" className="text-xs h-7 px-3">
+            <FlaskConical className="mr-1.5 h-3.5 w-3.5" />
+            {t('sections.testing')}
           </TabsTrigger>
         </TabsList>
 
@@ -2212,6 +2276,201 @@ export function ConfiguracionPage({ onHelp, buzonEnabled, onBuzonToggle, isCloud
                   <span className="text-muted-foreground">{t('data.platform')}</span>
                   <span>{navigator.platform}</span>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tests Tab */}
+        <TabsContent value="testing" className="space-y-4">
+          {/* Header & Controls */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <FlaskConical className="h-4 w-4" />
+                  {t('testing.title')}
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  {testLogs.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => { setTestLogs([]); setTestStatus('idle'); setTestPassed(0); setTestFailed(0); setTestSkipped(0); setTestDuration(null); setTestExitCode(null) }}
+                      disabled={testStatus === 'running'}
+                    >
+                      <Trash2 className="mr-1 h-3 w-3" />
+                      {t('testing.clearLog')}
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={handleRunTests}
+                    disabled={testStatus === 'running'}
+                  >
+                    {testStatus === 'running' ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <FlaskConical className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    {testStatus === 'running' ? t('testing.running') : t('testing.runTests')}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground mb-3">
+                {t('testing.description')}
+              </p>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="flex justify-between py-1 border-b">
+                  <span className="text-muted-foreground">{t('testing.framework')}</span>
+                  <span className="font-mono">Vitest</span>
+                </div>
+                <div className="flex justify-between py-1 border-b">
+                  <span className="text-muted-foreground">{t('testing.command')}</span>
+                  <span className="font-mono">npx vitest run</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Progress & Stats */}
+          {testStatus !== 'idle' && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">{t('testing.summary')}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Status indicator */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{t('testing.status')}:</span>
+                  {testStatus === 'running' && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200">
+                      <Loader2 className="mr-1 h-2.5 w-2.5 animate-spin" />
+                      {t('testing.inProgress')}
+                    </Badge>
+                  )}
+                  {testStatus === 'success' && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-green-50 text-green-700 border-green-200">
+                      <CheckCircle className="mr-1 h-2.5 w-2.5" />
+                      {t('testing.success')}
+                    </Badge>
+                  )}
+                  {testStatus === 'failure' && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-50 text-red-700 border-red-200">
+                      <AlertCircle className="mr-1 h-2.5 w-2.5" />
+                      {t('testing.failure')}
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Progress bar */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{t('testing.progress')}</span>
+                    <span className="font-mono text-[10px]">
+                      {testPassed + testFailed + testSkipped} {t('testing.total').toLowerCase()}
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                    {(() => {
+                      const total = testPassed + testFailed + testSkipped
+                      if (total === 0) return testStatus === 'running' ? (
+                        <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '100%' }} />
+                      ) : null
+                      const passPercent = (testPassed / total) * 100
+                      const failPercent = (testFailed / total) * 100
+                      const skipPercent = (testSkipped / total) * 100
+                      return (
+                        <div className="h-full flex">
+                          {passPercent > 0 && <div className="bg-green-500 transition-all duration-300" style={{ width: `${passPercent}%` }} />}
+                          {failPercent > 0 && <div className="bg-red-500 transition-all duration-300" style={{ width: `${failPercent}%` }} />}
+                          {skipPercent > 0 && <div className="bg-yellow-500 transition-all duration-300" style={{ width: `${skipPercent}%` }} />}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </div>
+
+                {/* Stats grid */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="border rounded p-2 text-center">
+                    <div className="text-lg font-bold font-mono text-green-600">{testPassed}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('testing.passed')}</div>
+                  </div>
+                  <div className="border rounded p-2 text-center">
+                    <div className="text-lg font-bold font-mono text-red-600">{testFailed}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('testing.failed')}</div>
+                  </div>
+                  <div className="border rounded p-2 text-center">
+                    <div className="text-lg font-bold font-mono text-yellow-600">{testSkipped}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('testing.skipped')}</div>
+                  </div>
+                  <div className="border rounded p-2 text-center">
+                    <div className="text-lg font-bold font-mono">{testPassed + testFailed + testSkipped}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('testing.total')}</div>
+                  </div>
+                </div>
+
+                {/* Duration & exit code */}
+                {(testDuration || testExitCode !== null) && (
+                  <div className="flex gap-4 text-xs">
+                    {testDuration && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground">{t('testing.duration')}:</span>
+                        <span className="font-mono">{testDuration}</span>
+                      </div>
+                    )}
+                    {testExitCode !== null && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground">{t('testing.exitCode')}:</span>
+                        <span className={`font-mono ${testExitCode === 0 ? 'text-green-600' : 'text-red-600'}`}>{testExitCode}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Log output */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                {t('testing.outputLog')}
+                {testStatus === 'running' && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div
+                ref={testLogRef}
+                className="bg-zinc-950 text-zinc-200 rounded border border-zinc-800 font-mono text-[11px] leading-[1.6] p-3 h-[340px] overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-all select-text"
+              >
+                {testLogs.length === 0 ? (
+                  <span className="text-zinc-500 italic">{t('testing.noOutput')}</span>
+                ) : (
+                  testLogs.map((line, i) => {
+                    // Strip ANSI escape sequences for matching and display
+                    const clean = line.replace(/\x1b\[[0-9;]*m/g, '')
+                    let lineClass = 'text-zinc-300'
+                    if (/^\s*[✓✔√]\s/.test(clean)) lineClass = 'text-green-400'
+                    else if (/^\s*[✗✘×]\s/.test(clean)) lineClass = 'text-red-400'
+                    else if (/^\s*[-⊘○]\s/.test(clean)) lineClass = 'text-yellow-400'
+                    else if (/FAIL|ERROR|error/i.test(clean)) lineClass = 'text-red-400'
+                    else if (/PASS|passed/i.test(clean)) lineClass = 'text-green-400'
+                    else if (/Tests\s+\d|Test Files|Duration/i.test(clean)) lineClass = 'text-cyan-400'
+                    else if (/^\s*(src|electron)[/\\]/.test(clean)) lineClass = 'text-zinc-400'
+                    return (
+                      <div key={i} className={lineClass}>
+                        <span className="text-zinc-600 select-none mr-2">{String(i + 1).padStart(4, ' ')}</span>
+                        {clean}
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </CardContent>
           </Card>

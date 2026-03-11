@@ -12,7 +12,8 @@
     "categories": "Expense Categories",
     "language": "Language",
     "beta": "Beta Features",
-    "system": "System"
+    "system": "System",
+    "testing": "Tests"
   },
   "company": {
     "name": "Company name",
@@ -334,5 +335,30 @@
     "warningDesc": "Enable experimental features. They may contain bugs or change without notice.",
     "buzon": "Mailbox",
     "buzonDescription": "Integrated email client with IMAP/SMTP support"
+  },
+  "testing": {
+    "title": "Test Runner",
+    "description": "Run the project test suite and view results in real time",
+    "runTests": "Run Tests",
+    "running": "Running...",
+    "stop": "Stop",
+    "clearLog": "Clear Log",
+    "summary": "Execution Summary",
+    "passed": "Passed",
+    "failed": "Failed",
+    "skipped": "Skipped",
+    "total": "Total",
+    "duration": "Duration",
+    "status": "Status",
+    "idle": "Idle",
+    "inProgress": "Running",
+    "success": "Completed — No errors",
+    "failure": "Completed — With errors",
+    "exitCode": "Exit code",
+    "outputLog": "Output Log",
+    "noOutput": "No results. Run the tests to see output.",
+    "framework": "Framework",
+    "command": "Command",
+    "progress": "Progress"
   }
 }

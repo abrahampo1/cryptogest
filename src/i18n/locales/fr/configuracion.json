@@ -12,7 +12,8 @@
     "categories": "Catégories de Dépenses",
     "language": "Langue",
     "beta": "Fonctionnalités Bêta",
-    "system": "Système"
+    "system": "Système",
+    "testing": "Tests"
   },
   "company": {
     "name": "Nom de l'entreprise",
@@ -334,5 +335,30 @@
     "warningDesc": "Activer les fonctionnalités expérimentales. Elles peuvent contenir des erreurs ou changer sans préavis.",
     "buzon": "Messagerie",
     "buzonDescription": "Client email intégré avec support IMAP/SMTP"
+  },
+  "testing": {
+    "title": "Test Runner",
+    "description": "Exécutez la suite de tests du projet et visualisez les résultats en temps réel",
+    "runTests": "Exécuter les Tests",
+    "running": "En cours...",
+    "stop": "Arrêter",
+    "clearLog": "Effacer le Log",
+    "summary": "Résumé d'Exécution",
+    "passed": "Réussis",
+    "failed": "Échoués",
+    "skipped": "Ignorés",
+    "total": "Total",
+    "duration": "Durée",
+    "status": "Statut",
+    "idle": "En attente",
+    "inProgress": "En cours",
+    "success": "Terminé — Sans erreurs",
+    "failure": "Terminé — Avec erreurs",
+    "exitCode": "Code de sortie",
+    "outputLog": "Log de sortie",
+    "noOutput": "Aucun résultat. Exécutez les tests pour voir la sortie.",
+    "framework": "Framework",
+    "command": "Commande",
+    "progress": "Progression"
   }
 }
