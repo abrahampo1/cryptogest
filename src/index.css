@@ -173,6 +173,31 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* Dark sidebar scrollbar */
+  .scrollbar-sidebar {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .scrollbar-sidebar:hover {
+    scrollbar-color: rgb(51 65 85 / 0.5) transparent;
+  }
+  .scrollbar-sidebar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .scrollbar-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-sidebar::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 9999px;
+  }
+  .scrollbar-sidebar:hover::-webkit-scrollbar-thumb {
+    background: rgb(51 65 85 / 0.5);
+  }
+  .scrollbar-sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgb(71 85 105 / 0.6);
+  }
 }
 
 /* Page transition animations */

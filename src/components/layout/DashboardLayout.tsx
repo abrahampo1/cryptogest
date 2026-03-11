@@ -26,7 +26,7 @@ export function DashboardLayout({ children, currentPage, onPageChange, onLock, o
   return (
     <div className="flex h-screen bg-background">
       <Sidebar currentPage={currentPage} onPageChange={onPageChange} onLock={onLock} onSwitchEmpresa={onSwitchEmpresa} onSelectEmpresa={onSelectEmpresa} empresaNombre={empresaNombre} empresas={empresas} activeEmpresaId={activeEmpresaId} buzonEnabled={buzonEnabled} isCloudEmpresa={isCloudEmpresa} cloudSession={cloudSession} />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto border-l border-border">
         <div className="h-full p-6">
           {children}
         </div>
