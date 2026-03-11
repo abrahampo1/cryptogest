@@ -159,7 +159,11 @@ function setCacheForType(entityType: string, entities: any[]): void {
 function updateCacheEntity(entityType: string, entity: any): void {
   const cache = entityCaches.get(entityType)
   if (!cache || !cache.populated) return
-  const idx = cache.entities.findIndex((e: any) => e._uuid === entity._uuid)
+  // Match by _uuid first, fallback to id to prevent duplicates
+  let idx = cache.entities.findIndex((e: any) => e._uuid && e._uuid === entity._uuid)
+  if (idx < 0 && entity.id != null) {
+    idx = cache.entities.findIndex((e: any) => e.id === entity.id)
+  }
   if (idx >= 0) {
     cache.entities[idx] = entity
   } else {
@@ -190,9 +194,12 @@ async function triggerBackgroundSync(entityType: string): Promise<void> {
 
     let hasChanges = false
 
-    // Apply updated entities
+    // Apply updated entities (filter by entity_type for safety)
     if (result.data && result.data.length > 0) {
       for (const serverEntity of result.data) {
+        // Skip entities that don't match the requested type
+        if (serverEntity.entity_type && serverEntity.entity_type !== entityType) continue
+
         const decrypted = decryptEntity({
           encrypted_data: serverEntity.encrypted_data,
           iv: serverEntity.iv,
@@ -210,7 +217,7 @@ async function triggerBackgroundSync(entityType: string): Promise<void> {
       hasChanges = true
     }
 
-    // Apply deletions
+    // Apply deletions (only for UUIDs that belong to this entity type's ID maps)
     if (result.deleted && result.deleted.length > 0) {
       for (const deletedUuid of result.deleted) {
         // Clean up ID maps
@@ -219,8 +226,9 @@ async function triggerBackgroundSync(entityType: string): Promise<void> {
         if (localId !== undefined) {
           getIdMap(entityType).delete(localId)
           reverseMap.delete(deletedUuid)
+          removeCacheEntity(entityType, deletedUuid)
         }
-        removeCacheEntity(entityType, deletedUuid)
+        // If UUID is not in our reverse map, it belongs to another entity type — skip
       }
       hasChanges = true
     }
@@ -454,7 +462,7 @@ function makeRequest<T>(options: RequestOptions): Promise<T> {
     })
 
     if (options.body) {
-      req.write(options.body)
+      req.write(Buffer.from(options.body, 'utf8'))
     }
     req.end()
   })
@@ -498,16 +506,26 @@ function getUuidById(entityType: string, localId: number): string | undefined {
 }
 
 function buildIdMapsFromEntities(entityType: string, entities: any[]): void {
-  // Clear existing maps for this type
-  idMaps.set(entityType, new Map())
-  reverseIdMaps.set(entityType, new Map())
-  idCounters.set(entityType, 1)
+  // Preserve counter minimum from existing state to prevent ID collisions
+  const previousCounter = idCounters.get(entityType) || 1
+
+  // Rebuild maps from server entities
+  const newIdMap = new Map<number, string>()
+  const newReverseMap = new Map<string, number>()
+  let maxId = 0
 
   for (const entity of entities) {
-    if (entity.id && entity._uuid) {
-      registerEntity(entityType, entity.id, entity._uuid)
+    if (entity.id != null && entity._uuid) {
+      newIdMap.set(entity.id, entity._uuid)
+      newReverseMap.set(entity._uuid, entity.id)
+      if (entity.id > maxId) maxId = entity.id
     }
   }
+
+  idMaps.set(entityType, newIdMap)
+  reverseIdMaps.set(entityType, newReverseMap)
+  // Counter must be at least max(previous, maxFromEntities) + 1
+  idCounters.set(entityType, Math.max(previousCounter, maxId + 1))
 }
 
 // ============================================
@@ -516,12 +534,15 @@ function buildIdMapsFromEntities(entityType: string, entities: any[]): void {
 
 async function fetchAllEntitiesFromServer(entityType: string): Promise<any[]> {
   const cfg = requireConfig()
-  const result = await makeRequest<{ data: ServerEntity[] }>({
+  const result = await makeRequest<any>({
     method: 'GET',
     path: `/api/v1/empresas/${cfg.empresaId}/entities?type=${encodeURIComponent(entityType)}`,
   })
 
-  const entities = result.data.map((serverEntity) => {
+  const serverEntities: ServerEntity[] = Array.isArray(result?.data) ? result.data
+    : Array.isArray(result) ? result : []
+
+  const entities = serverEntities.map((serverEntity) => {
     const decrypted = decryptEntity({
       encrypted_data: serverEntity.encrypted_data,
       iv: serverEntity.iv,
@@ -592,7 +613,7 @@ async function createEntity(entityType: string, data: any): Promise<any> {
 
   registerEntity(entityType, localId, uuid)
 
-  // Optimistic cache update
+  // Optimistic cache update (only if cache is already populated to avoid replacing existing data)
   updateCacheEntity(entityType, entityData)
 
   return entityData
@@ -1674,11 +1695,12 @@ export const logo = {
 export const departamentos = {
   getAll: async (): Promise<any[]> => {
     const all = await getAllEntities('departamento')
-    const empleados = await getAllEntities('empleado')
+    let empleadosList: any[] = []
+    try { empleadosList = await getAllEntities('empleado') } catch { /* non-critical */ }
     return all.map(d => ({
       ...d,
       activo: d.activo ?? true,
-      _count: { empleados: empleados.filter((e: any) => e.departamentoId === d.id).length },
+      _count: { empleados: empleadosList.filter((e: any) => e.departamentoId === d.id).length },
     })).sort((a: any, b: any) => (a.nombre || '').localeCompare(b.nombre || ''))
   },
   create: async (data: any): Promise<any> => {
@@ -1699,8 +1721,10 @@ export const departamentos = {
 export const empleados = {
   getAll: async (): Promise<any[]> => {
     const all = await getAllEntities('empleado')
-    const deptos = await getAllEntities('departamento')
-    const contratos = await getAllEntities('contrato')
+    let deptos: any[] = []
+    let contratos: any[] = []
+    try { deptos = await getAllEntities('departamento') } catch { /* non-critical */ }
+    try { contratos = await getAllEntities('contrato') } catch { /* non-critical */ }
     const deptoMap = new Map(deptos.map((d: any) => [d.id, d]))
     return all.map(e => ({
       ...e,
@@ -1715,11 +1739,12 @@ export const empleados = {
     const finalUuid = getUuidById('empleado', id)
     if (!finalUuid) throw new Error('Empleado not found')
     const empleado = await getEntity('empleado', finalUuid)
-    const deptos = await getAllEntities('departamento')
-    const contratos = await getAllEntities('contrato')
-    const nominas = await getAllEntities('nomina')
-    const ausencias = await getAllEntities('ausencia')
-    const tiposAusencia = await getAllEntities('tipoAusencia')
+    let deptos: any[] = [], contratos: any[] = [], nominas: any[] = [], ausencias: any[] = [], tiposAusencia: any[] = []
+    try { deptos = await getAllEntities('departamento') } catch { /* */ }
+    try { contratos = await getAllEntities('contrato') } catch { /* */ }
+    try { nominas = await getAllEntities('nomina') } catch { /* */ }
+    try { ausencias = await getAllEntities('ausencia') } catch { /* */ }
+    try { tiposAusencia = await getAllEntities('tipoAusencia') } catch { /* */ }
     const tipoMap = new Map(tiposAusencia.map((t: any) => [t.id, t]))
     const deptoMap = new Map(deptos.map((d: any) => [d.id, d]))
     return {
@@ -1737,15 +1762,23 @@ export const empleados = {
       diasVacacionesAnuales: data.diasVacacionesAnuales || 30,
       fechaAlta: data.fechaAlta || new Date().toISOString(),
     })
-    const deptos = await getAllEntities('departamento')
-    const deptoMap = new Map(deptos.map((d: any) => [d.id, d]))
-    return { ...entity, departamento: entity.departamentoId ? deptoMap.get(entity.departamentoId) || null : null, contratos: [] }
+    try {
+      const deptos = await getAllEntities('departamento')
+      const deptoMap = new Map(deptos.map((d: any) => [d.id, d]))
+      return { ...entity, departamento: entity.departamentoId ? deptoMap.get(entity.departamentoId) || null : null, contratos: [] }
+    } catch {
+      return { ...entity, departamento: null, contratos: [] }
+    }
   },
   update: async (id: number, data: any): Promise<any> => {
     const updated = await updateEntity('empleado', id, data)
-    const deptos = await getAllEntities('departamento')
-    const deptoMap = new Map(deptos.map((d: any) => [d.id, d]))
-    return { ...updated, departamento: updated.departamentoId ? deptoMap.get(updated.departamentoId) || null : null }
+    try {
+      const deptos = await getAllEntities('departamento')
+      const deptoMap = new Map(deptos.map((d: any) => [d.id, d]))
+      return { ...updated, departamento: updated.departamentoId ? deptoMap.get(updated.departamentoId) || null : null }
+    } catch {
+      return { ...updated, departamento: null }
+    }
   },
   delete: async (id: number): Promise<void> => {
     // Also delete related contratos, nominas, ausencias, jornada
@@ -2075,5 +2108,29 @@ export const empresaCloud = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role }),
     })
+  },
+}
+
+// ============================================
+// Test-only exports (internal functions for unit testing)
+// ============================================
+export const __test__ = {
+  getNextId,
+  registerEntity,
+  buildIdMapsFromEntities,
+  getIdMap,
+  getReverseIdMap,
+  getCacheForType,
+  setCacheForType,
+  updateCacheEntity,
+  removeCacheEntity,
+  getUuidById,
+  get idCounters() { return idCounters },
+  get entityCaches() { return entityCaches },
+  resetState() {
+    idMaps.clear()
+    reverseIdMaps.clear()
+    idCounters.clear()
+    entityCaches.clear()
   },
 }
