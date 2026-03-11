@@ -23,7 +23,25 @@
       "Bash(ls -ld \"E:/ClasGes6\"/*/)",
       "WebFetch(domain:developers.holded.com)",
       "WebSearch",
-      "WebFetch(domain:rollout.com)"
+      "WebFetch(domain:rollout.com)",
+      "Bash(gh release:*)",
+      "Bash(do echo:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npx:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(grep -n \"export function\\\\|export const\\\\|export class\" /E/Repositories/cryptogest/src/lib/*.ts | head -50)",
+      "Bash(wc -l /E/Repositories/cryptogest/electron/*.ts)",
+      "Bash(cd E:/Repositories/cryptogest-cloud && php artisan test --parallel 2>&1)",
+      "Bash(cd E:/Repositories/cryptogest-cloud && php artisan test --filter=\"Unit\" 2>&1)",
+      "Bash(cd E:/Repositories/cryptogest-cloud && php artisan test --filter=\"Api\" 2>&1)",
+      "Bash(cd E:/Repositories/cryptogest-cloud && php artisan test --filter=\"Api\" 2>&1 | tail -20)",
+      "Bash(cd E:/Repositories/cryptogest-cloud && php artisan test --filter=\"ProfileTest|EmailVerification|PasswordUpdate\" 2>&1 | tail -20)",
+      "Bash(cd E:/Repositories/cryptogest-cloud && php artisan test --filter=\"PlanTest|BackupTest|DeviceLinkTest|EmpresaInvitationTest|AuthCheckTest|AccountTest|EmpresaApiTest|EmpresaUserApiTest|BackupApiTest|EncryptedEntityApiTest|MiddlewareAccessTest|UserPlanTest\" 2>&1)",
+      "Bash(grep -r \"EmpresaInfo\" /e/Repositories/cryptogest/src --include=\"*.tsx\" --include=\"*.ts\" -l 2>/dev/null | head -10)",
+      "Bash(cd /e/Repositories/cryptogest-cloud && php artisan test 2>&1)",
+      "Bash(cd /e/Repositories/cryptogest-cloud && php artisan test --filter=\"EmailVerification|ProfileTest\" 2>&1)",
+      "Bash(cd /e/Repositories/cryptogest-cloud && php artisan test --filter=EncryptedEntityApiTest 2>&1)"
     ]
   }
 }
