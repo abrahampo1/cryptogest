@@ -54,6 +54,9 @@ import {
   Trophy,
   Timer,
   Sparkles,
+  Briefcase,
+  Banknote,
+  CalendarX2,
   type LucideIcon,
 } from "lucide-react"
 
@@ -75,6 +78,10 @@ const sectionDefs = [
   { id: "productos", key: "productos", icon: Package, color: "text-amber-600", border: "border-l-amber-500", bg: "bg-amber-50", group: "basico" as const },
   { id: "facturas", key: "facturas", icon: FileText, color: "text-rose-600", border: "border-l-rose-500", bg: "bg-rose-50", group: "basico" as const },
   { id: "gastos", key: "gastos", icon: Receipt, color: "text-orange-600", border: "border-l-orange-500", bg: "bg-orange-50", group: "basico" as const },
+  { id: "rrhh", key: "rrhh", icon: Briefcase, color: "text-lime-600", border: "border-l-lime-500", bg: "bg-lime-50", group: "rrhh" as const },
+  { id: "nominas", key: "nominas", icon: Banknote, color: "text-green-600", border: "border-l-green-500", bg: "bg-green-50", group: "rrhh" as const },
+  { id: "ausencias", key: "ausencias", icon: CalendarX2, color: "text-yellow-600", border: "border-l-yellow-500", bg: "bg-yellow-50", group: "rrhh" as const },
+  { id: "jornada", key: "jornada", icon: Timer, color: "text-stone-600", border: "border-l-stone-500", bg: "bg-stone-50", group: "rrhh" as const },
   { id: "ejercicios", key: "ejercicios", icon: Calendar, color: "text-teal-600", border: "border-l-teal-500", bg: "bg-teal-50", group: "avanzado" as const },
   { id: "contabilidad", key: "contabilidad", icon: BookOpen, color: "text-indigo-600", border: "border-l-indigo-500", bg: "bg-indigo-50", group: "avanzado" as const },
   { id: "modelos", key: "modelos", icon: FileBarChart, color: "text-cyan-600", border: "border-l-cyan-500", bg: "bg-cyan-50", group: "avanzado" as const },
@@ -105,6 +112,7 @@ function useGroupLabels() {
   return useMemo((): Record<string, string> => ({
     inicio: t('groupLabels.inicio'),
     basico: t('groupLabels.basico'),
+    rrhh: t('groupLabels.rrhh'),
     avanzado: t('groupLabels.avanzado'),
     sistema: t('groupLabels.sistema'),
     referencia: t('groupLabels.referencia'),
@@ -157,7 +165,8 @@ function useReadSections() {
 // Estimated reading time in minutes per section
 const readingTimeMap: Record<string, number> = {
   "inicio": 3, "primeros-pasos": 4, "dashboard": 3, "clientes": 3,
-  "productos": 3, "facturas": 5, "gastos": 4, "ejercicios": 3,
+  "productos": 3, "facturas": 5, "gastos": 4, "rrhh": 5,
+  "nominas": 5, "ausencias": 4, "jornada": 4, "ejercicios": 3,
   "contabilidad": 4, "modelos": 4, "plantillas": 3, "cloud": 5,
   "configuracion": 4, "seguridad": 4, "glosario": 5,
 }
@@ -639,6 +648,240 @@ function GastosContent() {
   </>
 }
 
+function RRHHContent() {
+  const { t } = useTranslation('manual')
+  return <>
+    <P>{t('rrhh.intro')}</P>
+
+    <SectionTitle>{t('rrhh.tabs')}</SectionTitle>
+    <Step n={1}><Ic icon={Users} className="text-lime-600" /><span dangerouslySetInnerHTML={{ __html: t('rrhh.tabEmpleados') }} /></Step>
+    <Step n={2}><Ic icon={FileText} className="text-lime-600" /><span dangerouslySetInnerHTML={{ __html: t('rrhh.tabContratos') }} /></Step>
+    <Step n={3}><Ic icon={Briefcase} className="text-lime-600" /><span dangerouslySetInnerHTML={{ __html: t('rrhh.tabDepartamentos') }} /></Step>
+
+    <SectionTitle>{t('rrhh.newEmployee')}</SectionTitle>
+    <P>{t('rrhh.newEmployeeDesc')}</P>
+    <Step n={1} checkId="rrhh-emp-1">{t('rrhh.empStep1')}<Ic icon={UserPlus} className="text-primary" /><strong>{t('rrhh.empStep1Action')}</strong>{t('rrhh.empStep1End')}</Step>
+    <Step n={2} checkId="rrhh-emp-2"><span dangerouslySetInnerHTML={{ __html: t('rrhh.empStep2') }} /></Step>
+    <Step n={3} checkId="rrhh-emp-3"><span dangerouslySetInnerHTML={{ __html: t('rrhh.empStep3') }} /></Step>
+    <Step n={4} checkId="rrhh-emp-4"><span dangerouslySetInnerHTML={{ __html: t('rrhh.empStep4') }} /></Step>
+    <Step n={5} checkId="rrhh-emp-5"><span dangerouslySetInnerHTML={{ __html: t('rrhh.empStep5') }} /></Step>
+    <Step n={6} checkId="rrhh-emp-6"><span dangerouslySetInnerHTML={{ __html: t('rrhh.empStep6') }} /></Step>
+    <Step n={7} checkId="rrhh-emp-7">{t('rrhh.empStep7')}<Ic icon={Save} className="text-primary" /><strong>{t('rrhh.empStep7Action')}</strong>{t('rrhh.empStep7End')}</Step>
+
+    <Concept term={t('rrhh.ssConcept')}>
+      {t('rrhh.ssConceptDesc')}
+    </Concept>
+
+    <Concept term={t('rrhh.cotizacionConcept')}>
+      <span dangerouslySetInnerHTML={{ __html: t('rrhh.cotizacionConceptDesc') }} />
+    </Concept>
+
+    <SectionTitle>{t('rrhh.editEmployee')}</SectionTitle>
+    <P>{t('rrhh.editEmployeeDesc')}</P>
+    <Step n={1}><Ic icon={Pencil} className="text-blue-600" /><span dangerouslySetInnerHTML={{ __html: t('rrhh.empEditAction') }} /></Step>
+    <Step n={2}><Ic icon={Eye} className="text-slate-600" /><span dangerouslySetInnerHTML={{ __html: t('rrhh.empViewAction') }} /></Step>
+    <Step n={3}><Ic icon={Trash2} className="text-red-500" /><span dangerouslySetInnerHTML={{ __html: t('rrhh.empDeleteAction') }} /></Step>
+
+    <P><span dangerouslySetInnerHTML={{ __html: t('rrhh.empBajaDesc') }} /></P>
+
+    <SectionTitle>{t('rrhh.departments')}</SectionTitle>
+    <P>{t('rrhh.departmentsDesc')}</P>
+    <Step n={1}><span dangerouslySetInnerHTML={{ __html: t('rrhh.deptStep1') }} /></Step>
+    <Step n={2}>{t('rrhh.deptStep2')}<Ic icon={Plus} className="text-primary" /><strong>{t('rrhh.deptStep2Action')}</strong>{t('rrhh.deptStep2End')}</Step>
+    <Step n={3}>{t('rrhh.deptStep3')}</Step>
+    <Step n={4}><span dangerouslySetInnerHTML={{ __html: t('rrhh.deptStep4') }} /></Step>
+
+    <SectionTitle>{t('rrhh.contracts')}</SectionTitle>
+    <P>{t('rrhh.contractsDesc')}</P>
+    <Step n={1}><span dangerouslySetInnerHTML={{ __html: t('rrhh.contractStep1') }} /></Step>
+    <Step n={2}>{t('rrhh.contractStep2')}<Ic icon={Plus} className="text-primary" /><strong>{t('rrhh.contractStep2Action')}</strong>{t('rrhh.contractStep2End')}</Step>
+    <Step n={3}><span dangerouslySetInnerHTML={{ __html: t('rrhh.contractStep3') }} /></Step>
+    <Step n={4}><span dangerouslySetInnerHTML={{ __html: t('rrhh.contractStep4') }} /></Step>
+    <Step n={5}><span dangerouslySetInnerHTML={{ __html: t('rrhh.contractStep5') }} /></Step>
+    <Step n={6}><span dangerouslySetInnerHTML={{ __html: t('rrhh.contractStep6') }} /></Step>
+    <Step n={7}><span dangerouslySetInnerHTML={{ __html: t('rrhh.contractStep7') }} /></Step>
+
+    <Concept term={t('rrhh.contractConcept')}>
+      <span dangerouslySetInnerHTML={{ __html: t('rrhh.contractConceptDesc') }} />
+    </Concept>
+
+    <Tip>{t('rrhh.firstEmployeeTip')}</Tip>
+
+    <GoToPage page="rrhh" icon={Briefcase} color="text-lime-600" bg="bg-lime-50" label={t('sections.rrhh.title')} />
+  </>
+}
+
+function NominasContent() {
+  const { t } = useTranslation('manual')
+  return <>
+    <P>{t('nominas.intro')}</P>
+
+    <Concept term={t('nominas.concept')}>
+      <span dangerouslySetInnerHTML={{ __html: t('nominas.conceptDesc') }} />
+    </Concept>
+
+    <SectionTitle>{t('nominas.calculate')}</SectionTitle>
+    <Step n={1} checkId="nom-1"><span dangerouslySetInnerHTML={{ __html: t('nominas.calculateStep1') }} /></Step>
+    <Step n={2} checkId="nom-2"><span dangerouslySetInnerHTML={{ __html: t('nominas.calculateStep2') }} /></Step>
+    <Step n={3} checkId="nom-3">{t('nominas.calculateStep3')}<Ic icon={Plus} className="text-primary" /><strong>{t('nominas.calculateStep3Action')}</strong>{t('nominas.calculateStep3End')}</Step>
+    <Step n={4} checkId="nom-4">{t('nominas.calculateStep4')}</Step>
+    <Step n={5} checkId="nom-5"><span dangerouslySetInnerHTML={{ __html: t('nominas.calculateStep5') }} /></Step>
+    <Step n={6} checkId="nom-6"><span dangerouslySetInnerHTML={{ __html: t('nominas.calculateStep6') }} /></Step>
+
+    <SectionTitle>{t('nominas.devengos')}</SectionTitle>
+    <P>{t('nominas.devengosDesc')}</P>
+    <Step n={1}><span dangerouslySetInnerHTML={{ __html: t('nominas.devengoSalario') }} /></Step>
+    <Step n={2}><span dangerouslySetInnerHTML={{ __html: t('nominas.devengoProrrata') }} /></Step>
+    <Step n={3}><span dangerouslySetInnerHTML={{ __html: t('nominas.devengoComplementos') }} /></Step>
+    <Step n={4}><span dangerouslySetInnerHTML={{ __html: t('nominas.devengoHorasExtra') }} /></Step>
+    <Step n={5}><span dangerouslySetInnerHTML={{ __html: t('nominas.devengoOtros') }} /></Step>
+
+    <SectionTitle>{t('nominas.deducciones')}</SectionTitle>
+    <P>{t('nominas.deduccionesDesc')}</P>
+    <Step n={1}><span dangerouslySetInnerHTML={{ __html: t('nominas.deduccionCC') }} /></Step>
+    <Step n={2}><span dangerouslySetInnerHTML={{ __html: t('nominas.deduccionDesempleo') }} /></Step>
+    <Step n={3}><span dangerouslySetInnerHTML={{ __html: t('nominas.deduccionFP') }} /></Step>
+    <Step n={4}><span dangerouslySetInnerHTML={{ __html: t('nominas.deduccionIRPF') }} /></Step>
+
+    <Concept term={t('nominas.liquidoConcept')}>
+      <span dangerouslySetInnerHTML={{ __html: t('nominas.liquidoConceptDesc') }} />
+    </Concept>
+
+    <SectionTitle>{t('nominas.costeEmpresa')}</SectionTitle>
+    <P>{t('nominas.costeEmpresaDesc')}</P>
+    <Step n={1}><span dangerouslySetInnerHTML={{ __html: t('nominas.costeCCEmpresa') }} /></Step>
+    <Step n={2}><span dangerouslySetInnerHTML={{ __html: t('nominas.costeDesempleoEmpresa') }} /></Step>
+    <Step n={3}><span dangerouslySetInnerHTML={{ __html: t('nominas.costeFOGASA') }} /></Step>
+    <Step n={4}><span dangerouslySetInnerHTML={{ __html: t('nominas.costeFP') }} /></Step>
+    <Step n={5}><span dangerouslySetInnerHTML={{ __html: t('nominas.costeATEP') }} /></Step>
+
+    <P>{t('nominas.costeConceptDesc')}</P>
+
+    <SectionTitle>{t('nominas.states')}</SectionTitle>
+    <P>{t('nominas.statesDesc')}</P>
+    <Step n={1}><Ic icon={Pencil} className="text-slate-500" /><span dangerouslySetInnerHTML={{ __html: t('nominas.stateDraft') }} /></Step>
+    <Step n={2}><Ic icon={CheckCircle2} className="text-emerald-500" /><span dangerouslySetInnerHTML={{ __html: t('nominas.stateConfirmed') }} /></Step>
+    <Step n={3}><Ic icon={Banknote} className="text-green-500" /><span dangerouslySetInnerHTML={{ __html: t('nominas.statePaid') }} /></Step>
+
+    <SectionTitle>{t('nominas.pdf')}</SectionTitle>
+    <P>{t('nominas.pdfDesc')}</P>
+    <Step n={1}>{t('nominas.pdfStep1')}<Ic icon={Download} className="text-slate-600" />{t('nominas.pdfStep1End')}</Step>
+    <Step n={2}>{t('nominas.pdfStep2')}</Step>
+
+    <SectionTitle>{t('nominas.sepa')}</SectionTitle>
+    <P><span dangerouslySetInnerHTML={{ __html: t('nominas.sepaDesc') }} /></P>
+    <Step n={1}><span dangerouslySetInnerHTML={{ __html: t('nominas.sepaStep1') }} /></Step>
+    <Step n={2}><span dangerouslySetInnerHTML={{ __html: t('nominas.sepaStep2') }} /></Step>
+    <Step n={3}><span dangerouslySetInnerHTML={{ __html: t('nominas.sepaStep3') }} /></Step>
+    <Step n={4}><span dangerouslySetInnerHTML={{ __html: t('nominas.sepaStep4') }} /></Step>
+
+    <Warning><span dangerouslySetInnerHTML={{ __html: t('nominas.contractWarning') }} /></Warning>
+
+    <Tip>{t('nominas.autoEntryTip')}</Tip>
+
+    <GoToPage page="nominas" icon={Banknote} color="text-green-600" bg="bg-green-50" label={t('sections.nominas.title')} />
+  </>
+}
+
+function AusenciasContent() {
+  const { t } = useTranslation('manual')
+  return <>
+    <P>{t('ausencias.intro')}</P>
+
+    <SectionTitle>{t('ausencias.types')}</SectionTitle>
+    <P>{t('ausencias.typesDesc')}</P>
+    <Step n={1}><span dangerouslySetInnerHTML={{ __html: t('ausencias.typeVacaciones') }} /></Step>
+    <Step n={2}><span dangerouslySetInnerHTML={{ __html: t('ausencias.typeEnfermedad') }} /></Step>
+    <Step n={3}><span dangerouslySetInnerHTML={{ __html: t('ausencias.typePermiso') }} /></Step>
+    <Step n={4}><span dangerouslySetInnerHTML={{ __html: t('ausencias.typeNoRetribuido') }} /></Step>
+    <P><span dangerouslySetInnerHTML={{ __html: t('ausencias.typeOtros') }} /></P>
+
+    <SectionTitle>{t('ausencias.configTypes')}</SectionTitle>
+    <Step n={1}>{t('ausencias.configStep1')}<Ic icon={Settings} className="text-slate-600" /><strong>{t('ausencias.configStep1Action')}</strong>{t('ausencias.configStep1End')}</Step>
+    <Step n={2}>{t('ausencias.configStep2')}<Ic icon={Plus} className="text-primary" /><strong>{t('ausencias.configStep2Action')}</strong>{t('ausencias.configStep2End')}</Step>
+    <Step n={3}><span dangerouslySetInnerHTML={{ __html: t('ausencias.configStep3') }} /></Step>
+    <Step n={4}><span dangerouslySetInnerHTML={{ __html: t('ausencias.configStep4') }} /></Step>
+    <Step n={5}><span dangerouslySetInnerHTML={{ __html: t('ausencias.configStep5') }} /></Step>
+
+    <SectionTitle>{t('ausencias.create')}</SectionTitle>
+    <Step n={1} checkId="aus-1">{t('ausencias.createStep1')}<Ic icon={Plus} className="text-primary" /><strong>{t('ausencias.createStep1Action')}</strong>{t('ausencias.createStep1End')}</Step>
+    <Step n={2} checkId="aus-2"><span dangerouslySetInnerHTML={{ __html: t('ausencias.createStep2') }} /></Step>
+    <Step n={3} checkId="aus-3"><span dangerouslySetInnerHTML={{ __html: t('ausencias.createStep3') }} /></Step>
+    <Step n={4} checkId="aus-4"><span dangerouslySetInnerHTML={{ __html: t('ausencias.createStep4') }} /></Step>
+    <Step n={5} checkId="aus-5"><span dangerouslySetInnerHTML={{ __html: t('ausencias.createStep5') }} /></Step>
+    <Step n={6} checkId="aus-6"><span dangerouslySetInnerHTML={{ __html: t('ausencias.createStep6') }} /></Step>
+
+    <SectionTitle>{t('ausencias.approval')}</SectionTitle>
+    <P>{t('ausencias.approvalDesc')}</P>
+    <Step n={1}><Ic icon={Clock} className="text-amber-500" /><span dangerouslySetInnerHTML={{ __html: t('ausencias.approvalPending') }} /></Step>
+    <Step n={2}><Ic icon={CheckCircle2} className="text-emerald-500" /><span dangerouslySetInnerHTML={{ __html: t('ausencias.approvalApproved') }} /></Step>
+    <Step n={3}><Ic icon={XCircle} className="text-red-500" /><span dangerouslySetInnerHTML={{ __html: t('ausencias.approvalRejected') }} /></Step>
+    <Step n={4}><Ic icon={RotateCcw} className="text-slate-500" /><span dangerouslySetInnerHTML={{ __html: t('ausencias.approvalCancelled') }} /></Step>
+
+    <SectionTitle>{t('ausencias.calendar')}</SectionTitle>
+    <P>{t('ausencias.calendarDesc')}</P>
+
+    <Concept term={t('ausencias.diasConcept')}>
+      <span dangerouslySetInnerHTML={{ __html: t('ausencias.diasConceptDesc') }} />
+    </Concept>
+
+    <Tip>{t('ausencias.vacationTip')}</Tip>
+
+    <GoToPage page="ausencias" icon={CalendarX2} color="text-yellow-600" bg="bg-yellow-50" label={t('sections.ausencias.title')} />
+  </>
+}
+
+function JornadaContent() {
+  const { t } = useTranslation('manual')
+  return <>
+    <P>{t('jornada.intro')}</P>
+
+    <Concept term={t('jornada.legalConcept')}>
+      <span dangerouslySetInnerHTML={{ __html: t('jornada.legalConceptDesc') }} />
+    </Concept>
+
+    <SectionTitle>{t('jornada.clockIn')}</SectionTitle>
+    <Step n={1} checkId="jor-1"><span dangerouslySetInnerHTML={{ __html: t('jornada.clockInStep1') }} /></Step>
+    <Step n={2} checkId="jor-2"><span dangerouslySetInnerHTML={{ __html: t('jornada.clockInStep2') }} /></Step>
+    <Step n={3} checkId="jor-3">{t('jornada.clockInStep3')}<Ic icon={Clock} className="text-primary" /><strong>{t('jornada.clockInStep3Action')}</strong>{t('jornada.clockInStep3End')}</Step>
+    <Step n={4} checkId="jor-4">{t('jornada.clockInStep4')}<Ic icon={Clock} className="text-primary" /><strong>{t('jornada.clockInStep4Action')}</strong>{t('jornada.clockInStep4End')}</Step>
+    <Step n={5} checkId="jor-5"><span dangerouslySetInnerHTML={{ __html: t('jornada.clockInStep5') }} /></Step>
+
+    <SectionTitle>{t('jornada.pauses')}</SectionTitle>
+    <P><span dangerouslySetInnerHTML={{ __html: t('jornada.pausesDesc') }} /></P>
+
+    <SectionTitle>{t('jornada.dailyView')}</SectionTitle>
+    <P>{t('jornada.dailyViewDesc')}</P>
+
+    <SectionTitle>{t('jornada.history')}</SectionTitle>
+    <P><span dangerouslySetInnerHTML={{ __html: t('jornada.historyDesc') }} /></P>
+
+    <SectionTitle>{t('jornada.overtime')}</SectionTitle>
+    <P>{t('jornada.overtimeDesc')}</P>
+    <Step n={1}><span dangerouslySetInnerHTML={{ __html: t('jornada.overtimeNormal') }} /></Step>
+    <Step n={2}><span dangerouslySetInnerHTML={{ __html: t('jornada.overtimeFuerzaMayor') }} /></Step>
+
+    <SectionTitle>{t('jornada.monthlySummary')}</SectionTitle>
+    <P>{t('jornada.monthlySummaryDesc')}</P>
+    <Step n={1}><span dangerouslySetInnerHTML={{ __html: t('jornada.summaryDays') }} /></Step>
+    <Step n={2}><span dangerouslySetInnerHTML={{ __html: t('jornada.summaryHours') }} /></Step>
+    <Step n={3}><span dangerouslySetInnerHTML={{ __html: t('jornada.summaryOvertime') }} /></Step>
+    <P>{t('jornada.summaryAverage')}</P>
+
+    <SectionTitle>{t('jornada.editRecords')}</SectionTitle>
+    <Step n={1}>{t('jornada.editStep1')}</Step>
+    <Step n={2}>{t('jornada.editStep2')}<Ic icon={Pencil} className="text-blue-600" />{t('jornada.editStep2End')}</Step>
+    <Step n={3}><span dangerouslySetInnerHTML={{ __html: t('jornada.editStep3') }} /></Step>
+    <Step n={4}>{t('jornada.editStep4')}</Step>
+
+    <Warning>{t('jornada.forgotWarning')}</Warning>
+
+    <Tip>{t('jornada.legalTip')}</Tip>
+
+    <GoToPage page="jornada" icon={Timer} color="text-stone-600" bg="bg-stone-50" label={t('sections.jornada.title')} />
+  </>
+}
+
 function EjerciciosContent() {
   const { t } = useTranslation('manual')
   return <>
@@ -1031,6 +1274,10 @@ const pageContent: Record<string, (props: { onNavigate: (id: string) => void }) 
   "productos": () => <ProductosContent />,
   "facturas": () => <FacturasContent />,
   "gastos": () => <GastosContent />,
+  "rrhh": () => <RRHHContent />,
+  "nominas": () => <NominasContent />,
+  "ausencias": () => <AusenciasContent />,
+  "jornada": () => <JornadaContent />,
   "ejercicios": () => <EjerciciosContent />,
   "contabilidad": () => <ContabilidadContent />,
   "modelos": () => <ModelosContent />,
@@ -1080,7 +1327,7 @@ export function ManualPage({ section, onNavigateToPage }: ManualPageProps) {
   const SectionIcon = currentSection.icon
 
   // Group sections for nav
-  const groups = ["inicio", "basico", "avanzado", "sistema", "referencia"] as const
+  const groups = ["inicio", "basico", "rrhh", "avanzado", "sistema", "referencia"] as const
   const groupedFiltered = groups.map(g => ({
     group: g,
     label: groupLabels[g],

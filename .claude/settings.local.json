@@ -41,7 +41,10 @@
       "Bash(grep -r \"EmpresaInfo\" /e/Repositories/cryptogest/src --include=\"*.tsx\" --include=\"*.ts\" -l 2>/dev/null | head -10)",
       "Bash(cd /e/Repositories/cryptogest-cloud && php artisan test 2>&1)",
       "Bash(cd /e/Repositories/cryptogest-cloud && php artisan test --filter=\"EmailVerification|ProfileTest\" 2>&1)",
-      "Bash(cd /e/Repositories/cryptogest-cloud && php artisan test --filter=EncryptedEntityApiTest 2>&1)"
+      "Bash(cd /e/Repositories/cryptogest-cloud && php artisan test --filter=EncryptedEntityApiTest 2>&1)",
+      "Bash(git checkout *)",
+      "Bash(GIT_EDITOR=true git rebase *)",
+      "Bash(git *)"
     ]
   }
 }
