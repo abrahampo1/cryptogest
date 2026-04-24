@@ -22,8 +22,10 @@ import { SEPAPage } from '@/pages/SEPAPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { EmpresaSelectorPage } from '@/pages/EmpresaSelectorPage'
 import { SetupWizardPage } from '@/pages/SetupWizardPage'
-import { Loader2, Cloud, ArrowLeft, Lock, CheckCircle2 } from 'lucide-react'
+import { Loader2, Cloud, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { CloudLoginPrompt } from '@/components/CloudLoginPrompt'
+import { Button } from '@/components/ui/button'
+import { PasswordInput } from '@/components/ui/password-input'
 
 type AppPhase = 'loading' | 'setup-wizard' | 'empresa-selector' | 'auth' | 'cloud-auth' | 'authenticated'
 
@@ -310,10 +312,10 @@ function App() {
 
   if (phase === 'loading') {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-surface-1 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-3" />
-          <p className="text-sm text-slate-400">{t('loading')}</p>
+          <p className="text-[13px] text-muted-foreground">{t('loading')}</p>
         </div>
       </div>
     )
@@ -327,7 +329,7 @@ function App() {
 
   if (phase === 'empresa-selector') {
     return (
-      <div className={`min-h-screen bg-slate-950 ${transitionClass}`}>
+      <div className={`min-h-screen bg-surface-1 ${transitionClass}`}>
         <EmpresaSelectorPage
           empresas={empresas}
           ultimaEmpresaId={ultimaEmpresaId}
@@ -346,7 +348,7 @@ function App() {
 
   if (phase === 'auth') {
     return (
-      <div className={`min-h-screen bg-slate-950 ${transitionClass}`}>
+      <div className={`min-h-screen bg-surface-1 ${transitionClass}`}>
         <AuthPage
           onAuthenticated={handleAuthenticated}
           empresaNombre={activeEmpresa?.nombre}
@@ -358,68 +360,64 @@ function App() {
 
   if (phase === 'cloud-auth') {
     return (
-      <div className={`min-h-screen bg-slate-950 flex items-center justify-center ${transitionClass}`}>
+      <div className={`min-h-screen bg-surface-1 flex items-center justify-center ${transitionClass}`}>
         <div className="w-full max-w-md p-8">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-500/10 mb-4">
-              <Cloud className="h-8 w-8 text-blue-400" />
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-lg bg-primary/10 border border-primary/20 mb-4">
+              <Cloud className="h-7 w-7 text-primary" />
             </div>
-            <h1 className="text-2xl font-bold text-white mb-2">{t('auth:empresaSelector.cloudPassphraseTitle', 'Unlock Cloud Company')}</h1>
-            <p className="text-sm text-slate-400">{activeEmpresa?.nombre}</p>
-            <p className="text-xs text-slate-500 mt-1">{t('auth:empresaSelector.cloudPassphraseDesc', 'Enter the passphrase to decrypt the data')}</p>
+            <h1 className="text-[18px] font-semibold text-foreground mb-1 tracking-tight">
+              {t('auth:empresaSelector.cloudPassphraseTitle', 'Unlock Cloud Company')}
+            </h1>
+            <p className="text-[15px] text-foreground">{activeEmpresa?.nombre}</p>
+            <p className="text-[13px] text-muted-foreground mt-1">
+              {t('auth:empresaSelector.cloudPassphraseDesc', 'Enter the passphrase to decrypt the data')}
+            </p>
           </div>
           {!cloudSession ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <CloudLoginPrompt onConnected={handleCloudSessionChange} />
-              <button
-                onClick={handleBackFromAuth}
-                className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors flex items-center justify-center gap-1"
-              >
-                <ArrowLeft className="h-3 w-3" />
+              <Button variant="ghost" onClick={handleBackFromAuth} className="w-full">
+                <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
                 {t('common:back', 'Back')}
-              </button>
+              </Button>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
-                <span className="text-xs text-green-400">{t('auth:empresaSelector.cloudSessionActive', { email: cloudSession.user.email, defaultValue: 'Connected as {{email}}' })}</span>
+            <div className="space-y-3">
+              <div className="flex items-center justify-center gap-2 p-2.5 rounded-md bg-success/10 border border-success/20">
+                <CheckCircle2 className="h-3.5 w-3.5 text-success shrink-0" />
+                <span className="text-[13px] text-success">
+                  {t('auth:empresaSelector.cloudSessionActive', {
+                    email: cloudSession.user.email,
+                    defaultValue: 'Connected as {{email}}',
+                  })}
+                </span>
               </div>
-              <div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                  <input
-                    type="password"
-                    value={cloudPassphrase}
-                    onChange={(e) => setCloudPassphrase(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCloudAuth()}
-                    placeholder={t('auth:empresaSelector.passphrase', 'Passphrase')}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    autoFocus
-                  />
-                </div>
-              </div>
-              {cloudAuthError && (
-                <p className="text-sm text-red-400">{cloudAuthError}</p>
-              )}
-              <button
+              <PasswordInput
+                value={cloudPassphrase}
+                onChange={(e) => setCloudPassphrase(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCloudAuth()}
+                placeholder={t('auth:empresaSelector.passphrase', 'Passphrase')}
+                error={!!cloudAuthError}
+                hint={cloudAuthError || undefined}
+                autoComplete="current-password"
+                autoFocus
+              />
+              <Button
                 onClick={handleCloudAuth}
                 disabled={!cloudPassphrase || cloudAuthLoading}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                className="w-full"
               >
                 {cloudAuthLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   t('auth:unlock', 'Unlock')
                 )}
-              </button>
-              <button
-                onClick={handleBackFromAuth}
-                className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors flex items-center justify-center gap-1"
-              >
-                <ArrowLeft className="h-3 w-3" />
+              </Button>
+              <Button variant="ghost" onClick={handleBackFromAuth} className="w-full">
+                <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
                 {t('common:back', 'Back')}
-              </button>
+              </Button>
             </div>
           )}
         </div>

@@ -2,16 +2,14 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { translateError } from '@/lib/formatting'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PasswordInput, estimatePasswordStrength } from '@/components/ui/password-input'
 import {
   InputOTP,
   InputOTPGroup,
 } from '@/components/ui/input-otp'
 import {
   Lock,
-  Eye,
-  EyeOff,
   Loader2,
   AlertCircle,
   CheckCircle,
@@ -41,7 +39,6 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [pin, setPin] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [inputMode, setInputMode] = useState<InputMode>('password')
@@ -237,10 +234,10 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
   if (mode === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+      <div className="flex min-h-screen items-center justify-center bg-surface-1">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-slate-400 mx-auto" />
-          <p className="mt-3 text-sm text-slate-500">{t('verifyingSecurity')}</p>
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto" />
+          <p className="mt-3 text-[13px] text-muted-foreground">{t('verifyingSecurity')}</p>
         </div>
       </div>
     )
@@ -255,24 +252,24 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
     ]
 
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+      <div className="flex min-h-screen items-center justify-center bg-surface-1">
         <div className="w-full max-w-sm px-6">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-2.5 mb-6">
               <img src="./assets/logo.png" alt="CryptoGest" className="h-8 w-8" />
-              <span className="text-lg font-semibold text-white tracking-tight">CryptoGest</span>
+              <span className="text-[18px] font-semibold text-foreground tracking-tight">CryptoGest</span>
             </div>
             {empresaNombre && (
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/60 border border-slate-700/50 mb-4">
-                <Building2 className="h-3 w-3 text-slate-400" />
-                <span className="text-xs text-slate-300">{empresaNombre}</span>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-2 border border-hairline mb-4">
+                <Building2 className="h-3 w-3 text-muted-foreground" />
+                <span className="text-[11px] text-foreground">{empresaNombre}</span>
               </div>
             )}
-            <h2 className="text-lg font-semibold text-white">{t('preparingCompany')}</h2>
-            <p className="mt-1 text-sm text-slate-500">{t('onlyFewSeconds')}</p>
+            <h2 className="text-[18px] font-semibold text-foreground">{t('preparingCompany')}</h2>
+            <p className="mt-1 text-[13px] text-muted-foreground">{t('onlyFewSeconds')}</p>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {steps.map((step, i) => {
               const Icon = step.icon
               const isActive = i === configuringStep
@@ -281,31 +278,31 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
               return (
                 <div
                   key={i}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-all duration-300 ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-md border transition-colors duration-200 ${
                     isActive
-                      ? 'border-primary/50 bg-slate-800/80'
+                      ? 'border-primary/50 bg-surface-3'
                       : isDone
-                        ? 'border-emerald-800/40 bg-emerald-950/20'
-                        : 'border-slate-800/50 bg-slate-900/30'
+                        ? 'border-success/30 bg-success/5'
+                        : 'border-hairline bg-surface-2'
                   }`}
                 >
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
                     isActive
-                      ? 'bg-primary/20'
+                      ? 'bg-primary/15'
                       : isDone
-                        ? 'bg-emerald-900/30'
-                        : 'bg-slate-800/50'
+                        ? 'bg-success/15'
+                        : 'bg-surface-3'
                   }`}>
                     {isActive ? (
                       <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     ) : isDone ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      <CheckCircle2 className="h-4 w-4 text-success" />
                     ) : (
-                      <Icon className="h-4 w-4 text-slate-600" />
+                      <Icon className="h-4 w-4 text-muted-foreground" />
                     )}
                   </div>
-                  <span className={`text-sm transition-colors ${
-                    isActive ? 'text-white' : isDone ? 'text-emerald-400/80' : 'text-slate-600'
+                  <span className={`text-[13px] transition-colors ${
+                    isActive ? 'text-foreground' : isDone ? 'text-success' : 'text-muted-foreground'
                   }`}>
                     {isDone ? step.label.replace('...', '') : step.label}
                   </span>
@@ -320,47 +317,44 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
   if (mode === 'welcome') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+      <div className="flex min-h-screen items-center justify-center bg-surface-1">
         <div className="w-full max-w-sm px-6 text-center">
           <div className="flex items-center justify-center gap-2.5 mb-8">
             <img src="./assets/logo.png" alt="CryptoGest" className="h-8 w-8" />
-            <span className="text-lg font-semibold text-white tracking-tight">CryptoGest</span>
+            <span className="text-[18px] font-semibold text-foreground tracking-tight">CryptoGest</span>
           </div>
 
           <div className="mb-6">
-            <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-emerald-900/30 border border-emerald-800/40 mx-auto mb-5">
-              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+            <div className="flex items-center justify-center h-14 w-14 rounded-lg bg-success/10 border border-success/30 mx-auto mb-5">
+              <CheckCircle2 className="h-7 w-7 text-success" />
             </div>
-            <h2 className="text-xl font-semibold text-white mb-2">{t('allReady')}</h2>
+            <h2 className="text-[18px] font-semibold text-foreground mb-2 tracking-tight">{t('allReady')}</h2>
             {empresaNombre && (
-              <p className="text-sm text-slate-400 mb-1">
+              <p className="text-[13px] text-foreground mb-1">
                 {t('companyConfigured', { name: empresaNombre })}
               </p>
             )}
-            <p className="text-sm text-slate-500">
+            <p className="text-[13px] text-muted-foreground">
               {t('dbEncryptedReady')}
             </p>
           </div>
 
-          <div className="space-y-3 text-left mb-8 px-2">
-            <div className="flex items-center gap-3 text-xs text-slate-400">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+          <div className="space-y-2 text-left mb-8 px-2">
+            <div className="flex items-center gap-3 text-[13px] text-muted-foreground">
+              <div className="h-1.5 w-1.5 rounded-full bg-success shrink-0" />
               {t('dbEncryptedAndReady')}
             </div>
-            <div className="flex items-center gap-3 text-xs text-slate-400">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+            <div className="flex items-center gap-3 text-[13px] text-muted-foreground">
+              <div className="h-1.5 w-1.5 rounded-full bg-success shrink-0" />
               {t('masterPasswordConfigured')}
             </div>
-            <div className="flex items-center gap-3 text-xs text-slate-400">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+            <div className="flex items-center gap-3 text-[13px] text-muted-foreground">
+              <div className="h-1.5 w-1.5 rounded-full bg-success shrink-0" />
               {t('startAddingData')}
             </div>
           </div>
 
-          <Button
-            className="w-full h-10 bg-white text-slate-900 hover:bg-slate-200 font-medium"
-            onClick={onAuthenticated}
-          >
+          <Button className="w-full h-10" onClick={onAuthenticated}>
             <Rocket className="mr-2 h-4 w-4" />
             {t('begin')}
           </Button>
@@ -370,14 +364,14 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-950">
+    <div className="flex min-h-screen bg-surface-1">
       {/* Panel izquierdo - Formulario */}
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
           {/* Logo mobile */}
           <div className="lg:hidden flex items-center justify-center gap-2.5 mb-10">
             <img src="./assets/logo.png" alt="CryptoGest" className="h-8 w-8" />
-            <span className="text-lg font-semibold text-white tracking-tight">CryptoGest</span>
+            <span className="text-[18px] font-semibold text-foreground tracking-tight">CryptoGest</span>
           </div>
 
           {/* Empresa badge + Back */}
@@ -386,24 +380,25 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
               {onBack && (
                 <button
                   onClick={onBack}
-                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={t('common:back')}
                 >
                   <ArrowLeft className="h-3 w-3" />
                 </button>
               )}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/60 border border-slate-700/50">
-                <Building2 className="h-3 w-3 text-slate-400" />
-                <span className="text-xs text-slate-300">{empresaNombre}</span>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface-2 border border-hairline">
+                <Building2 className="h-3 w-3 text-muted-foreground" />
+                <span className="text-[11px] text-foreground">{empresaNombre}</span>
               </div>
             </div>
           )}
 
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-xl font-semibold text-white">
+            <h1 className="text-[18px] font-semibold text-foreground tracking-tight">
               {mode === 'setup' ? t('initialSetup') : t('welcomeBack')}
             </h1>
-            <p className="mt-1.5 text-sm text-slate-400">
+            <p className="mt-1.5 text-[13px] text-muted-foreground">
               {mode === 'setup'
                 ? t('setupDescription')
                 : t('loginDescription')}
@@ -414,52 +409,52 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
           {mode === 'login' && passkeyEnabled && (
             <>
               <button
-                className="w-full flex items-center gap-4 p-4 rounded-lg border border-slate-800 bg-slate-900/50 hover:bg-slate-800/80 transition-colors text-left group"
+                className="w-full flex items-center gap-4 p-4 rounded-md border border-hairline bg-surface-2 hover:bg-surface-3 transition-colors duration-150 text-left group"
                 onClick={handlePasskeyLogin}
                 disabled={isLoading}
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-800 group-hover:bg-slate-700 transition-colors">
-                  <ScanFace className="h-5 w-5 text-slate-300" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-3 group-hover:bg-surface-3 transition-colors">
+                  <ScanFace className="h-5 w-5 text-foreground" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white">{t('unlockWithBiometrics')}</p>
-                  <p className="text-xs text-slate-500">{t('biometricsDescription')}</p>
+                  <p className="text-[13px] font-medium text-foreground">{t('unlockWithBiometrics')}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('biometricsDescription')}</p>
                 </div>
                 {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 ) : (
-                  <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-slate-400 transition-colors" />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                 )}
               </button>
 
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-800" />
+                  <div className="w-full border-t border-hairline" />
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="bg-slate-950 px-3 text-xs text-slate-600">{t('common:or')}</span>
+                  <span className="bg-surface-1 px-3 text-[11px] text-muted-foreground">{t('common:or')}</span>
                 </div>
               </div>
             </>
           )}
 
           {/* Selector contraseña / PIN */}
-          <div className="flex gap-1 p-0.5 rounded-md bg-slate-900 border border-slate-800 mb-5">
+          <div className="flex gap-1 p-0.5 rounded-md bg-surface-2 border border-hairline mb-5">
             <button
-              className={`flex-1 text-xs font-medium py-1.5 rounded transition-colors ${
+              className={`flex-1 text-[11px] font-medium py-1.5 rounded transition-colors duration-150 ${
                 inputMode === 'password'
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-500 hover:text-slate-300'
+                  ? 'bg-surface-3 text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => setInputMode('password')}
             >
               {t('password')}
             </button>
             <button
-              className={`flex-1 text-xs font-medium py-1.5 rounded transition-colors ${
+              className={`flex-1 text-[11px] font-medium py-1.5 rounded transition-colors duration-150 ${
                 inputMode === 'pin'
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-500 hover:text-slate-300'
+                  ? 'bg-surface-3 text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => setInputMode('pin')}
             >
@@ -472,50 +467,46 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
             {inputMode === 'password' ? (
               <>
                 <div className="space-y-1.5">
-                  <Label htmlFor="password" className="text-xs text-slate-400 font-normal">
+                  <Label htmlFor="password" className="text-[11px] text-muted-foreground font-normal">
                     {mode === 'setup' ? t('masterPassword') : t('password')}
                   </Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      className="h-10 bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 pr-10 focus-visible:ring-slate-700 focus-visible:ring-offset-slate-950"
-                      placeholder={t('enterPassword')}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-400 transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
+                  <PasswordInput
+                    id="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder={t('enterPassword')}
+                    autoFocus
+                    autoComplete={mode === 'setup' ? 'new-password' : 'current-password'}
+                    strength={mode === 'setup' ? estimatePasswordStrength(password) : null}
+                  />
                 </div>
 
                 {mode === 'setup' && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="confirmPassword" className="text-xs text-slate-400 font-normal">
+                    <Label htmlFor="confirmPassword" className="text-[11px] text-muted-foreground font-normal">
                       {t('confirmPassword')}
                     </Label>
-                    <Input
+                    <PasswordInput
                       id="confirmPassword"
-                      type={showPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       onKeyPress={handleKeyPress}
-                      className="h-10 bg-slate-900 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-slate-700 focus-visible:ring-offset-slate-950"
                       placeholder={t('repeatPassword')}
+                      autoComplete="new-password"
+                      error={!!confirmPassword && password !== confirmPassword}
+                      hint={
+                        confirmPassword && password !== confirmPassword
+                          ? t('passwordsDoNotMatch')
+                          : undefined
+                      }
                     />
                   </div>
                 )}
               </>
             ) : (
               <div className="space-y-3">
-                <Label className="text-xs text-slate-400 font-normal block text-center">
+                <Label className="text-[11px] text-muted-foreground font-normal block text-center">
                   {mode === 'setup' ? t('setNumericPin') : t('enterPin')}
                 </Label>
                 <div className="flex justify-center">
@@ -534,26 +525,26 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
                         {slots.slice(0, Math.max(4, pin.length + 1, 4)).map((slot, idx) => (
                           <div
                             key={idx}
-                            className={`h-11 w-11 flex items-center justify-center rounded-md border bg-slate-900 text-white text-lg transition-all ${
+                            className={`h-11 w-11 flex items-center justify-center rounded-md border bg-surface-2 text-foreground text-lg transition-all ${
                               slot.isActive
-                                ? 'border-slate-600 ring-1 ring-slate-600'
-                                : 'border-slate-800'
+                                ? 'border-primary ring-2 ring-primary/40'
+                                : 'border-hairline'
                             }`}
                           >
                             {slot.char ? (
                               <span className="text-xl">•</span>
                             ) : slot.isActive ? (
-                              <span className="animate-pulse text-slate-600">|</span>
+                              <span className="animate-pulse text-muted-foreground">|</span>
                             ) : null}
                             {slot.hasFakeCaret && (
                               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                                <div className="h-5 w-px animate-caret-blink bg-white" />
+                                <div className="h-5 w-px animate-caret-blink bg-foreground" />
                               </div>
                             )}
                           </div>
                         ))}
                         {pin.length >= 4 && pin.length < 8 && (
-                          <div className="h-11 w-11 flex items-center justify-center rounded-md border border-dashed border-slate-800 text-slate-700 text-sm">
+                          <div className="h-11 w-11 flex items-center justify-center rounded-md border border-dashed border-hairline text-muted-foreground text-[13px]">
                             +
                           </div>
                         )}
@@ -561,7 +552,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
                     )}
                   />
                 </div>
-                <p className="text-[11px] text-slate-600 text-center">
+                <p className="text-[11px] text-muted-foreground text-center">
                   {mode === 'setup' ? t('minDigits') : ''}
                 </p>
               </div>
@@ -569,23 +560,23 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
             {/* Error */}
             {error && (
-              <div className="flex items-start gap-2.5 rounded-md bg-red-950/30 border border-red-900/30 px-3 py-2.5 text-sm text-red-400">
+              <div className="flex items-start gap-2.5 rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2.5 text-destructive">
                 <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                <span className="text-xs leading-relaxed">{error}</span>
+                <span className="text-[13px] leading-relaxed">{error}</span>
               </div>
             )}
 
             {/* Import success */}
             {importSuccess && (
-              <div className="flex items-start gap-2.5 rounded-md bg-emerald-950/30 border border-emerald-900/30 px-3 py-2.5 text-sm text-emerald-400">
+              <div className="flex items-start gap-2.5 rounded-md bg-success/10 border border-success/30 px-3 py-2.5 text-success">
                 <CheckCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                <span className="text-xs leading-relaxed">{importSuccess}</span>
+                <span className="text-[13px] leading-relaxed">{importSuccess}</span>
               </div>
             )}
 
             {/* Submit */}
             <Button
-              className="w-full h-10 bg-white text-slate-900 hover:bg-slate-200 font-medium"
+              className="w-full h-10"
               onClick={handleSubmit}
               disabled={isLoading || (inputMode === 'pin' && pin.length < 4)}
             >
@@ -604,11 +595,11 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
           </div>
 
           {/* Footer actions */}
-          <div className="mt-8 pt-6 border-t border-slate-900">
+          <div className="mt-8 pt-6 border-t border-hairline">
             <button
               onClick={handleImportBackup}
               disabled={isImporting}
-              className="w-full flex items-center justify-center gap-2 text-xs text-slate-600 hover:text-slate-400 transition-colors py-2 disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors py-2 disabled:opacity-50"
             >
               {isImporting ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -621,7 +612,7 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
 
           {/* Security note - solo en setup */}
           {mode === 'setup' && (
-            <p className="mt-6 text-[11px] text-slate-700 text-center leading-relaxed">
+            <p className="mt-6 text-[11px] text-muted-foreground text-center leading-relaxed">
               {t('securityNote')}
             </p>
           )}
@@ -629,39 +620,39 @@ export function AuthPage({ onAuthenticated, empresaNombre, onBack }: AuthPagePro
       </div>
 
       {/* Panel derecho - Branding */}
-      <div className="hidden lg:flex lg:w-[480px] flex-col justify-between bg-slate-900 border-l border-slate-800 p-10">
+      <div className="hidden lg:flex lg:w-[480px] flex-col justify-between bg-surface-2 border-l border-hairline p-10">
         <div>
           <div className="flex items-center gap-3">
             <img src="./assets/logo.png" alt="CryptoGest" className="h-9 w-9" />
-            <span className="text-lg font-semibold text-white tracking-tight">CryptoGest</span>
+            <span className="text-[18px] font-semibold text-foreground tracking-tight">CryptoGest</span>
           </div>
         </div>
 
         <div className="space-y-6">
-          <h2 className="text-2xl font-semibold text-white leading-tight">
+          <h2 className="text-[28px] font-semibold text-foreground leading-tight tracking-tight">
             {t('secureAccounting')}
           </h2>
-          <p className="text-sm text-slate-400 leading-relaxed">
+          <p className="text-[13px] text-muted-foreground leading-relaxed">
             {t('secureDescription')}
           </p>
 
           <div className="space-y-3 pt-2">
             <div className="flex items-center gap-3">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span className="text-xs text-slate-400">{t('endToEndEncryption')}</span>
+              <div className="h-1.5 w-1.5 rounded-full bg-success" />
+              <span className="text-[13px] text-muted-foreground">{t('endToEndEncryption')}</span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span className="text-xs text-slate-400">{t('localStorageOnly')}</span>
+              <div className="h-1.5 w-1.5 rounded-full bg-success" />
+              <span className="text-[13px] text-muted-foreground">{t('localStorageOnly')}</span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <span className="text-xs text-slate-400">{t('portableBackups')}</span>
+              <div className="h-1.5 w-1.5 rounded-full bg-success" />
+              <span className="text-[13px] text-muted-foreground">{t('portableBackups')}</span>
             </div>
           </div>
         </div>
 
-        {appVersion && <p className="text-[11px] text-slate-600">v{appVersion}</p>}
+        {appVersion && <p className="text-[11px] text-muted-foreground font-mono">v{appVersion}</p>}
       </div>
     </div>
   )
