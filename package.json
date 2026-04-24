@@ -20,8 +20,16 @@
     ],
     "mac": {
       "icon": "assets/logo.png",
-      "category": "public.app-category.finance"
+      "category": "public.app-category.finance",
+      "identity": null,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["universal"]
+        }
+      ]
     },
+    "afterPack": "./scripts/afterPack.js",
     "win": {
       "icon": "assets/logo.png"
     },
