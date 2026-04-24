@@ -11,7 +11,7 @@
     --card-foreground: 220 20% 20%;
     --popover: 0 0% 100%;
     --popover-foreground: 220 20% 20%;
-    --primary: 220 60% 35%;
+    --primary: 218 72% 42%;
     --primary-foreground: 0 0% 100%;
     --secondary: 220 15% 92%;
     --secondary-foreground: 220 20% 25%;
@@ -23,7 +23,7 @@
     --destructive-foreground: 0 0% 100%;
     --border: 220 15% 88%;
     --input: 220 15% 88%;
-    --ring: 220 60% 35%;
+    --ring: 218 72% 42%;
     --radius: 0.25rem;
 
     /* Custom colors for accounting */
@@ -33,6 +33,16 @@
     --warning-foreground: 0 0% 100%;
     --info: 200 80% 45%;
     --info-foreground: 0 0% 100%;
+
+    /* Brand accent — padlock gold from logo. Reserved for security / trust moments. */
+    --brand: 42 95% 50%;
+    --brand-foreground: 30 40% 15%;
+
+    /* Minimal-pro surface tokens (layered elevation by contrast) */
+    --surface-1: 210 20% 98%;
+    --surface-2: 0 0% 100%;
+    --surface-3: 220 15% 95%;
+    --hairline: 220 15% 88%;
   }
 
   .dark {
@@ -42,7 +52,7 @@
     --card-foreground: 220 15% 90%;
     --popover: 220 25% 12%;
     --popover-foreground: 220 15% 90%;
-    --primary: 220 60% 55%;
+    --primary: 218 72% 58%;
     --primary-foreground: 0 0% 100%;
     --secondary: 220 20% 18%;
     --secondary-foreground: 220 15% 85%;
@@ -54,11 +64,21 @@
     --destructive-foreground: 0 0% 100%;
     --border: 220 20% 20%;
     --input: 220 20% 20%;
-    --ring: 220 60% 55%;
+    --ring: 218 72% 58%;
 
     --success: 145 50% 45%;
     --warning: 35 80% 55%;
     --info: 200 70% 50%;
+
+    /* Brand accent (dark) — luminous padlock gold. */
+    --brand: 42 95% 58%;
+    --brand-foreground: 30 40% 12%;
+
+    /* Minimal-pro surface tokens (dark) */
+    --surface-1: 220 25% 8%;
+    --surface-2: 220 22% 12%;
+    --surface-3: 220 20% 16%;
+    --hairline: 220 15% 22%;
   }
 }
 
@@ -293,7 +313,7 @@ html:has(.page-enter-forward) body,
 html:has(.page-exit-back) body,
 html:has(.page-enter-back) body {
   overflow: hidden;
-  background-color: #020617 !important;
+  background-color: hsl(var(--surface-1)) !important;
 }
 
 /* Staggered list item animations */
@@ -342,4 +362,16 @@ html:has(.page-enter-back) body {
 .animate-expand {
   animation: expand-in 250ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
   overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up-fade,
+  .animate-expand,
+  .page-exit-forward,
+  .page-enter-forward,
+  .page-exit-back,
+  .page-enter-back {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
 }
